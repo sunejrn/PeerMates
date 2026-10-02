@@ -13,11 +13,13 @@ const geistSans = Geist({
   subsets: ["latin"],
 });
 
+/* fonts */
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
 });
 
+/* metadata */
 export const metadata: Metadata = {
   title: "WatchTogether - Real-Time Synchronized Watch Parties",
   description:
