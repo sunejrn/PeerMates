@@ -3,6 +3,14 @@ import { StreamChat } from "stream-chat";
 const apiKey = process.env.STREAM_API_KEY || process.env.NEXT_PUBLIC_STREAM_API_KEY;
 const apiSecret = process.env.STREAM_API_SECRET;
 
+// Use the built-in "livestream" channel type:
+// - exists by default (custom types like "watchparty" must be created in the
+//   Stream dashboard first, otherwise channel.watch() fails and clients
+//   silently fall back to local-only BroadcastChannel).
+// - any authenticated user can watch/post without explicit membership,
+//   which is exactly what a share-link watch party needs.
+export const STREAM_CHANNEL_TYPE = "livestream";
+
 export const isStreamConfigured = Boolean(apiKey && apiSecret);
 
 export const streamServerClient = isStreamConfigured
@@ -46,7 +54,7 @@ export async function ensureStreamChannel(
   if (!streamServerClient) return null;
 
   try {
-    const channel = streamServerClient.channel("watchparty", slug, {
+    const channel = streamServerClient.channel(STREAM_CHANNEL_TYPE, slug, {
       name: title,
       created_by_id: hostId,
     } as any);
