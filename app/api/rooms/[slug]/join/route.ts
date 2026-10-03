@@ -3,6 +3,7 @@ import { getRoomBySlug } from "@/lib/rooms/store";
 import { auth } from "@/lib/auth";
 import { db } from "@/db/drizzle";
 import { roomParticipants, user } from "@/db/schema";
+import { getRole, isKicked, type RoomRole } from "@/lib/redis/roles";
 import { nanoid } from "nanoid";
 
 export async function POST(
@@ -36,7 +37,20 @@ export async function POST(
     }
 
     const isHost = room.hostId === userId;
-    const role = isHost ? "host" : "viewer";
+    // Authoritative role from the Redis role store (survives reconnects and
+    // carries co-host promotions); falls back to host-id comparison.
+    let role: RoomRole = isHost ? "host" : "viewer";
+    try {
+      if (await isKicked(slug, userId)) {
+        return NextResponse.json(
+          { error: "KICKED", message: "You were removed from this room." },
+          { status: 403 }
+        );
+      }
+      role = await getRole(slug, userId, room.hostId);
+    } catch {
+      // fall back to host-id comparison
+    }
 
     // Record participant in DB if available
     try {
@@ -75,9 +89,9 @@ export async function POST(
         role,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      { error: error instanceof Error ? error.message : "Internal server error" },
       { status: 500 },
     );
   }

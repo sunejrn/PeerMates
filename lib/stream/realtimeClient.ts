@@ -9,11 +9,13 @@ import { StreamChat, Channel } from "stream-chat";
 // and cause channel.watch() to fail.
 const STREAM_CHANNEL_TYPE = "livestream";
 
+export type RoomRole = "host" | "cohost" | "viewer";
+
 export interface PartyMember {
   id: string;
   name: string;
   image?: string;
-  role: "host" | "viewer";
+  role: RoomRole;
   joinedAt: number;
 }
 
@@ -35,10 +37,27 @@ export interface RealtimePlaybackEvent {
     | "playback.seek"
     | "playback.heartbeat"
     | "playback.buffering"
-    | "room.host_changed";
+    | "room.host_changed"
+    | "room.roles_changed"
+    | "room.settings_changed"
+    | "room.source_changed"
+    | "room.control_requested"
+    | "room.kicked";
   position?: number;
   serverTimestamp?: number;
   newHostId?: string;
+  userId?: string;
+  role?: RoomRole;
+}
+
+export class ChatSendError extends Error {
+  code: string;
+  retryAfter: number;
+  constructor(code: string, message: string, retryAfter = 0) {
+    super(message);
+    this.code = code;
+    this.retryAfter = retryAfter;
+  }
 }
 
 export type EventCallback = (event: RealtimePlaybackEvent) => void;
@@ -144,12 +163,14 @@ export class RealtimeChannelService {
               serverTimestamp: (event as any).serverTimestamp,
             };
             this.eventListeners.forEach((cb) => cb(pbEvent));
-          } else if (event.type === "room.host_changed") {
-            const hostEvent: RealtimePlaybackEvent = {
-              type: "room.host_changed",
+          } else if (event.type && event.type.startsWith("room.")) {
+            const roomEvent: RealtimePlaybackEvent = {
+              type: event.type as any,
               newHostId: (event as any).newHostId,
+              userId: (event as any).userId,
+              role: (event as any).role,
             };
-            this.eventListeners.forEach((cb) => cb(hostEvent));
+            this.eventListeners.forEach((cb) => cb(roomEvent));
           } else if (event.type === "message.new" && event.message) {
             const msg: ChatMessage = {
               id: event.message.id,
@@ -201,7 +222,7 @@ export class RealtimeChannelService {
 
           if (data.type && data.type.startsWith("playback.")) {
             this.eventListeners.forEach((cb) => cb(data));
-          } else if (data.type === "room.host_changed") {
+          } else if (data.type && data.type.startsWith("room.")) {
             this.eventListeners.forEach((cb) => cb(data));
           } else if (data.type === "chat.message") {
             this.messageListeners.forEach((cb) => cb(data.message));
@@ -319,6 +340,8 @@ export class RealtimeChannelService {
 
     // Persist server-side first so ALL devices/browsers receive it via
     // polling even when Stream custom config blocks the realtime path.
+    // Server rejections (mute / slow-mode / kick / rate-limit) are thrown
+    // as ChatSendError so the UI can explain what happened.
     let serverMsg: ChatMessage | null = null;
     try {
       const res = await fetch(`/api/rooms/${this.slug}/messages`, {
@@ -333,14 +356,22 @@ export class RealtimeChannelService {
           },
         }),
       });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new ChatSendError(
+          data?.error || "SEND_FAILED",
+          data?.message || "Message was not delivered.",
+          data?.retryAfter ?? 0
+        );
+      }
+      if (data.message) {
         serverMsg = data.message;
         // Echo locally immediately for snappy UX
-        if (serverMsg) this.messageListeners.forEach((cb) => cb(serverMsg!));
+        this.messageListeners.forEach((cb) => cb(serverMsg!));
       }
-    } catch {
-      // fall through to Stream/local paths
+    } catch (err) {
+      if (err instanceof ChatSendError) throw err;
+      // network failure: fall through to Stream/local paths
     }
 
     if (this.streamChannel && this.streamLive) {

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getRoomBySlug } from "@/lib/rooms/store";
-import { setRoomState, getRoomState } from "@/lib/redis/roomState";
-import { db } from "@/db/drizzle";
-import { rooms } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { getRoomBySlug, transferRoomHost } from "@/lib/rooms/store";
+import { getPresence } from "@/lib/redis/presence";
+import { getRole, pickSuccessor } from "@/lib/redis/roles";
+import { resolveActorId, forbidden, errMessage } from "@/lib/rooms/actor";
 
 export async function POST(
   req: NextRequest,
@@ -26,32 +25,41 @@ export async function POST(
       return NextResponse.json({ error: "Room not found." }, { status: 404 });
     }
 
-    // Update in-memory room
-    room.hostId = newHostId;
+    const { actorId } = await resolveActorId(req, body);
+    if (!actorId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
 
-    // Update in database if configured
-    try {
-      if (process.env.DATABASE_URL) {
-        await db
-          .update(rooms)
-          .set({ hostId: newHostId, updatedAt: new Date() })
-          .where(eq(rooms.slug, slug));
+    const actorRole = await getRole(slug, actorId, room.hostId);
+
+    // Case 1: the current host hands the crown to someone else.
+    if (actorId === room.hostId || actorRole === "host") {
+      const updated = await transferRoomHost(slug, String(newHostId));
+      return NextResponse.json({ success: true, newHostId: updated?.hostId });
+    }
+
+    // Case 2: self-claim (host migration). Only allowed when the current
+    // host is genuinely gone from presence, and only by the rightful
+    // successor: a co-host first, else the longest-tenured viewer.
+    if (String(newHostId) === actorId) {
+      const present = await getPresence(slug);
+      const hostStillPresent = present.some((m) => m.id === room.hostId);
+      if (hostStillPresent) {
+        return forbidden("The current host is still in the room.");
       }
-    } catch (err) {
-      console.warn("Could not update host in database:", err);
+      const successor = await pickSuccessor(slug, present, room.hostId);
+      if (successor !== actorId) {
+        return forbidden("You are not next in line for the host role.");
+      }
+      const updated = await transferRoomHost(slug, actorId);
+      return NextResponse.json({ success: true, newHostId: updated?.hostId });
     }
 
-    // Update live Redis room state
-    const currentState = await getRoomState(slug);
-    if (currentState) {
-      currentState.hostId = newHostId;
-      await setRoomState(slug, currentState);
-    }
-
-    return NextResponse.json({ success: true, newHostId });
-  } catch (error: any) {
+    // Anyone else assigning hosts is forbidden (prevents host hijacking).
+    return forbidden("Only the host can transfer the host role.");
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      { error: errMessage(error) },
       { status: 500 },
     );
   }

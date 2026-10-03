@@ -9,26 +9,48 @@ import { Button } from "@/components/ui/button";
 interface ChatPanelProps {
   messages: ChatMessage[];
   currentUserId: string;
-  onSendMessage: (text: string) => void;
+  onSendMessage: (text: string) => Promise<boolean> | boolean | void;
+  slowModeSeconds?: number;
+  chatMuted?: boolean;
+  userMuted?: boolean;
+  isPrivileged?: boolean;
 }
 
 export function ChatPanel({
   messages,
   currentUserId,
   onSendMessage,
+  slowModeSeconds = 0,
+  chatMuted = false,
+  userMuted = false,
+  isPrivileged = false,
 }: ChatPanelProps) {
   const [inputText, setInputText] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const scrollBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     scrollBottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const viewersMuted = chatMuted && !isPrivileged;
+  const inputDisabled = userMuted || viewersMuted || isSending;
+  const disabledReason = userMuted
+    ? "You are muted in this room"
+    : viewersMuted
+      ? "Chat is muted for viewers"
+      : "Type a message...";
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
-    onSendMessage(inputText);
-    setInputText("");
+    if (!inputText.trim() || inputDisabled) return;
+    try {
+      setIsSending(true);
+      const ok = await onSendMessage(inputText);
+      if (ok !== false) setInputText("");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -37,11 +59,25 @@ export function ChatPanel({
       <div className="flex items-center justify-between border-b border-border/80 px-4 py-3 bg-muted/20">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
           <span>💬 Party Chat</span>
+          {slowModeSeconds > 0 && (
+            <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+              🐢 {slowModeSeconds}s slow
+            </span>
+          )}
         </h3>
         <span className="text-[11px] text-muted-foreground font-mono">
           {messages.length} messages
         </span>
       </div>
+
+      {/* Moderation notices */}
+      {(userMuted || viewersMuted) && (
+        <div className="border-b border-red-500/20 bg-red-500/5 px-4 py-2 text-[11px] text-red-600 dark:text-red-400" role="status">
+          {userMuted
+            ? "🔇 You are muted and cannot send messages."
+            : "🔇 Chat is muted for viewers right now."}
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <ScrollArea className="flex-1 p-3 sm:p-4">
@@ -99,16 +135,18 @@ export function ChatPanel({
         <Input
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
-          placeholder="Type a message..."
-          className="h-10 sm:h-9 bg-background/80 border-input text-xs text-foreground focus-visible:ring-violet-500"
+          placeholder={disabledReason}
+          disabled={inputDisabled}
+          aria-label="Chat message"
+          className="h-11 sm:h-11 bg-background/80 border-input text-sm text-foreground focus-visible:ring-violet-500 disabled:opacity-60"
         />
         <Button
           type="submit"
           size="sm"
-          disabled={!inputText.trim()}
-          className="h-10 sm:h-9 px-4 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold cursor-pointer shrink-0"
+          disabled={!inputText.trim() || inputDisabled}
+          className="h-11 sm:h-11 px-4 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold cursor-pointer shrink-0 disabled:opacity-50"
         >
-          Send
+          {isSending ? "…" : "Send"}
         </Button>
       </form>
     </div>

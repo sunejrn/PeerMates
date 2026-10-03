@@ -8,6 +8,8 @@ interface GlassControlsProps {
   currentTime: number;
   duration: number;
   isHost: boolean;
+  /** Overrides the role label (e.g. co-host). Defaults from isHost. */
+  controlLabel?: string;
   onPlay: () => void;
   onPause: () => void;
   onSeek: (seconds: number) => void;
@@ -28,6 +30,7 @@ export function GlassControls({
   currentTime,
   duration,
   isHost,
+  controlLabel,
   onPlay,
   onPause,
   onSeek,
@@ -128,7 +131,7 @@ export function GlassControls({
           <div className="flex items-center gap-2">
             {isHost ? (
               <span className="hidden sm:inline-flex text-[11px] font-medium text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
-                👑 Host Controlling
+                {controlLabel ?? "👑 Host Controlling"}
               </span>
             ) : (
               <span className="hidden sm:inline-flex text-[11px] font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md border border-border/40">

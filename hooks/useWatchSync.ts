@@ -7,6 +7,8 @@ import {
   PartyMember,
   ChatMessage,
   RealtimePlaybackEvent,
+  ChatSendError,
+  RoomRole,
 } from "@/lib/stream/realtimeClient";
 import { toast } from "sonner";
 
@@ -15,6 +17,19 @@ interface UseWatchSyncProps {
   initialHostId: string;
   currentUser: PartyMember;
   playerRef: React.RefObject<UnifiedPlayerRef | null>;
+  onSourceChanged?: (room: { videoSource: string; videoType: string }) => void;
+}
+
+export interface RoomChatSettings {
+  slowModeSeconds: number;
+  chatMuted: boolean;
+}
+
+export interface ControlRequestItem {
+  userId: string;
+  name: string;
+  image?: string;
+  requestedAt: number;
 }
 
 export type SyncState = "synced" | "syncing" | "buffering" | "disconnected";
@@ -53,6 +68,7 @@ export function useWatchSync({
   initialHostId,
   currentUser,
   playerRef,
+  onSourceChanged,
 }: UseWatchSyncProps) {
   const [hostId, setHostId] = useState(initialHostId);
   const [syncState, setSyncState] = useState<SyncState>("syncing");
@@ -60,18 +76,41 @@ export function useWatchSync({
   const [members, setMembers] = useState<PartyMember[]>([currentUser]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isHostBuffering, setIsHostBuffering] = useState(false);
+  // ---- Roles & moderation state (server-authoritative) ----
+  const [myRole, setMyRole] = useState<RoomRole>("viewer");
+  const [roleMap, setRoleMap] = useState<Record<string, RoomRole>>({});
+  const [chatSettings, setChatSettings] = useState<RoomChatSettings>({
+    slowModeSeconds: 0,
+    chatMuted: false,
+  });
+  const [controlRequests, setControlRequests] = useState<ControlRequestItem[]>([]);
+  const [mutedIds, setMutedIds] = useState<string[]>([]);
+  const [myRequestPending, setMyRequestPending] = useState(false);
+  const [amMuted, setAmMuted] = useState(false);
+  const [kickedOut, setKickedOut] = useState(false);
 
   const isHost = currentUser.id === hostId;
+  const isCohost = myRole === "cohost";
+  /** Hosts and co-hosts are privileged: only they emit control events. */
+  const canControl = isHost || isCohost;
 
-  // Stable references to prevent effect re-triggering loops
+  // Stable references to prevent effect re-triggering loops.
+  // Synced in an effect (never during render) per the Rules of Hooks.
   const hostIdRef = useRef(hostId);
-  hostIdRef.current = hostId;
-
   const isHostRef = useRef(isHost);
-  isHostRef.current = isHost;
-
+  const canControlRef = useRef(canControl);
+  const roleMapRef = useRef<Record<string, RoomRole>>({});
+  const onSourceChangedRef = useRef(onSourceChanged);
   const currentUserRef = useRef(currentUser);
-  currentUserRef.current = currentUser;
+
+  useEffect(() => {
+    hostIdRef.current = hostId;
+    isHostRef.current = isHost;
+    canControlRef.current = canControl;
+    roleMapRef.current = roleMap;
+    onSourceChangedRef.current = onSourceChanged;
+    currentUserRef.current = currentUser;
+  });
 
   const hasSeenHostOnlineRef = useRef(false);
   const serviceRef = useRef<RealtimeChannelService | null>(null);
@@ -118,7 +157,8 @@ export function useWatchSync({
   );
 
   // Apply a server state snapshot to the local player (shared by the
-  // initial fetch and the follower polling loop).
+  // initial fetch and the follower polling loop). Privileged users
+  // (host + co-hosts) drive state and never follow.
   const applyServerState = useCallback(
     (state: {
       currentTime: number;
@@ -126,7 +166,7 @@ export function useWatchSync({
       serverTimestamp: number;
     }) => {
       const player = playerRef.current;
-      if (!player || isHostRef.current) return;
+      if (!player || canControlRef.current) return;
       if (
         typeof state.currentTime !== "number" ||
         typeof state.serverTimestamp !== "number"
@@ -167,6 +207,8 @@ export function useWatchSync({
 
   // 1. Initial Instant State Fetch from Redis (for new joiners).
   // Followers continuously re-poll below, so late host actions still sync.
+  // Co-hosts also fetch once to land on the live position; emissions are
+  // suppressed while catching up so we never echo our own seek.
   useEffect(() => {
     async function fetchInitialRedisState() {
       try {
@@ -181,6 +223,7 @@ export function useWatchSync({
             ? state.currentTime + elapsed
             : state.currentTime;
 
+          isSyncingFromEventRef.current = true;
           playerRef.current.seek(initialTime);
 
           if (state.isPlaying) {
@@ -189,6 +232,9 @@ export function useWatchSync({
             playerRef.current.pause();
           }
           setSyncState("synced");
+          setTimeout(() => {
+            isSyncingFromEventRef.current = false;
+          }, 800);
         }
       } catch (err) {
         console.warn("Could not load initial Redis state:", err);
@@ -221,7 +267,16 @@ export function useWatchSync({
             joinedAt: currentUserRef.current.joinedAt,
           }),
         });
-        if (!res.ok || stopped) return;
+        if (!res.ok || stopped) {
+          if (res.status === 403) {
+            const data = await res.json().catch(() => ({}));
+            if (data?.error === "KICKED") {
+              setKickedOut(true);
+              toast.error("You were removed from this room by a moderator.");
+            }
+          }
+          return;
+        }
         const data = await res.json();
         if (Array.isArray(data.members)) {
           serverMembersRef.current = data.members;
@@ -269,7 +324,13 @@ export function useWatchSync({
 
     const promoteNextHost = (list: PartyMember[]) => {
       const sorted = [...list].sort((a, b) => a.joinedAt - b.joinedAt);
-      const nextHost = sorted[0];
+      // Succession: a co-host first, else the longest-tenured viewer.
+      const roleOf = (id: string): RoomRole =>
+        roleMapRef.current[id] ??
+        (list.find((m) => m.id === id)?.role as RoomRole | undefined) ??
+        "viewer";
+      const nextHost =
+        sorted.find((m) => roleOf(m.id) === "cohost") ?? sorted[0];
       const currentHostId = hostIdRef.current;
       const myId = currentUserRef.current.id;
       if (nextHost && nextHost.id !== currentHostId) {
@@ -356,6 +417,68 @@ export function useWatchSync({
     };
   }, [slug]);
 
+  // 1e. Server-authoritative roles / settings / control-request polling.
+  // This is what makes promotions, slow-mode, and mute-all appear on every
+  // device within seconds, even if Stream realtime events are dropped.
+  const fetchRoles = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/rooms/${slug}/roles?viewerId=${encodeURIComponent(currentUserRef.current.id)}`
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.roles && typeof data.roles === "object") {
+        setRoleMap(data.roles);
+      }
+      if (data.myRole === "host" || data.myRole === "cohost" || data.myRole === "viewer") {
+        setMyRole((prev) => {
+          if (prev !== data.myRole && data.myRole !== "viewer") {
+            toast.success(
+              data.myRole === "host"
+                ? "You are now the room host! 👑"
+                : "You were promoted to co-host! 🎬"
+            );
+          } else if (prev === "cohost" && data.myRole === "viewer") {
+            toast.info("Your co-host role was removed.");
+          }
+          return data.myRole;
+        });
+      }
+      if (data.settings) {
+        setChatSettings({
+          slowModeSeconds: Number(data.settings.slowModeSeconds) || 0,
+          chatMuted: Boolean(data.settings.chatMuted),
+        });
+      }
+      if (Array.isArray(data.requests)) {
+        setControlRequests(data.requests);
+      }
+      if (Array.isArray(data.mutedIds)) {
+        setMutedIds(data.mutedIds.map(String));
+      }
+      setMyRequestPending(Boolean(data.myRequestPending));
+      setAmMuted(Boolean(data.amMuted));
+      if (data.hostId && data.hostId !== hostIdRef.current) {
+        setHostId(data.hostId);
+      }
+    } catch {
+      // polling is best-effort
+    }
+  }, [slug]);
+
+  useEffect(() => {
+    if (!slug) return;
+    let stopped = false;
+    fetchRoles();
+    const timer = setInterval(() => {
+      if (!stopped) fetchRoles();
+    }, 5000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [slug, fetchRoles]);
+
   // 1d. Server-backed playback polling for followers.
   // Host writes state on every play/pause/seek + 3s heartbeat; followers
   // correct drift here. Works across devices even if Stream events drop.
@@ -363,7 +486,7 @@ export function useWatchSync({
     if (!slug) return;
     let stopped = false;
     const pollState = async () => {
-      if (isHostRef.current || stopped) return;
+      if (canControlRef.current || stopped) return;
       // Skip briefly after a realtime event already synced us (avoid double-seek)
       if (Date.now() - lastServerStateAtRef.current < 1500) return;
       try {
@@ -467,9 +590,15 @@ export function useWatchSync({
       if (hostStillPresent) {
         hasSeenHostOnlineRef.current = true;
       } else if (hasSeenHostOnlineRef.current && merged.length > 0) {
-        // Host was online previously but has now left! Promote longest-tenured member
+        // Host was online previously but has now left! Promote a co-host
+        // first, else the longest-tenured member.
         const sorted = [...merged].sort((a, b) => a.joinedAt - b.joinedAt);
-        const nextHost = sorted[0];
+        const roleOf = (id: string): RoomRole =>
+          roleMapRef.current[id] ??
+          (merged.find((m) => m.id === id)?.role as RoomRole | undefined) ??
+          "viewer";
+        const nextHost =
+          sorted.find((m) => roleOf(m.id) === "cohost") ?? sorted[0];
 
         if (nextHost && nextHost.id !== currentHostId) {
           setHostId(nextHost.id);
@@ -493,18 +622,61 @@ export function useWatchSync({
       }
     });
 
-    // Listen for real-time playback events (for followers)
+    // Listen for real-time playback + room events (for followers)
     const unsubPlayback = service.onPlaybackEvent(
       (event: RealtimePlaybackEvent) => {
         if (!isMounted) return;
 
         if (event.type === "room.host_changed" && event.newHostId) {
           setHostId(event.newHostId);
+          fetchRoles();
           return;
         }
 
-        // Host drives state; ignore playback events if we are the host
-        if (isHostRef.current) return;
+        if (event.type === "room.roles_changed") {
+          fetchRoles();
+          return;
+        }
+
+        if (event.type === "room.settings_changed") {
+          fetchRoles();
+          return;
+        }
+
+        if (event.type === "room.source_changed") {
+          // Ask the page to refetch room metadata and remount the player.
+          fetch(`/api/rooms/${slug}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((data) => {
+              if (data?.room) {
+                onSourceChangedRef.current?.({
+                  videoSource: data.room.videoSource,
+                  videoType: data.room.videoType,
+                });
+              }
+            })
+            .catch(() => {});
+          return;
+        }
+
+        if (event.type === "room.control_requested") {
+          // Refresh the queue immediately; only privileged users see it.
+          fetchRoles();
+          return;
+        }
+
+        if (event.type === "room.kicked" && event.userId) {
+          if (event.userId === currentUserRef.current.id) {
+            setKickedOut(true);
+            toast.error("You were removed from this room by a moderator.");
+          } else {
+            fetchRoles();
+          }
+          return;
+        }
+
+        // Privileged users drive state; ignore playback events for them
+        if (canControlRef.current) return;
 
         const player = playerRef.current;
         if (!player) return;
@@ -580,12 +752,14 @@ export function useWatchSync({
       unsubPlayback();
       service.disconnect();
     };
-    // ONLY re-subscribe if room slug or user ID changes
-  }, [slug, currentUser.id, playerRef]);
+    // ONLY re-subscribe if room slug or user ID changes (fetchRoles is
+    // useCallback-bound to slug, so it never triggers extra re-subs).
+  }, [slug, currentUser.id, playerRef, fetchRoles]);
 
-  // 3. Host Heartbeat Loop (every 3 seconds while playing)
+  // 3. Privileged heartbeat loop (host + co-hosts, every 3s while playing).
+  // Viewers never send control events — enforced again server-side.
   useEffect(() => {
-    if (!isHost) {
+    if (!canControl) {
       if (heartbeatTimerRef.current) {
         clearInterval(heartbeatTimerRef.current);
         heartbeatTimerRef.current = null;
@@ -618,12 +792,12 @@ export function useWatchSync({
         heartbeatTimerRef.current = null;
       }
     };
-  }, [isHost, playerRef, saveStateToRedis]);
+  }, [canControl, playerRef, saveStateToRedis]);
 
-  // 4. Host player event dispatch
+  // 4. Privileged player event dispatch (host + co-hosts only)
   const handleHostPlayerEvent = useCallback(
     (event: PlayerStateEvent) => {
-      if (!isHostRef.current || isSyncingFromEventRef.current) return;
+      if (!canControlRef.current || isSyncingFromEventRef.current) return;
 
       const serverTimestamp = Date.now();
       const player = playerRef.current;
@@ -661,19 +835,217 @@ export function useWatchSync({
     [playerRef, saveStateToRedis]
   );
 
-  const sendMessage = useCallback((text: string) => {
-    serviceRef.current?.sendMessage(text);
+  const sendMessage = useCallback(async (text: string): Promise<boolean> => {
+    const service = serviceRef.current;
+    if (!service) return false;
+    try {
+      await service.sendMessage(text);
+      return true;
+    } catch (err) {
+      if (err instanceof ChatSendError) {
+        if (err.code === "SLOW_MODE") {
+          toast.warning(err.message || "Slow mode is on. Wait a moment.");
+        } else if (err.code === "KICKED") {
+          setKickedOut(true);
+          toast.error("You were removed from this room.");
+        } else {
+          toast.error(err.message || "Message was not delivered.");
+        }
+      } else {
+        toast.error("Message was not delivered. Check your connection.");
+      }
+      return false;
+    }
   }, []);
+
+  // ---- Privileged + request actions (all re-validated server-side) ----
+
+  async function postRolesAction(payload: Record<string, unknown>) {
+    const res = await fetch(`/api/rooms/${slug}/roles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Role change failed.");
+    await fetchRoles();
+  }
+
+  const promoteMember = useCallback(
+    async (targetUserId: string) => {
+      await postRolesAction({ action: "promote", targetUserId });
+      toast.success("Viewer promoted to co-host 🎬");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  const demoteMember = useCallback(
+    async (targetUserId: string) => {
+      await postRolesAction({ action: "demote", targetUserId });
+      toast.success("Co-host demoted to viewer.");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  async function postControlAction(payload: Record<string, unknown>) {
+    const res = await fetch(`/api/rooms/${slug}/control`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        name: currentUserRef.current.name,
+        image: currentUserRef.current.image,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok)
+      throw new Error(data?.message || data?.error || "Request failed.");
+    await fetchRoles();
+    return data;
+  }
+
+  const requestControl = useCallback(async () => {
+    await postControlAction({ action: "request" });
+    setMyRequestPending(true);
+    toast.success("Control requested — the host was notified. ✋");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
+
+  const approveControlRequest = useCallback(
+    async (targetUserId: string) => {
+      await postControlAction({ action: "approve", targetUserId });
+      toast.success("Control request approved 🎬");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  const denyControlRequest = useCallback(
+    async (targetUserId: string) => {
+      await postControlAction({ action: "deny", targetUserId });
+      toast.success("Control request dismissed.");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  async function postModerationAction(payload: Record<string, unknown>) {
+    const res = await fetch(`/api/rooms/${slug}/moderation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok)
+      throw new Error(data?.message || data?.error || "Moderation failed.");
+    await fetchRoles();
+    return data;
+  }
+
+  const kickMember = useCallback(
+    async (targetUserId: string) => {
+      await postModerationAction({ action: "kick", targetUserId });
+      toast.success("Viewer removed from the room.");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  const muteMember = useCallback(
+    async (targetUserId: string) => {
+      await postModerationAction({ action: "mute", targetUserId });
+      toast.success("Viewer muted.");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  const unmuteMember = useCallback(
+    async (targetUserId: string) => {
+      await postModerationAction({ action: "unmute", targetUserId });
+      toast.success("Viewer unmuted.");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  const setSlowMode = useCallback(
+    async (seconds: number) => {
+      const data = await postModerationAction({ action: "slowmode", seconds });
+      toast.success(
+        seconds === 0 ? "Slow mode off." : `Slow mode: ${seconds}s between messages.`
+      );
+      return data;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  const setChatMuted = useCallback(
+    async (muted: boolean) => {
+      await postModerationAction({ action: "muteall", muted });
+      toast.success(muted ? "Viewers muted — chat is read-only." : "Chat unmuted for everyone.");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  const changeVideoSource = useCallback(
+    async (videoUrl: string) => {
+      const data = await postModerationAction({ action: "source", videoUrl });
+      if (data?.room) {
+        onSourceChangedRef.current?.({
+          videoSource: data.room.videoSource,
+          videoType: data.room.videoType,
+        });
+      }
+      toast.success("Video source changed for everyone.");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
+  // Overlay the authoritative role map onto the merged member list so
+  // Stream-watcher copies (which carry no role) still render correctly.
+  const membersWithRoles = members.map((m) => ({
+    ...m,
+    role:
+      roleMap[m.id] ??
+      (m.id === hostId ? ("host" as RoomRole) : m.role),
+  }));
 
   return {
     isHost,
+    isCohost,
+    canControl,
+    myRole,
     hostId,
     syncState,
     driftSeconds,
-    members,
+    members: membersWithRoles,
     messages,
     isHostBuffering,
     handleHostPlayerEvent,
     sendMessage,
+    chatSettings,
+    controlRequests,
+    mutedIds,
+    myRequestPending,
+    amMuted,
+    kickedOut,
+    refreshRoles: fetchRoles,
+    promoteMember,
+    demoteMember,
+    requestControl,
+    approveControlRequest,
+    denyControlRequest,
+    kickMember,
+    muteMember,
+    unmuteMember,
+    setSlowMode,
+    setChatMuted,
+    changeVideoSource,
   };
 }

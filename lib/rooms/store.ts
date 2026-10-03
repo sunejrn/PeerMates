@@ -3,6 +3,7 @@ import { rooms, roomParticipants, user } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { VideoType } from "@/lib/video/detector";
 import { setRoomState } from "@/lib/redis/roomState";
+import { seedHostRole, setRole } from "@/lib/redis/roles";
 
 export interface RoomRecord {
   id: string;
@@ -93,6 +94,16 @@ export async function createRoomInDb(data: {
     hostId: data.hostId,
   });
 
+  // The creator is the host: seed the Redis role store (TTL'd) and mirror
+  // the role onto the GetStream channel membership.
+  await seedHostRole(data.slug, data.hostId);
+  try {
+    const { mirrorMemberRole } = await import("@/lib/stream/server");
+    await mirrorMemberRole(data.slug, data.hostId, "host");
+  } catch {
+    // best-effort only
+  }
+
   return roomData;
 }
 
@@ -159,4 +170,167 @@ export async function getRecentRooms(): Promise<RoomRecord[]> {
   }
 
   return Array.from(fallbackRooms.values()).slice(0, 6);
+}
+
+/**
+ * Transfer room ownership to a new host. Updates the in-memory record,
+ * the Neon row (if configured), live Redis playback state, and the Redis
+ * role store (old host becomes co-host so the room never loses a
+ * privileged user by accident). Callers must authorize beforehand.
+ */
+export async function transferRoomHost(
+  slug: string,
+  newHostId: string
+): Promise<RoomRecord | null> {
+  const room = await getRoomBySlug(slug);
+  if (!room) return null;
+  const previousHostId = room.hostId;
+  room.hostId = newHostId;
+
+  try {
+    if (process.env.DATABASE_URL) {
+      const { db: database } = await import("@/db/drizzle");
+      const { rooms: roomsTable, user: userTable, roomParticipants: participantsTable } = await import(
+        "@/db/schema"
+      );
+      const { eq: eqOp, and: andOp } = await import("drizzle-orm");
+      // rooms.host_id references user.id — the successor may never have a
+      // user row (e.g. promoted viewer), so upsert one first or the update
+      // fails on the foreign key.
+      let displayName = "Room Member";
+      try {
+        const { getPresence } = await import("@/lib/redis/presence");
+        const present = await getPresence(slug);
+        const found = present.find((m) => m.id === newHostId);
+        if (found?.name) displayName = found.name;
+      } catch {
+        // name is best-effort
+      }
+      await database
+        .insert(userTable)
+        .values({
+          id: newHostId,
+          name: displayName,
+          email: `${newHostId}@watchtogether.local`,
+          emailVerified: true,
+        })
+        .onConflictDoNothing();
+      await database
+        .update(roomsTable)
+        .set({ hostId: newHostId, updatedAt: new Date() })
+        .where(eqOp(roomsTable.slug, slug));
+      // Keep participant roles consistent (best-effort; rows may not exist).
+      try {
+        await database
+          .update(participantsTable)
+          .set({ role: "host" })
+          .where(
+            andOp(
+              eqOp(participantsTable.roomId, room.id),
+              eqOp(participantsTable.userId, newHostId)
+            )
+          );
+        if (previousHostId && previousHostId !== newHostId) {
+          await database
+            .update(participantsTable)
+            .set({ role: "cohost" })
+            .where(
+              andOp(
+                eqOp(participantsTable.roomId, room.id),
+                eqOp(participantsTable.userId, previousHostId)
+              )
+            );
+        }
+      } catch {
+        // participant rows are optional
+      }
+    }
+  } catch (err) {
+    console.warn("Could not update host in database:", err);
+  }
+
+  try {
+    const { getRoomState } = await import("@/lib/redis/roomState");
+    const currentState = await getRoomState(slug);
+    if (currentState) {
+      currentState.hostId = newHostId;
+      await setRoomState(slug, currentState);
+    }
+  } catch {
+    // best-effort
+  }
+
+  // Previous host steps down to co-host; new host takes the crown.
+  if (previousHostId && previousHostId !== newHostId) {
+    await setRole(slug, previousHostId, "cohost");
+  }
+  await setRole(slug, newHostId, "host");
+
+  try {
+    const { mirrorMemberRole, broadcastRoomEvent } = await import(
+      "@/lib/stream/server"
+    );
+    await mirrorMemberRole(slug, newHostId, "host");
+    if (previousHostId && previousHostId !== newHostId) {
+      await mirrorMemberRole(slug, previousHostId, "cohost");
+    }
+    await broadcastRoomEvent(slug, {
+      type: "room.host_changed",
+      newHostId,
+    });
+  } catch {
+    // best-effort only
+  }
+
+  return room;
+}
+
+/**
+ * Change the room's video source (privileged action). Resets playback to
+ * paused-at-zero so every follower re-syncs to the new media.
+ */
+export async function changeRoomSource(
+  slug: string,
+  videoSource: string,
+  videoType: VideoType
+): Promise<RoomRecord | null> {
+  const room = await getRoomBySlug(slug);
+  if (!room) return null;
+  room.videoSource = videoSource;
+  room.videoType = videoType;
+
+  try {
+    if (process.env.DATABASE_URL) {
+      const { db: database } = await import("@/db/drizzle");
+      const { rooms: roomsTable } = await import("@/db/schema");
+      const { eq: eqOp } = await import("drizzle-orm");
+      await database
+        .update(roomsTable)
+        .set({ videoSource, videoType, updatedAt: new Date() })
+        .where(eqOp(roomsTable.slug, slug));
+    }
+  } catch (err) {
+    console.warn("Could not update video source in database:", err);
+  }
+
+  await setRoomState(slug, {
+    currentTime: 0,
+    isPlaying: false,
+    playbackRate: 1,
+    serverTimestamp: Date.now(),
+    hostId: room.hostId,
+  });
+
+  try {
+    const { broadcastRoomEvent } = await import("@/lib/stream/server");
+    await broadcastRoomEvent(slug, {
+      type: "room.source_changed",
+      videoSource,
+      videoType,
+    });
+  } catch {
+    // best-effort only
+  }
+
+  return room;
 }

@@ -6,6 +6,8 @@ import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { UnifiedPlayerRef } from "@/components/player/types";
 import { RoomRecord } from "@/lib/rooms/store";
 import { PresenceBar } from "@/components/room/PresenceBar";
+import { ViewerList } from "@/components/room/ViewerList";
+import { ModerationPanel } from "@/components/room/ModerationPanel";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SyncStatusIndicator } from "@/components/room/SyncStatusIndicator";
 import { useWatchSync } from "@/hooks/useWatchSync";
@@ -31,6 +33,8 @@ export default function RoomPage({
   const [room, setRoom] = useState<RoomRecord | null>(null);
   const [isLoadingRoom, setIsLoadingRoom] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isRequestingControl, setIsRequestingControl] = useState(false);
+  const [isClaimingHost, setIsClaimingHost] = useState(false);
   // Mobile tab state for narrow viewports (< lg)
   const [mobileTab, setMobileTab] = useState<"video-info" | "chat">("video-info");
 
@@ -43,8 +47,10 @@ export default function RoomPage({
         if (!res.ok) throw new Error("Room not found");
         const data = await res.json();
         setRoom(data.room);
-      } catch (err: any) {
-        toast.error(err?.message || "Failed to load watch party");
+      } catch (err: unknown) {
+        toast.error(
+          err instanceof Error ? err.message : "Failed to load watch party"
+        );
       } finally {
         setIsLoadingRoom(false);
       }
@@ -53,7 +59,7 @@ export default function RoomPage({
   }, [slug]);
 
   // Stable join timestamp and memoized member object to prevent re-render loops
-  const joinedAtRef = useRef<number>(Date.now());
+  const [joinedAt] = useState<number>(() => Date.now());
   const currentUser = useMemo(
     () => ({
       id: session?.user?.id || "guest",
@@ -62,14 +68,16 @@ export default function RoomPage({
       role: (room?.hostId === session?.user?.id ? "host" : "viewer") as
         | "host"
         | "viewer",
-      joinedAt: joinedAtRef.current,
+      joinedAt,
     }),
-    [session?.user?.id, session?.user?.name, session?.user?.image, room?.hostId]
+    [session?.user?.id, session?.user?.name, session?.user?.image, room?.hostId, joinedAt]
   );
 
-  // Synchronized Watch Party Engine (Phase 4, 5, 6)
+  // Synchronized Watch Party Engine (Phase 4, 5, 6 + roles/moderation)
   const {
     isHost,
+    isCohost,
+    canControl,
     hostId,
     syncState,
     driftSeconds,
@@ -78,11 +86,40 @@ export default function RoomPage({
     isHostBuffering,
     handleHostPlayerEvent,
     sendMessage,
+    chatSettings,
+    controlRequests,
+    mutedIds,
+    myRequestPending,
+    amMuted,
+    kickedOut,
+    promoteMember,
+    demoteMember,
+    requestControl,
+    approveControlRequest,
+    denyControlRequest,
+    kickMember,
+    muteMember,
+    unmuteMember,
+    setSlowMode,
+    setChatMuted,
+    changeVideoSource,
   } = useWatchSync({
     slug,
     initialHostId: room?.hostId || "",
     currentUser,
     playerRef,
+    onSourceChanged: (src) => {
+      setRoom((prev) =>
+        prev
+          ? {
+              ...prev,
+              videoSource: src.videoSource,
+              videoType: src.videoType as RoomRecord["videoType"],
+            }
+          : prev
+      );
+      toast.success("The video source was changed — re-syncing…");
+    },
   });
 
   const handleCopyLink = () => {
@@ -95,16 +132,33 @@ export default function RoomPage({
   const handleClaimHost = async () => {
     if (!session?.user) return;
     try {
+      setIsClaimingHost(true);
       const res = await fetch(`/api/rooms/${slug}/host`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newHostId: session.user.id }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         toast.success("You are now the room host! 👑");
+      } else {
+        toast.error(data?.error || data?.message || "Host claim rejected.");
       }
     } catch {
       toast.error("Failed to request host role");
+    } finally {
+      setIsClaimingHost(false);
+    }
+  };
+
+  const handleRequestControl = async () => {
+    try {
+      setIsRequestingControl(true);
+      await requestControl();
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Control request failed.");
+    } finally {
+      setIsRequestingControl(false);
     }
   };
 
@@ -196,7 +250,7 @@ export default function RoomPage({
               </h2>
               <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
                 You must sign in with GitHub to join{" "}
-                <strong className="text-foreground">"{room.title}"</strong>.
+                <strong className="text-foreground">&quot;{room.title}&quot;</strong>.
                 Required to sync playback with friends, chat live, and participate.
               </p>
             </div>
@@ -221,6 +275,23 @@ export default function RoomPage({
             </Button>
           </Card>
         </main>
+      </div>
+    );
+  }
+
+  // KICKED OUT — moderator removed this user
+  if (kickedOut) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center text-foreground">
+        <h1 className="text-3xl font-bold text-destructive">Removed from Room</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          A moderator removed you from{" "}
+          <strong className="text-foreground">&quot;{room.title}&quot;</strong>. You can
+          no longer watch, chat, or control playback here.
+        </p>
+        <Button className="mt-6 min-h-11 bg-violet-600 hover:bg-violet-500 text-white">
+          <Link href="/">Return to Lobby</Link>
+        </Button>
       </div>
     );
   }
@@ -289,10 +360,13 @@ export default function RoomPage({
           {/* Unified Video Player - 16:9 aspect-video maintained across all screens */}
           <div className="w-full">
             <VideoPlayer
+              key={room.videoSource}
               ref={playerRef}
               src={room.videoSource}
               videoType={room.videoType}
               isHost={isHost}
+              canControl={canControl}
+              roleBadge={isHost ? "host" : isCohost ? "cohost" : "viewer"}
               onPlayerEvent={handleHostPlayerEvent}
             />
           </div>
@@ -342,11 +416,15 @@ export default function RoomPage({
             <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-sm">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2 flex-wrap">
                     <span>Host-Authoritative Sync</span>
                     {isHost ? (
                       <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
                         👑 You are the Host
+                      </Badge>
+                    ) : isCohost ? (
+                      <Badge className="bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30 text-[10px]">
+                        🎬 You are a Co-host
                       </Badge>
                     ) : (
                       <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30 text-[10px]">
@@ -355,24 +433,74 @@ export default function RoomPage({
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    {isHost
+                    {canControl
                       ? "Your player actions broadcast frame state and a 3-second heartbeat to followers."
                       : "Playback automatically aligns with the host if drift exceeds 0.5 seconds."}
                   </p>
                 </div>
 
-                {!isHost && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleClaimHost}
-                    className="min-h-11 sm:min-h-9 border-border bg-card/80 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 cursor-pointer"
-                  >
-                    👑 Request Host Role
-                  </Button>
-                )}
+                {!canControl &&
+                  (myRequestPending ? (
+                    <Badge
+                      variant="outline"
+                      className="border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 text-xs px-3 py-2"
+                    >
+                      ✋ Request sent — waiting for host
+                    </Badge>
+                  ) : (
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleRequestControl}
+                        disabled={isRequestingControl}
+                        className="min-h-11 sm:min-h-9 border-cyan-500/40 bg-cyan-500/10 text-xs text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20 cursor-pointer"
+                      >
+                        {isRequestingControl ? "Sending…" : "✋ Request control"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleClaimHost}
+                        disabled={isClaimingHost}
+                        className="min-h-11 sm:min-h-9 border-border bg-card/80 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 cursor-pointer"
+                      >
+                        {isClaimingHost ? "Checking…" : "👑 Claim host if gone"}
+                      </Button>
+                    </div>
+                  ))}
               </div>
             </Card>
+
+            {/* Viewer list (virtualized — fast at 500 members) */}
+            <ViewerList
+              members={members}
+              currentUserId={session.user.id}
+              hostId={hostId}
+              isPrivileged={canControl}
+              isHost={isHost}
+              mutedIds={mutedIds}
+              controlRequests={controlRequests}
+              onPromote={promoteMember}
+              onDemote={demoteMember}
+              onKick={kickMember}
+              onMute={muteMember}
+              onUnmute={unmuteMember}
+              onApproveRequest={approveControlRequest}
+              onDenyRequest={denyControlRequest}
+            />
+
+            {/* Moderation tools (host + co-hosts only) */}
+            {canControl && (
+              <ModerationPanel
+                slowModeSeconds={chatSettings.slowModeSeconds}
+                chatMuted={chatSettings.chatMuted}
+                memberCount={members.length}
+                onSetSlowMode={setSlowMode}
+                onSetChatMuted={setChatMuted}
+                onChangeSource={changeVideoSource}
+              />
+            )}
           </div>
         </div>
 
@@ -386,6 +514,10 @@ export default function RoomPage({
             messages={messages}
             currentUserId={session.user.id}
             onSendMessage={sendMessage}
+            slowModeSeconds={chatSettings.slowModeSeconds}
+            chatMuted={chatSettings.chatMuted}
+            userMuted={amMuted}
+            isPrivileged={canControl}
           />
         </div>
       </main>

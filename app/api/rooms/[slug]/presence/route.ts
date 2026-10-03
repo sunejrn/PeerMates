@@ -4,9 +4,29 @@ import {
   heartbeatPresence,
   removePresence,
 } from "@/lib/redis/presence";
-import { getRoomBySlug } from "@/lib/rooms/store";
+import { getRoomBySlug, transferRoomHost } from "@/lib/rooms/store";
+import {
+  getRole,
+  getAllRoles,
+  isKicked,
+  pickSuccessor,
+  type RoomRole,
+} from "@/lib/redis/roles";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/redis/ratelimit";
+import { rateLimited, errMessage } from "@/lib/rooms/actor";
 
 type RouteParams = { params: Promise<{ slug: string }> };
+
+function withRoles<T extends { id: string }>(
+  members: T[],
+  roles: Record<string, RoomRole>,
+  hostId: string
+) {
+  return members.map((m) => ({
+    ...m,
+    role: (roles[m.id] ?? (m.id === hostId ? "host" : "viewer")) as RoomRole,
+  }));
+}
 
 // GET /api/rooms/[slug]/presence -> list of currently-online members
 // This is the cross-device source of truth (Redis-backed). Stream watchers
@@ -18,11 +38,17 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
     if (!room) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-    const members = await getPresence(slug);
-    return NextResponse.json({ members, hostId: room.hostId });
-  } catch (error: any) {
+    const [members, roles] = await Promise.all([
+      getPresence(slug),
+      getAllRoles(slug),
+    ]);
+    return NextResponse.json({
+      members: withRoles(members, roles, room.hostId),
+      hostId: room.hostId,
+    });
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      { error: errMessage(error) },
       { status: 500 }
     );
   }
@@ -44,25 +70,50 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+    if (await isKicked(slug, String(id))) {
+      return NextResponse.json(
+        { error: "KICKED", message: "You were removed from this room." },
+        { status: 403 }
+      );
+    }
+
+    const rl = await checkRateLimit(
+      `presence:${slug}:${id}`,
+      RATE_LIMITS.presence.limit,
+      RATE_LIMITS.presence.windowSeconds
+    );
+    if (!rl.allowed) return rateLimited(rl.retryAfter);
+
+    // The authoritative role comes from the Redis role store so a
+    // promoted co-host keeps their badge across reconnects.
+    const role = await getRole(slug, String(id), room.hostId);
     const member = {
       id: String(id),
       name: String(name),
       image: image ? String(image) : undefined,
-      role: (room.hostId === id ? "host" : "viewer") as "host" | "viewer",
+      role,
       joinedAt: typeof joinedAt === "number" ? joinedAt : Date.now(),
     };
     await heartbeatPresence(slug, member);
-    const members = await getPresence(slug);
-    return NextResponse.json({ success: true, members });
-  } catch (error: any) {
+    const [members, roles] = await Promise.all([
+      getPresence(slug),
+      getAllRoles(slug),
+    ]);
+    return NextResponse.json({
+      success: true,
+      members: withRoles(members, roles, room.hostId),
+      myRole: role,
+    });
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      { error: errMessage(error) },
       { status: 500 }
     );
   }
 }
 
-// DELETE /api/rooms/[slug]/presence -> leave
+// DELETE /api/rooms/[slug]/presence -> leave. If the host leaves, the crown
+// passes to a co-host first, then the longest-tenured viewer.
 export async function DELETE(req: NextRequest, { params }: RouteParams) {
   try {
     const { slug } = await params;
@@ -72,10 +123,23 @@ export async function DELETE(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "userId required" }, { status: 400 });
     }
     await removePresence(slug, String(userId));
+
+    const room = await getRoomBySlug(slug);
+    if (room && String(userId) === room.hostId) {
+      const remaining = await getPresence(slug);
+      const successor = await pickSuccessor(slug, remaining, room.hostId);
+      if (successor) {
+        const updated = await transferRoomHost(slug, successor);
+        return NextResponse.json({
+          success: true,
+          newHostId: updated?.hostId ?? successor,
+        });
+      }
+    }
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      { error: errMessage(error) },
       { status: 500 }
     );
   }

@@ -15,7 +15,16 @@ import { Badge } from "@/components/ui/badge";
 
 export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
   function VideoPlayer(props, ref) {
-    const { videoType, isHost = true, onPlayerEvent } = props;
+    const {
+      videoType,
+      isHost = true,
+      canControl: canControlProp,
+      roleBadge,
+      onPlayerEvent,
+    } = props;
+    const canControl = canControlProp ?? isHost;
+    const badge: "host" | "cohost" | "viewer" =
+      roleBadge ?? (isHost ? "host" : "viewer");
     const innerPlayerRef = useRef<UnifiedPlayerRef>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -101,13 +110,21 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
             {videoType}
           </Badge>
 
-          {isHost ? (
+          {badge === "host" ? (
             <Badge
               variant="outline"
               className="border-amber-500/40 bg-amber-500/20 backdrop-blur-md text-[10px] sm:text-[11px] font-medium text-amber-300 px-2 sm:px-2.5 py-0.5 flex items-center gap-1.5 shadow"
             >
               <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
               Host
+            </Badge>
+          ) : badge === "cohost" ? (
+            <Badge
+              variant="outline"
+              className="border-cyan-500/40 bg-cyan-500/20 backdrop-blur-md text-[10px] sm:text-[11px] font-medium text-cyan-300 px-2 sm:px-2.5 py-0.5 flex items-center gap-1.5 shadow"
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+              Co-host
             </Badge>
           ) : (
             <Badge
@@ -130,7 +147,14 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
             isPlaying={isPlaying}
             currentTime={currentTime}
             duration={duration}
-            isHost={isHost}
+            isHost={canControl}
+            controlLabel={
+              badge === "host"
+                ? "👑 Host Controlling"
+                : badge === "cohost"
+                  ? "🎬 Co-host Controlling"
+                  : undefined
+            }
             onPlay={() => innerPlayerRef.current?.play()}
             onPause={() => innerPlayerRef.current?.pause()}
             onSeek={(s) => innerPlayerRef.current?.seek(s)}

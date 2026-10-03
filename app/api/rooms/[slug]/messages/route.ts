@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { appendMessage, getMessages } from "@/lib/redis/chat";
 import { getRoomBySlug } from "@/lib/rooms/store";
+import {
+  getRole,
+  getSettings,
+  isKicked,
+  isMutedChat,
+  checkAndRecordChatSend,
+} from "@/lib/redis/roles";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/redis/ratelimit";
+import { resolveActorId, forbidden, rateLimited, errMessage } from "@/lib/rooms/actor";
 
 type RouteParams = { params: Promise<{ slug: string }> };
 
@@ -20,15 +29,16 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
       ? messages.filter((m) => m.createdAt > since)
       : messages;
     return NextResponse.json({ messages: filtered });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      { error: errMessage(error) },
       { status: 500 }
     );
   }
 }
 
-// POST /api/rooms/[slug]/messages -> persist + broadcast a chat message
+// POST /api/rooms/[slug]/messages -> persist + broadcast a chat message.
+// Enforces kicks, per-user mutes, mute-all, slow-mode, and rate limits.
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
     const { slug } = await params;
@@ -47,6 +57,52 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    const { actorId } = await resolveActorId(req, { userId: user?.id });
+    const senderId = actorId || String(user.id);
+
+    if (await isKicked(slug, senderId)) {
+      return NextResponse.json(
+        { error: "KICKED", message: "You were removed from this room." },
+        { status: 403 }
+      );
+    }
+    if (await isMutedChat(slug, senderId)) {
+      return forbidden("You are muted in this room.");
+    }
+
+    const [role, settings] = await Promise.all([
+      getRole(slug, senderId, room.hostId),
+      getSettings(slug),
+    ]);
+    const privileged = role === "host" || role === "cohost";
+    if (settings.chatMuted && !privileged) {
+      return forbidden("Chat is muted for viewers right now.");
+    }
+
+    const { waitSeconds } = await checkAndRecordChatSend(
+      slug,
+      senderId,
+      settings.slowModeSeconds
+    );
+    if (waitSeconds > 0) {
+      return NextResponse.json(
+        {
+          error: "SLOW_MODE",
+          message: `Slow mode is on. Wait ${waitSeconds}s.`,
+          retryAfter: waitSeconds,
+        },
+        { status: 429 }
+      );
+    }
+
+    const rl = await checkRateLimit(
+      `msg:${slug}:${senderId}`,
+      RATE_LIMITS.message.limit,
+      RATE_LIMITS.message.windowSeconds
+    );
+    if (!rl.allowed) return rateLimited(rl.retryAfter);
+
     const msg = {
       id:
         typeof id === "string" && id
@@ -54,7 +110,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
           : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       text: text.trim().slice(0, 1000),
       user: {
-        id: String(user.id),
+        id: senderId,
         name: String(user.name),
         image: user.image ? String(user.image) : undefined,
       },
@@ -63,9 +119,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     };
     await appendMessage(slug, msg);
     return NextResponse.json({ success: true, message: msg });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      { error: errMessage(error) },
       { status: 500 }
     );
   }
