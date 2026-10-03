@@ -105,7 +105,12 @@ export default function RoomPage({
     messages,
     isHostBuffering,
     handleHostPlayerEvent,
-    sendMessage,
+    sendRich,
+    uploadMedia,
+    reactToMessage,
+    deleteMessage,
+    typingUsers,
+    sendTyping,
     chatSettings,
     controlRequests,
     mutedIds,
@@ -386,6 +391,23 @@ export default function RoomPage({
     }
   };
 
+  // "Pin to moment" markers: chat comments tagged with video seconds.
+  const momentMarkers = useMemo(
+    () =>
+      messages
+        .filter((m) => !m.deleted && typeof m.moment === "number")
+        .map((m) => ({ id: m.id, seconds: m.moment as number })),
+    [messages]
+  );
+
+  const handleMarkerTap = useCallback((seconds: number) => {
+    try {
+      playerRef.current?.seek(seconds);
+    } catch {
+      // player not ready — ignore
+    }
+  }, []);
+
   // Loading state
   if (isAuthPending || isLoadingRoom) {
     return (
@@ -581,6 +603,8 @@ export default function RoomPage({
               onFragmentBytes={handleFragmentBytes}
               onAutoplayBlocked={() => setPlayBlocked(true)}
               onPlayerEvent={handleHostPlayerEvent}
+              markers={momentMarkers}
+              onMarkerTap={canControl ? handleMarkerTap : undefined}
             />
             {/* iOS Safari blocks autoplay with sound: followers get a real
                 tap target that plays inside the user gesture. */}
@@ -827,11 +851,27 @@ export default function RoomPage({
           <ChatPanel
             messages={messages}
             currentUserId={session.user.id}
-            onSendMessage={sendMessage}
+            onSendMessage={sendRich}
+            uploadMedia={uploadMedia}
             slowModeSeconds={chatSettings.slowModeSeconds}
             chatMuted={chatSettings.chatMuted}
             userMuted={amMuted}
             isPrivileged={canControl}
+            dataSaver={dataSaver}
+            typingUsers={typingUsers}
+            onTyping={sendTyping}
+            canDeleteAny={canControl}
+            onReact={reactToMessage}
+            onDelete={deleteMessage}
+            canControl={canControl}
+            onCaptureMoment={() => playerRef.current?.getCurrentTime() ?? 0}
+            onPinJump={(seconds) => {
+              try {
+                playerRef.current?.seek(seconds);
+              } catch {
+                // player not ready — ignore
+              }
+            }}
           />
         </div>
       </main>

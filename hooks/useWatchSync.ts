@@ -9,6 +9,9 @@ import {
   RealtimePlaybackEvent,
   ChatSendError,
   RoomRole,
+  mergeChatPair,
+  type MessageAttachment,
+  type MessageReplyRef,
 } from "@/lib/stream/realtimeClient";
 import { toast } from "sonner";
 import type { LocalFingerprint } from "@/lib/video/localfile";
@@ -55,13 +58,40 @@ function mergeMessages(...lists: ChatMessage[][]): ChatMessage[] {
   for (const list of lists) {
     for (const m of list) {
       if (!m?.id) continue;
-      if (!map.has(m.id)) map.set(m.id, m);
+      const existing = map.get(m.id);
+      // Same id from two transports (echo vs poll): union reactions,
+      // tombstones win, content prefers the server copy.
+      map.set(m.id, existing ? mergeChatPair(existing, m) : m);
     }
   }
   return Array.from(map.values()).sort(
     (a, b) =>
       new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );
+}
+
+/** Stamp the authoritative server reactions map onto a message list. */
+function applyReactions(
+  list: ChatMessage[],
+  reactions: Record<string, Record<string, string[]>>
+): ChatMessage[] {
+  let changed = false;
+  const out = list.map((m) => {
+    const r = reactions[m.id] ?? {};
+    const cur = m.reactions ?? {};
+    const same =
+      Object.keys(r).length === Object.keys(cur).length &&
+      Object.entries(r).every(([e, users]) => {
+        const c = cur[e] ?? [];
+        return (
+          c.length === users.length && users.every((u) => c.includes(u))
+        );
+      });
+    if (same) return m;
+    changed = true;
+    return mergeChatPair(m, { ...m, reactions: r });
+  });
+  return changed ? out : list;
 }
 
 export function useWatchSync({
@@ -89,6 +119,10 @@ export function useWatchSync({
   const [myRequestPending, setMyRequestPending] = useState(false);
   const [amMuted, setAmMuted] = useState(false);
   const [kickedOut, setKickedOut] = useState(false);
+  // ---- Ephemeral typing indicators (4s expiry per user, max 3 shown) ----
+  const [typingUsers, setTypingUsers] = useState<{ id: string; name: string }[]>([]);
+  const typingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  // sendTyping lives below the channel effect (reads serviceRef).
   // ---- "My Files" local-file match badges (server-authoritative) ----
   const [fileMatchMap, setFileMatchMap] = useState<Record<string, boolean | null>>({});
   // ---- Connectivity: "online" | "reconnecting" | "offline" ----
@@ -598,9 +632,13 @@ export function useWatchSync({
         if (!res.ok || stopped) return;
         const data = await res.json();
         if (Array.isArray(data.messages)) {
-          serverMessagesRef.current = data.messages;
+          const withReactions =
+            data.reactions && typeof data.reactions === "object"
+              ? applyReactions(data.messages, data.reactions)
+              : data.messages;
+          serverMessagesRef.current = withReactions;
           setMessages(
-            mergeMessages(realtimeMessagesRef.current, data.messages)
+            mergeMessages(realtimeMessagesRef.current, withReactions)
           );
         }
       } catch {
@@ -774,6 +812,26 @@ export function useWatchSync({
       ]);
       setMessages(
         mergeMessages(realtimeMessagesRef.current, serverMessagesRef.current)
+      );
+    });
+
+    // Ephemeral typing indicators (4s expiry per user, max 3 shown).
+    const unsubTyping = service.onTyping((user) => {
+      if (!isMounted) return;
+      if (user.id === currentUserRef.current.id) return;
+      setTypingUsers((prev) => {
+        const without = prev.filter((u) => u.id !== user.id);
+        return [...without, user].slice(-3);
+      });
+      const timers = typingTimers.current;
+      const old = timers.get(user.id);
+      if (old) clearTimeout(old);
+      timers.set(
+        user.id,
+        setTimeout(() => {
+          timers.delete(user.id);
+          setTypingUsers((prev) => prev.filter((u) => u.id !== user.id));
+        }, 4000)
       );
     });
 
@@ -965,6 +1023,7 @@ export function useWatchSync({
     return () => {
       isMounted = false;
       unsubMsg();
+      unsubTyping();
       unsubMembers();
       unsubPlayback();
       service.disconnect();
@@ -972,6 +1031,97 @@ export function useWatchSync({
     // ONLY re-subscribe if room slug or user ID changes (fetchRoles and
     // correctDrift are useCallback-stable, so they never trigger re-subs).
   }, [slug, currentUser.id, playerRef, fetchRoles, correctDrift]);
+
+  // ---- Chat transport actions (read serviceRef: defined after the effect
+  // that assigns it, same as handleHostPlayerEvent/sendMessage). ----
+  const sendTyping = useCallback(() => {
+    void serviceRef.current?.sendTyping();
+  }, []);
+
+  /**
+   * Rich send: text and/or attachment, optional reply quote + moment pin.
+   * Same single-id fan-out as sendMessage, so no duplicates.
+   */
+  const sendRich = useCallback(
+    async (opts: {
+      text?: string;
+      replyTo?: MessageReplyRef;
+      attachment?: MessageAttachment;
+      moment?: number;
+    }): Promise<boolean> => {
+      const service = serviceRef.current;
+      if (!service) return false;
+      try {
+        await service.sendMessage(opts.text ?? "", {
+          replyTo: opts.replyTo,
+          attachment: opts.attachment,
+          moment: opts.moment,
+        });
+        return true;
+      } catch (err) {
+        if (err instanceof ChatSendError) {
+          if (err.code === "SLOW_MODE") {
+            toast.warning(err.message || "Slow mode is on. Wait a moment.");
+          } else if (err.code === "KICKED") {
+            setKickedOut(true);
+            toast.error("You were removed from this room.");
+          } else if (err.code === "SPAM") {
+            toast.warning(err.message || "Message blocked.");
+          } else {
+            toast.error(err.message || "Message was not delivered.");
+          }
+        } else {
+          toast.error("Message was not delivered. Check your connection.");
+        }
+        return false;
+      }
+    },
+    []
+  );
+
+  /** Upload chat media to the Stream CDN (throws OFFLINE_MEDIA inline). */
+  const uploadMedia = useCallback(
+    async (
+      file: Blob,
+      name: string,
+      kind: "image" | "file"
+    ): Promise<{ url: string }> => {
+      const service = serviceRef.current;
+      if (!service) throw new Error("Chat is not connected yet.");
+      return service.uploadChatFile(file, name, kind);
+    },
+    []
+  );
+
+  /** Delete own message (or any, if privileged). Tombstones everywhere. */
+  const deleteMessage = useCallback(
+    async (id: string): Promise<void> => {
+      try {
+        const res = await fetch(`/api/rooms/${slug}/messages/${id}`, {
+          method: "DELETE",
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.message || data?.error || "Delete failed.");
+        }
+        const tombstone = (list: ChatMessage[]) =>
+          list.map((m) =>
+            m.id === id
+              ? { ...m, text: "", attachment: undefined, moment: undefined, deleted: true as const }
+              : m
+          );
+        realtimeMessagesRef.current = tombstone(realtimeMessagesRef.current);
+        serverMessagesRef.current = tombstone(serverMessagesRef.current);
+        setMessages((prev) => tombstone(prev));
+        // Best-effort: remove the realtime copy too (poll covers the rest).
+        await serviceRef.current?.deleteStreamMessage(id);
+        toast.success("Message deleted.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Delete failed.");
+      }
+    },
+    [slug]
+  );
 
   // 3. Privileged heartbeat loop (host + co-hosts, every 3s while playing).
   // Viewers never send control events — enforced again server-side.
@@ -1077,6 +1227,46 @@ export function useWatchSync({
       return false;
     }
   }, []);
+
+  // ---- Chat actions live below the channel effect (they read
+  // serviceRef, which the effect assigns — same pattern as
+  // handleHostPlayerEvent/sendMessage). ----
+
+  /** Toggle an emoji reaction (optimistic, server converges). */
+  const reactToMessage = useCallback(
+    async (id: string, emoji: string): Promise<void> => {
+      const me = currentUserRef.current.id;
+      // Optimistic flip so taps feel instant.
+      const flip = (list: ChatMessage[]) =>
+        list.map((m) => {
+          if (m.id !== id || m.deleted) return m;
+          const users = new Set(m.reactions?.[emoji] ?? []);
+          if (users.has(me)) users.delete(me);
+          else users.add(me);
+          const reactions = { ...(m.reactions ?? {}) };
+          if (users.size === 0) delete reactions[emoji];
+          else reactions[emoji] = Array.from(users);
+          return { ...m, reactions };
+        });
+      realtimeMessagesRef.current = flip(realtimeMessagesRef.current);
+      serverMessagesRef.current = flip(serverMessagesRef.current);
+      setMessages((prev) => flip(prev));
+      try {
+        const res = await fetch(`/api/rooms/${slug}/messages/react`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, emoji }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.message || data?.error || "Reaction failed.");
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Reaction failed.");
+      }
+    },
+    [slug]
+  );
 
   // ---- Privileged + request actions (all re-validated server-side) ----
 
@@ -1289,6 +1479,12 @@ export function useWatchSync({
     isHostBuffering,
     handleHostPlayerEvent,
     sendMessage,
+    sendRich,
+    uploadMedia,
+    reactToMessage,
+    deleteMessage,
+    typingUsers,
+    sendTyping,
     chatSettings,
     controlRequests,
     mutedIds,

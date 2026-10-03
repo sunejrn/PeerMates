@@ -14,6 +14,9 @@ interface GlassControlsProps {
   onPause: () => void;
   onSeek: (seconds: number) => void;
   onToggleFullscreen?: () => void;
+  /** "Pin to moment" markers from chat. Tapping jumps when allowed. */
+  markers?: { id: string; seconds: number }[];
+  onMarkerTap?: (seconds: number) => void;
 }
 
 function formatTime(seconds: number): string {
@@ -35,6 +38,8 @@ export function GlassControls({
   onPause,
   onSeek,
   onToggleFullscreen,
+  markers = [],
+  onMarkerTap,
 }: GlassControlsProps) {
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [scrubValue, setScrubValue] = useState(0);
@@ -84,6 +89,37 @@ export function GlassControls({
               background: `linear-gradient(to right, rgb(139, 92, 246) ${progressPercent}%, rgba(120, 120, 120, 0.25) ${progressPercent}%)`,
             }}
           />
+          {/* Pinned-moment markers from chat (host/co-host taps jump). */}
+          {duration > 0 && markers.length > 0 && (
+            <div className="pointer-events-none absolute inset-0" aria-hidden={!onMarkerTap}>
+              {markers.map((m) => {
+                const pct = Math.min(100, Math.max(0, (m.seconds / duration) * 100));
+                return onMarkerTap ? (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onMarkerTap(m.seconds);
+                    }}
+                    aria-label={`Jump to pinned moment ${formatTime(m.seconds)}`}
+                    title={`📌 Pinned moment ${formatTime(m.seconds)}`}
+                    className="pointer-events-auto absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[8px] text-black shadow cursor-pointer"
+                    style={{ left: `${pct}%` }}
+                  >
+                    📌
+                  </button>
+                ) : (
+                  <span
+                    key={m.id}
+                    title={`📌 Pinned moment ${formatTime(m.seconds)} (host can jump)`}
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-amber-400/80 text-[7px] shadow"
+                    style={{ left: `${pct}%` }}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Action Controls Row */}

@@ -69,4 +69,6 @@ export const RATE_LIMITS = {
   moderation: { limit: 20, windowSeconds: 60 },
   /** WebRTC signaling envelopes (setup only; trickle ICE is bursty). */
   signaling: { limit: 60, windowSeconds: 60 },
+  /** Emoji reaction toggles (tap-happy but bounded). */
+  reaction: { limit: 30, windowSeconds: 60 },
 } as const;

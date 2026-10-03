@@ -53,6 +53,10 @@ export interface VideoPlayerProps {
   dataSaver?: boolean;
   /** Exact HLS segment bytes (measured, not estimated). */
   onFragmentBytes?: (bytes: number) => void;
+  /** "Pin to moment" markers rendered on the seekbar. */
+  markers?: { id: string; seconds: number }[];
+  /** Privileged tap on a marker jumps the video (else informational). */
+  onMarkerTap?: (seconds: number) => void;
   onPlayerEvent?: (event: PlayerStateEvent) => void;
   onReady?: () => void;
   autoPlay?: boolean;

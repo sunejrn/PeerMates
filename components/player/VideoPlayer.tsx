@@ -176,6 +176,8 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
             onPause={() => innerPlayerRef.current?.pause()}
             onSeek={(s) => innerPlayerRef.current?.seek(s)}
             onToggleFullscreen={handleToggleFullscreen}
+            markers={props.markers}
+            onMarkerTap={props.onMarkerTap}
           />
         </div>
       </div>
