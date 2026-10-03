@@ -162,6 +162,10 @@ export function useWatchSync({
   });
 
   const hasSeenHostOnlineRef = useRef(false);
+  /** Role toasts stay silent until the first roles fetch lands, so a refresh
+      never announces a role you already had (and StrictMode double-invoking
+      the updater can't double-fire on mount). */
+  const rolesSyncedRef = useRef(false);
   const serviceRef = useRef<RealtimeChannelService | null>(null);
   const lastSeekTimeRef = useRef<number>(0);
   const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -568,7 +572,9 @@ export function useWatchSync({
       if (nextHost && nextHost.id !== currentHostId) {
         setHostId(nextHost.id);
         if (nextHost.id === myId) {
-          toast.info("Host disconnected. You are now the room host! 👑");
+          toast.info("Host disconnected. You are now the room host! 👑", {
+            id: "role-change",
+          });
           serviceRef.current?.sendPlaybackEvent({
             type: "room.host_changed",
             newHostId: myId,
@@ -668,15 +674,21 @@ export function useWatchSync({
         setRoleMap(data.roles);
       }
       if (data.myRole === "host" || data.myRole === "cohost" || data.myRole === "viewer") {
+        // First successful sync just records the role — only real *changes*
+        // after that deserve a toast. Stable toast id so a repeat replaces
+        // instead of stacking a second sonner.
+        const announce = rolesSyncedRef.current;
+        rolesSyncedRef.current = true;
         setMyRole((prev) => {
-          if (prev !== data.myRole && data.myRole !== "viewer") {
+          if (announce && prev !== data.myRole && data.myRole !== "viewer") {
             toast.success(
               data.myRole === "host"
                 ? "You are now the room host! 👑"
-                : "You were promoted to co-host! 🎬"
+                : "You were promoted to co-host! 🎬",
+              { id: "role-change" }
             );
-          } else if (prev === "cohost" && data.myRole === "viewer") {
-            toast.info("Your co-host role was removed.");
+          } else if (announce && prev === "cohost" && data.myRole === "viewer") {
+            toast.info("Your co-host role was removed.", { id: "role-change" });
           }
           return data.myRole;
         });
@@ -888,7 +900,9 @@ export function useWatchSync({
           setHostId(nextHost.id);
 
           if (nextHost.id === myId) {
-            toast.info("Host disconnected. You are now the room host! 👑");
+            toast.info("Host disconnected. You are now the room host! 👑", {
+              id: "role-change",
+            });
             service.sendPlaybackEvent({
               type: "room.host_changed",
               newHostId: myId,

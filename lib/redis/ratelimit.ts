@@ -71,4 +71,12 @@ export const RATE_LIMITS = {
   signaling: { limit: 60, windowSeconds: 60 },
   /** Emoji reaction toggles (tap-happy but bounded). */
   reaction: { limit: 30, windowSeconds: 60 },
+  /** Room creation (per IP — free-tier abuse guard). */
+  roomCreate: { limit: 6, windowSeconds: 3600 },
+  /** Room joins / presence joins (per room+IP budget). */
+  roomJoin: { limit: 30, windowSeconds: 60 },
+  /** AI translate/recap per user (free-tier guard). */
+  aiPerUser: { limit: 10, windowSeconds: 3600 },
+  /** AI translate/recap global room budget (free-tier guard). */
+  aiGlobal: { limit: 60, windowSeconds: 3600 },
 } as const;

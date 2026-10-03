@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { JoinByCode } from "@/components/room/JoinByCode";
 import { useLocalFilePick } from "@/hooks/useLocalFilePick";
 import {
   formatBytes,
@@ -462,11 +463,18 @@ export function RoomLobby() {
         </div>
       </div>
 
+      {/* Join with a code — same width as the create card on desktop */}
+      <div className="w-full max-w-2xl lg:max-w-4xl mx-auto">
+        <div className="w-full lg:max-w-120">
+          <JoinByCode />
+        </div>
+      </div>
+
       <AuthModal
         open={showAuthModal}
         onOpenChange={setShowAuthModal}
         title="Sign In Required"
-        description="You have already used your 1 free party creation. Please sign in with GitHub to create unlimited watch parties and invite your friends."
+        description="You have already used your 1 free party creation. Please sign in with Google or GitHub to create unlimited watch parties and invite your friends."
       />
     </div>
   );

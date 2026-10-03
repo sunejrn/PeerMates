@@ -163,4 +163,34 @@
   html {
     @apply font-sans;
   }
+  html,
+  body {
+    /* Mobile-first: never allow horizontal scroll at 360px. */
+    max-width: 100%;
+    overflow-x: clip;
+  }
+}
+
+/* Chat message list: scrollable content, scrollbar visually hidden
+   (keeps the WhatsApp feel — the bar stays pinned, content scrolls). */
+.chat-messages {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+.chat-messages::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Room chat column: dvh-based so iPhone Safari + Android Chrome agree. */
+.room-chat-dock {
+  height: 30rem;
+  height: min(30rem, calc(100dvh - 24rem));
+}
+@media (min-width: 1024px) {
+  .room-chat-dock {
+    height: calc(100dvh - 6.5rem);
+  }
 }

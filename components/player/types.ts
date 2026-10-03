@@ -57,6 +57,14 @@ export interface VideoPlayerProps {
   markers?: { id: string; seconds: number }[];
   /** Privileged tap on a marker jumps the video (else informational). */
   onMarkerTap?: (seconds: number) => void;
+  /**
+   * Room subtitles: blob: URL of the selected-language VTT, rendered via a
+   * <track> element (native MP4/HLS/My Files only — YouTube embeds can't
+   * take external tracks). Per-user language + size, synced for everyone.
+   */
+  subtitleTrackUrl?: string | null;
+  /** Per-user caption size. */
+  subtitleSize?: "s" | "m" | "l";
   onPlayerEvent?: (event: PlayerStateEvent) => void;
   onReady?: () => void;
   autoPlay?: boolean;

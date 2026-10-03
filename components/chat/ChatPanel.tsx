@@ -9,7 +9,6 @@ import {
 } from "@/lib/stream/realtimeClient";
 import { ALLOWED_REACTIONS } from "@/lib/chat/moderate";
 import { PTT_ENABLED } from "@/lib/chat/moderate";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { VoiceRecorder, RecordedVoice } from "./VoiceRecorder";
@@ -280,13 +279,22 @@ export function ChatPanel({
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [flashId, setFlashId] = useState<string | null>(null);
+  /** While recording/previewing voice, the text row hides so 360px never overflows. */
+  const [voiceActive, setVoiceActive] = useState(false);
   const scrollBottomRef = useRef<HTMLDivElement>(null);
+  const scrollHostRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    scrollBottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Only auto-scroll when the user was already near the bottom, so
+    // reading history never gets yanked away. The input bar stays pinned
+    // because the scroll container is flex-1 min-h-0 (bar is shrink-0).
+    if (stickToBottomRef.current) {
+      scrollBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
   }, [messages]);
 
   // Close menus on Escape for keyboard users.
@@ -480,6 +488,9 @@ export function ChatPanel({
   };
 
   const menuMsg = menuFor ? messages.find((m) => m.id === menuFor) ?? null : null;
+  // Deleted messages stay as tombstones (so replies still resolve) — the
+  // header count only tracks visible messages, so it drops on delete.
+  const visibleCount = messages.filter((m) => !m.deleted).length;
   const typingLabel =
     typingUsers.length === 0
       ? null
@@ -490,7 +501,7 @@ export function ChatPanel({
           : `${typingUsers.length} people are typing…`;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-card/75 backdrop-blur-xl shadow-xl">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card/75 backdrop-blur-xl shadow-xl">
       {/* Chat Header */}
       <div className="flex items-center justify-between border-b border-border/80 px-4 py-3 bg-muted/20">
         <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -502,7 +513,7 @@ export function ChatPanel({
           )}
         </h3>
         <span className="text-[11px] text-muted-foreground font-mono">
-          {messages.length} messages
+          {visibleCount} messages
         </span>
       </div>
 
@@ -515,8 +526,19 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* Messages Scroll Area */}
-      <ScrollArea className="flex-1 p-3 sm:p-4">
+      {/* Messages — independently scrollable, scrollbar hidden, input stays pinned */}
+      <div
+        ref={scrollHostRef}
+        role="log"
+        aria-label="Party chat messages"
+        aria-live="off"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          stickToBottomRef.current =
+            el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+        }}
+        className="chat-messages min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4"
+      >
         <div className="space-y-3">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center text-xs text-muted-foreground">
@@ -714,7 +736,7 @@ export function ChatPanel({
           )}
           <div ref={scrollBottomRef} />
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Typing indicator */}
       {typingLabel && (
@@ -749,10 +771,14 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* Chat Input pinned to bottom with safe-area padding */}
+      {/* Chat Input pinned to bottom with safe-area padding.
+          WhatsApp-style: single fixed h-11 row. While the voice recorder owns
+          the row (recording/preview/sending), the text field + send hide so
+          360px never overflows — the voice bar always carries its own
+          Cancel + Stop/Send buttons. */}
       <form
         onSubmit={handleSubmit}
-        className="flex items-center gap-1.5 border-t border-border/80 p-2.5 sm:p-3 bg-muted/20 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
+        className="flex shrink-0 items-center gap-1.5 border-t border-border/80 p-2.5 sm:p-3 bg-muted/20 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
       >
         <input
           ref={imageInputRef}
@@ -782,6 +808,7 @@ export function ChatPanel({
           onClick={() => setAttachOpen(true)}
           disabled={inputDisabled}
           aria-label="Attach photo or file"
+          hidden={voiceActive}
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/80 text-lg cursor-pointer disabled:opacity-50"
         >
           📎
@@ -796,6 +823,7 @@ export function ChatPanel({
             }
           }}
           disabled={inputDisabled}
+          hidden={voiceActive}
           aria-label={pinDraft !== null ? `Pinned to ${formatClock(pinDraft)}, tap to remove` : "Pin message to current video moment"}
           title={pinDraft !== null ? `Pinned to ${formatClock(pinDraft)}` : "Pin to current moment"}
           className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-base cursor-pointer disabled:opacity-50 ${
@@ -806,31 +834,36 @@ export function ChatPanel({
         >
           📌
         </button>
-        <Input
-          value={inputText}
-          onChange={(e) => {
-            setInputText(e.target.value);
-            if (e.target.value.length > 0) onTyping?.();
-          }}
-          placeholder={disabledReason}
-          disabled={inputDisabled}
-          aria-label="Chat message"
-          className="h-11 sm:h-11 bg-background/80 border-input text-sm text-foreground focus-visible:ring-violet-500 disabled:opacity-60 min-w-0 flex-1"
-        />
+        {!voiceActive && (
+          <Input
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              if (e.target.value.length > 0) onTyping?.();
+            }}
+            placeholder={disabledReason}
+            disabled={inputDisabled}
+            aria-label="Chat message"
+            className="h-11 sm:h-11 bg-background/80 border-input text-sm text-foreground focus-visible:ring-violet-500 disabled:opacity-60 min-w-0 flex-1"
+          />
+        )}
         <VoiceRecorder
           disabled={inputDisabled}
           ptt={PTT_ENABLED}
           onSend={handleVoiceSend}
           onError={(m) => toast.error(m)}
+          onActiveChange={setVoiceActive}
         />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={(!inputText.trim() && pinDraft === null) || inputDisabled}
-          className="h-11 sm:h-11 px-4 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold cursor-pointer shrink-0 disabled:opacity-50"
-        >
-          {isSending ? "…" : "Send"}
-        </Button>
+        {!voiceActive && (
+          <Button
+            type="submit"
+            size="sm"
+            disabled={(!inputText.trim() && pinDraft === null) || inputDisabled}
+            className="h-11 sm:h-11 px-4 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold cursor-pointer shrink-0 disabled:opacity-50"
+          >
+            {isSending ? "…" : "Send"}
+          </Button>
+        )}
       </form>
 
       {/* Pin draft indicator */}

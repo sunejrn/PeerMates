@@ -24,6 +24,8 @@ interface VoiceRecorderProps {
   /** Push-to-talk: release sends immediately, skipping the preview. */
   ptt?: boolean;
   disabled?: boolean;
+  /** Parent hides the text input while recording/previewing to avoid 360px overflow. */
+  onActiveChange?: (active: boolean) => void;
 }
 
 type Phase = "idle" | "acquiring" | "recording" | "preview" | "sending";
@@ -38,7 +40,7 @@ function Waveform({
   live?: boolean;
 }) {
   return (
-    <div className="flex h-9 flex-1 items-center gap-[2px]" aria-hidden>
+    <div className="flex h-9 min-w-0 flex-1 items-center gap-[2px]" aria-hidden>
       {peaks.map((p, i) => {
         const played = !live && i / Math.max(1, peaks.length) < progress;
         return (
@@ -56,12 +58,15 @@ function Waveform({
 }
 
 /**
- * Hold-to-record voice notes (WhatsApp-style).
- * - Opus/WebM on Android/Chrome, AAC/MP4 fallback on iOS Safari.
- * - Slide left past 80px to cancel; 60s cap; 24kbps keeps files small.
- * - Preview with 1x/1.5x/2x speeds, or instant-send in push-to-talk mode.
+ * WhatsApp-style voice notes (tap-friendly, 44px targets).
+ * - TAP mic to start recording (no hold required) — works on iPhone
+ *   Safari + Android Chrome with one thumb tap.
+ * - HOLD also works: press-and-hold records, release drops to preview.
+ * - Recording bar always shows Cancel + Stop; preview always shows
+ *   Discard + Play + Speed + SEND, so there is always somewhere to tap.
+ * - Slide left >80px still cancels (kept from previous behaviour).
  */
-export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }: VoiceRecorderProps) {
+export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, onActiveChange }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [seconds, setSeconds] = useState(0);
   const [cancelArmed, setCancelArmed] = useState(false);
@@ -88,9 +93,17 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }
   useEffect(() => {
     phaseRef.current = phase;
   }, [phase]);
+  // Tell the chat bar to hide the text input while we own the row.
+  const active = phase === "recording" || phase === "acquiring" || phase === "preview" || phase === "sending";
+  useEffect(() => {
+    onActiveChange?.(active);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active]);
   const livePeaksRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const startAtRef = useRef(0);
+  const downAtRef = useRef(0);
+  const holdModeRef = useRef(false);
 
   const fail = (message: string) => {
     onError?.(message);
@@ -273,7 +286,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }
       return;
     }
     if (duration < VOICE_MIN_SECONDS || blob.size === 0) {
-      fail("Too short — hold to record at least a second.");
+      fail("Too short — tap mic, record at least a second, then tap Stop.");
       setSeconds(0);
       return;
     }
@@ -351,30 +364,50 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }
     setPhase("idle");
   };
 
-  // Recording UI (hold state)
+  // Recording UI — fixed h-11 row, always shows Cancel + Stop/Send.
+  // Parent hides the text input while active, so this never overflows 360px.
   if (phase === "recording" || phase === "acquiring") {
     return (
-      <div className="flex h-11 flex-1 items-center gap-2 rounded-xl border border-red-500/40 bg-red-500/5 px-3 select-none">
+      <div className="flex h-11 min-w-0 flex-1 items-center gap-1.5 rounded-xl border border-red-500/40 bg-red-500/5 px-1.5 select-none" role="status" aria-label="Recording voice note">
+        <button
+          type="button"
+          onClick={() => stopRecording(true)}
+          aria-label="Cancel recording"
+          title="Cancel"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-lg text-muted-foreground hover:text-destructive cursor-pointer"
+        >
+          🗑
+        </button>
         <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 animate-pulse" aria-hidden />
-        <span className="font-mono text-xs text-foreground tabular-nums shrink-0">
+        <span className="font-mono text-xs text-foreground tabular-nums shrink-0 w-10">
           {formatClock(seconds)}
         </span>
-        <div ref={livePeaksRef} className="flex h-9 flex-1 items-center gap-[2px]" aria-hidden>
-          {Array.from({ length: 40 }).map((_, i) => (
+        <div ref={livePeaksRef} className="flex h-9 min-w-0 flex-1 items-center gap-[2px] overflow-hidden" aria-hidden>
+          {Array.from({ length: 32 }).map((_, i) => (
             <span key={i} className="w-[3px] shrink-0 rounded-full bg-muted-foreground/30" style={{ height: "12%" }} />
           ))}
         </div>
-        <span className={`text-[10px] shrink-0 ${cancelArmed ? "text-red-500 font-bold" : "text-muted-foreground"}`}>
-          {cancelArmed ? "🗑 Release to cancel" : "◀ slide to cancel"}
+        <span className={`hidden min-[380px]:inline text-[10px] shrink-0 ${cancelArmed ? "text-red-500 font-bold" : "text-muted-foreground"}`}>
+          {cancelArmed ? "release to cancel" : "slide ◀ to cancel"}
         </span>
+        {/* STOP is always visible — tap it, then tap SEND in preview. */}
+        <button
+          type="button"
+          onClick={() => stopRecording(cancelArmed)}
+          aria-label="Stop recording and review"
+          title="Stop and review"
+          className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-xl bg-violet-600 px-2.5 text-xs font-bold text-white cursor-pointer"
+        >
+          ⏹ <span className="hidden min-[380px]:inline">Stop</span>
+        </button>
       </div>
     );
   }
 
-  // Preview UI
+  // Preview UI — fixed h-11 row with Discard + Play + waveform + speed + SEND.
   if (phase === "preview" && previewUrl) {
     return (
-      <div className="flex flex-1 items-center gap-1.5 rounded-xl border border-border bg-muted/40 px-2 py-1">
+      <div className="flex h-11 min-w-0 flex-1 items-center gap-1 rounded-xl border border-border bg-muted/40 px-1.5">
         <audio
           ref={audioRef}
           src={previewUrl}
@@ -397,7 +430,8 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }
           type="button"
           onClick={discardPreview}
           aria-label="Discard recording"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-destructive cursor-pointer"
+          title="Discard"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive cursor-pointer"
         >
           🗑
         </button>
@@ -405,7 +439,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }
           type="button"
           onClick={togglePreview}
           aria-label={isPlaying ? "Pause preview" : "Play preview"}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white cursor-pointer"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm text-white cursor-pointer"
         >
           {isPlaying ? "⏸" : "▶"}
         </button>
@@ -425,9 +459,10 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }
           type="button"
           onClick={sendPreview}
           aria-label="Send voice note"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-violet-600 text-white cursor-pointer"
+          title="Send voice note"
+          className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-xl bg-violet-600 px-3 text-xs font-bold text-white cursor-pointer"
         >
-          ➤
+          ➤ <span className="hidden min-[380px]:inline">Send</span>
         </button>
       </div>
     );
@@ -435,25 +470,38 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }
 
   if (phase === "sending") {
     return (
-      <div className="flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground">
+      <div className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground" role="status">
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
         Sending voice note…
       </div>
     );
   }
 
-  // Idle: hold-to-record mic button with slide-to-cancel tracking.
+  // Idle: TAP to start (primary), HOLD also works. 44px target.
   return (
     <button
       type="button"
       disabled={disabled}
-      aria-label={ptt ? "Hold to talk" : "Hold to record voice note"}
-      title={ptt ? "Hold to talk" : "Hold to record"}
+      aria-label={ptt ? "Hold to talk" : "Tap to record voice note (or hold)"}
+      title={ptt ? "Hold to talk" : "Tap to record"}
       onPointerDown={(e) => {
         if (disabled) return;
-        (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        downAtRef.current = Date.now();
+        holdModeRef.current = false;
+        try {
+          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+        } catch {
+          // ignore
+        }
         startXRef.current = e.clientX;
-        void beginRecording();
+        // Hold-to-record: only begin on a sustained press; a quick tap is
+        // handled by onClick (toggle mode) so single taps never get stuck.
+        window.setTimeout(() => {
+          if (phaseRef.current !== "idle" || disabled) return;
+          // Still pressed after 350ms => hold mode.
+          holdModeRef.current = true;
+          void beginRecording();
+        }, 350);
       }}
       onPointerMove={(e) => {
         if (phaseRef.current !== "recording") return;
@@ -463,15 +511,26 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false }
         setCancelArmed(armed);
       }}
       onPointerUp={() => {
-        if (phaseRef.current === "acquiring") {
-          pendingStopRef.current = true;
+        // Hold mode: release stops to preview (or cancels on slide).
+        if (holdModeRef.current && phaseRef.current === "recording") {
+          holdModeRef.current = false;
+          stopRecording(cancelRef.current);
           return;
         }
-        if (phaseRef.current === "recording") stopRecording(cancelRef.current);
+        if (phaseRef.current === "acquiring") {
+          pendingStopRef.current = true;
+        }
+        holdModeRef.current = false;
       }}
       onPointerCancel={() => {
         if (phaseRef.current === "recording") stopRecording(true);
         else if (phaseRef.current === "acquiring") pendingStopRef.current = true;
+        holdModeRef.current = false;
+      }}
+      onClick={() => {
+        // Quick tap (not a hold): toggle into locked recording.
+        if (disabled || holdModeRef.current) return;
+        if (phaseRef.current === "idle") void beginRecording();
       }}
       onContextMenu={(e) => e.preventDefault()}
       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/80 text-lg cursor-pointer touch-none select-none disabled:opacity-50"

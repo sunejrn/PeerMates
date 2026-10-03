@@ -12,7 +12,7 @@ import Hls from "hls.js";
 
 export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
   function NativeVideoPlayer(
-    { src, videoType, isHost = true, canControl, localSrc, onAutoplayBlocked, dataSaver = false, onFragmentBytes, onPlayerEvent, onReady },
+    { src, videoType, isHost = true, canControl, localSrc, onAutoplayBlocked, dataSaver = false, onFragmentBytes, onPlayerEvent, onReady, subtitleTrackUrl, subtitleSize = "m" },
     ref
   ) {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -274,12 +274,28 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
 
     return (
       <div className="relative h-full w-full bg-black flex items-center justify-center">
+        {/* Per-user caption size. ::cue must live in document CSS (not the
+            shadow DOM) — one tiny style tag, same render path on iPhone
+            Safari and Android Chrome. */}
+        <style>{`video.syncme-subs::cue{font-size:${subtitleSize === "s" ? "14px" : subtitleSize === "l" ? "24px" : "18px"};line-height:1.35;color:#fff;background:rgba(0,0,0,.65);text-shadow:0 1px 2px rgba(0,0,0,.8);}`}</style>
         <video
           ref={videoRef}
           controls={controlsAllowed}
           playsInline
-          className="h-full w-full object-contain"
-        />
+          crossOrigin="anonymous"
+          className="h-full w-full object-contain syncme-subs"
+        >
+          {/* Keyed track: swapping languages remounts only the track node —
+              the video element (and synced playback position) is untouched. */}
+          {subtitleTrackUrl && (
+            <track
+              key={subtitleTrackUrl}
+              kind="subtitles"
+              src={subtitleTrackUrl}
+              default
+            />
+          )}
+        </video>
       </div>
     );
   }

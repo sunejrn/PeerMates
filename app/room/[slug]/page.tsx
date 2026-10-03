@@ -26,9 +26,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AuthButton } from "@/components/auth/AuthButton";
+import { InviteSheet } from "@/components/room/InviteSheet";
+import { NicknameGate } from "@/components/room/NicknameGate";
+import { SubtitlesPanel } from "@/components/room/SubtitlesPanel";
+import { useGuestIdentity } from "@/hooks/useGuestIdentity";
+import { useRoomSubtitles } from "@/hooks/useRoomSubtitles";
 import { toast } from "sonner";
 import Link from "next/link";
-import { signIn } from "@/lib/auth-client";
 
 export default function RoomPage({
   params,
@@ -43,7 +47,6 @@ export default function RoomPage({
 
   const [room, setRoom] = useState<RoomRecord | null>(null);
   const [isLoadingRoom, setIsLoadingRoom] = useState(true);
-  const [isSigningIn, setIsSigningIn] = useState(false);
   const [isRequestingControl, setIsRequestingControl] = useState(false);
   const [isClaimingHost, setIsClaimingHost] = useState(false);
   // ---- "My Files" local playback state (per-device, never uploaded) ----
@@ -76,20 +79,33 @@ export default function RoomPage({
     fetchRoom();
   }, [slug]);
 
+  // ---- Guest identity (nickname-only join, no signup) ----
+  const { guestId, nickname, saveNickname } = useGuestIdentity();
+
   // Stable join timestamp and memoized member object to prevent re-render loops
   const [joinedAt] = useState<number>(() => Date.now());
+  const effectiveId = session?.user?.id || guestId;
+  const effectiveName = session?.user?.name || nickname || "Guest";
   const currentUser = useMemo(
     () => ({
-      id: session?.user?.id || "guest",
-      name: session?.user?.name || "Guest",
+      id: effectiveId,
+      name: effectiveName,
       image: session?.user?.image || undefined,
-      role: (room?.hostId === session?.user?.id ? "host" : "viewer") as
+      role: (room?.hostId === effectiveId ? "host" : "viewer") as
         | "host"
         | "viewer",
       joinedAt,
     }),
-    [session?.user?.id, session?.user?.name, session?.user?.image, room?.hostId, joinedAt]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [effectiveId, effectiveName, session?.user?.image, room?.hostId, joinedAt]
   );
+
+  // ---- Room subtitles (host/co-host upload, per-user language + size) ----
+  const subs = useRoomSubtitles({
+    slug,
+    actorId: effectiveId,
+    videoType: room?.videoType,
+  });
 
   // Synchronized Watch Party Engine (Phase 4, 5, 6 + roles/moderation)
   const {
@@ -336,25 +352,17 @@ export default function RoomPage({
     return () => document.removeEventListener("visibilitychange", onVis);
   }, [canControl, slug]);
 
-  const handleCopyLink = () => {
-    if (typeof window !== "undefined") {
-      navigator.clipboard.writeText(window.location.href);
-      toast.success("Watch party invite link copied to clipboard!");
-    }
-  };
-
   const handleClaimHost = async () => {
-    if (!session?.user) return;
     try {
       setIsClaimingHost(true);
       const res = await fetch(`/api/rooms/${slug}/host`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newHostId: session.user.id }),
+        body: JSON.stringify({ newHostId: effectiveId, actorId: effectiveId }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast.success("You are now the room host! 👑");
+        toast.success("You are now the room host! 👑", { id: "role-change" });
       } else {
         toast.error(data?.error || data?.message || "Host claim rejected.");
       }
@@ -373,21 +381,6 @@ export default function RoomPage({
       toast.error(err instanceof Error ? err.message : "Control request failed.");
     } finally {
       setIsRequestingControl(false);
-    }
-  };
-
-  const handleGitHubSignIn = async () => {
-    try {
-      setIsSigningIn(true);
-      await signIn.social({
-        provider: "github",
-        callbackURL:
-          typeof window !== "undefined" ? window.location.href : `/room/${slug}`,
-      });
-    } catch (err) {
-      console.error("Sign in error:", err);
-    } finally {
-      setIsSigningIn(false);
     }
   };
 
@@ -437,75 +430,33 @@ export default function RoomPage({
     );
   }
 
-  // MANDATORY AUTHENTICATION GATE
-  if (!session?.user) {
+  // GUEST JOIN — nickname only, no signup. Signed-in users skip this.
+  // Existing GitHub auth keeps working (AuthButton in headers); guests get
+  // a stable local id so presence/roles survive reconnects.
+  if (!session?.user && !nickname) {
     return (
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
+      <div className="flex min-h-screen min-h-dvh flex-col bg-background text-foreground">
         <header className="flex h-16 items-center justify-between border-b border-border/80 px-4 sm:px-6 backdrop-blur-md">
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground"
+            className="flex min-h-11 items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground"
           >
             ← Back to Lobby
           </Link>
           <AuthButton />
         </header>
 
-        <main className="flex flex-1 items-center justify-center p-4 sm:p-6">
-          <Card className="w-full max-w-md border-border bg-card/75 p-6 sm:p-8 text-center backdrop-blur-xl shadow-2xl rounded-2xl space-y-6">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-600/15 border border-violet-500/30 text-violet-600 dark:text-violet-400 shadow-md">
-              <svg
-                className="h-7 w-7"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                />
-              </svg>
-            </div>
-
-            <div className="space-y-2">
-              <Badge
-                variant="outline"
-                className="border-violet-500/40 bg-violet-500/10 text-violet-600 dark:text-violet-400 text-xs px-2.5 py-0.5"
-              >
-                Watch Party #{slug}
-              </Badge>
-              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-                Authentication Required
-              </h2>
-              <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-                You must sign in with GitHub to join{" "}
-                <strong className="text-foreground">&quot;{room.title}&quot;</strong>.
-                Required to sync playback with friends, chat live, and participate.
-              </p>
-            </div>
-
-            <Button
-              onClick={handleGitHubSignIn}
-              disabled={isSigningIn}
-              className="w-full h-12 gap-2.5 bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-lg cursor-pointer"
-            >
-              <svg
-                className="h-5 w-5 fill-current shrink-0"
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-              >
-                <path
-                  fillRule="evenodd"
-                  clipRule="evenodd"
-                  d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
-                />
-              </svg>
-              {isSigningIn ? "Connecting to GitHub..." : "Sign in with GitHub to Join"}
-            </Button>
-          </Card>
-        </main>
+        {!room ? (
+          <main className="flex flex-1 items-center justify-center p-4">
+            <p className="text-sm text-muted-foreground">Loading party…</p>
+          </main>
+        ) : (
+          <NicknameGate
+            roomTitle={room.title}
+            slug={slug}
+            onJoin={(name) => saveNickname(name)}
+          />
+        )}
       </div>
     );
   }
@@ -563,15 +514,7 @@ export default function RoomPage({
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleCopyLink}
-            className="border-border bg-card/80 text-xs text-foreground hover:bg-muted h-9 px-2.5 sm:px-3"
-            aria-label="Copy Invite Link"
-          >
-            📋 <span className="hidden sm:inline ml-1">Copy Link</span>
-          </Button>
+          <InviteSheet slug={slug} title={room.title} />
           <AuthButton />
         </div>
       </header>
@@ -605,6 +548,8 @@ export default function RoomPage({
               onPlayerEvent={handleHostPlayerEvent}
               markers={momentMarkers}
               onMarkerTap={canControl ? handleMarkerTap : undefined}
+              subtitleTrackUrl={subs.trackUrl}
+              subtitleSize={subs.size}
             />
             {/* iOS Safari blocks autoplay with sound: followers get a real
                 tap target that plays inside the user gesture. */}
@@ -694,7 +639,7 @@ export default function RoomPage({
             <Card className="border-border bg-card/60 px-3 sm:px-4 py-2 backdrop-blur-sm rounded-xl shadow-sm">
               <PresenceBar
                 members={members}
-                currentUserId={session.user.id}
+                currentUserId={effectiveId}
                 hostId={hostId}
                 noAvatars={dataSaver}
               />
@@ -763,7 +708,7 @@ export default function RoomPage({
             {/* Viewer list (virtualized — fast at 500 members) */}
             <ViewerList
               members={members}
-              currentUserId={session.user.id}
+              currentUserId={effectiveId}
               hostId={hostId}
               isPrivileged={canControl}
               isHost={isHost}
@@ -801,8 +746,8 @@ export default function RoomPage({
               <StreamFromHostPanel
                 slug={slug}
                 hostId={hostId}
-                myId={session.user.id}
-                myName={session.user.name || "Viewer"}
+                myId={effectiveId}
+                myName={effectiveName || "Viewer"}
                 isHost={isHost}
                 getHostVideo={getHostVideo}
                 onShareToggle={handleShareToggle}
@@ -821,6 +766,13 @@ export default function RoomPage({
                 onSwitchToLocalFile={handleMakeRoomFile}
               />
             )}
+
+            {/* Subtitles + AI (everyone; upload is privileged server-side) */}
+            <SubtitlesPanel
+              subs={subs}
+              canUpload={canControl}
+              getCurrentTime={() => playerRef.current?.getCurrentTime() ?? 0}
+            />
 
             {/* Low-Data Mode + live session meter */}
             <DataPanel
@@ -844,13 +796,13 @@ export default function RoomPage({
 
         {/* Right Column: Live Chat Panel (Always docked on desktop lg+, or in 'chat' tab on mobile) */}
         <div
-          className={`w-full lg:w-85 xl:w-95 shrink-0 h-120 lg:h-[calc(100vh-6.5rem)] min-h-100 flex flex-col ${
+          className={`room-chat-dock w-full lg:w-85 xl:w-95 shrink-0 min-h-100 flex min-h-0 flex-col ${
             mobileTab === "chat" ? "flex" : "hidden lg:flex"
           }`}
         >
           <ChatPanel
             messages={messages}
-            currentUserId={session.user.id}
+            currentUserId={effectiveId}
             onSendMessage={sendRich}
             uploadMedia={uploadMedia}
             slowModeSeconds={chatSettings.slowModeSeconds}

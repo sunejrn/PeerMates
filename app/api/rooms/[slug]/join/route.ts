@@ -4,24 +4,55 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db/drizzle";
 import { roomParticipants, user } from "@/db/schema";
 import { getRole, isKicked, type RoomRole } from "@/lib/redis/roles";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/redis/ratelimit";
+import { rateLimited } from "@/lib/rooms/actor";
 import { nanoid } from "nanoid";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
+  const { slug } = await params;
+  // Rate-limit joins per room (500-viewer scale guard, free tier safe).
+  const forwarded = req.headers.get("x-forwarded-for");
+  const ip = forwarded ? forwarded.split(",")[0].trim().slice(0, 64) : "unknown";
+  const { allowed, retryAfter } = await checkRateLimit(
+    `room-join:${slug}:${ip}`,
+    RATE_LIMITS.roomJoin.limit,
+    RATE_LIMITS.roomJoin.windowSeconds
+  );
+  if (!allowed) return rateLimited(retryAfter);
   try {
-    const { slug } = await params;
     const room = await getRoomBySlug(slug);
 
     if (!room) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
 
-    // Identify user
+    // Identify user (session first, then nickname/guest-id body fallback).
     let userId = "guest_" + nanoid(6);
     let userName = "Guest Viewer";
     let userImage: string | undefined;
+
+    let bodyNickname: string | undefined;
+    let bodyGuestId: string | undefined;
+    try {
+      const body = await req.json().catch(() => null);
+      if (body && typeof body === "object") {
+        const rec = body as Record<string, unknown>;
+        if (typeof rec.nickname === "string" && rec.nickname.trim()) {
+          bodyNickname = rec.nickname.trim().slice(0, 24);
+        }
+        for (const k of ["guestId", "actorId", "userId", "id"] as const) {
+          if (typeof rec[k] === "string" && (rec[k] as string).trim()) {
+            bodyGuestId = (rec[k] as string).trim().slice(0, 64);
+            break;
+          }
+        }
+      }
+    } catch {
+      // body is optional
+    }
 
     try {
       const session = await auth.api.getSession({
@@ -33,7 +64,11 @@ export async function POST(
         userImage = session.user.image || undefined;
       }
     } catch {
-      // Continue as guest
+      // Continue as guest (body fallback below)
+    }
+    if (userId.startsWith("guest_")) {
+      if (bodyGuestId) userId = bodyGuestId;
+      if (bodyNickname) userName = bodyNickname;
     }
 
     const isHost = room.hostId === userId;

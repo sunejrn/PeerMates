@@ -4,9 +4,24 @@ import { detectVideoSource, localFileSourceFor } from "@/lib/video/detector";
 import { isValidFingerprint } from "@/lib/video/localfile";
 import { setRoomFingerprint } from "@/lib/redis/localfile";
 import { createRoomInDb, getRecentRooms } from "@/lib/rooms/store";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/redis/ratelimit";
+import { rateLimited, errMessage } from "@/lib/rooms/actor";
 import { nanoid } from "nanoid";
 
+function clientIp(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0].trim().slice(0, 64);
+  return req.headers.get("x-real-ip")?.slice(0, 64) || "unknown";
+}
+
 export async function POST(req: NextRequest) {
+  // Rate-limit room creation (free-tier guard, per IP).
+  const { allowed, retryAfter } = await checkRateLimit(
+    `room-create:${clientIp(req)}`,
+    RATE_LIMITS.roomCreate.limit,
+    RATE_LIMITS.roomCreate.windowSeconds
+  );
+  if (!allowed) return rateLimited(retryAfter);
   try {
     const body = await req.json();
     const { title, videoUrl, localFile } = body;
