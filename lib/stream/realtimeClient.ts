@@ -17,6 +17,12 @@ export interface PartyMember {
   image?: string;
   role: RoomRole;
   joinedAt: number;
+  /**
+   * "My Files" rooms only: does this viewer's local file match the host
+   * fingerprint? true = Match, false = Different file, null/undefined =
+   * no file picked yet (or a non-local room).
+   */
+  fileMatch?: boolean | null;
 }
 
 export interface ChatMessage {

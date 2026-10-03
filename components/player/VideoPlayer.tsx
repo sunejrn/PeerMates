@@ -44,6 +44,9 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         getCurrentTime: () => innerPlayerRef.current?.getCurrentTime() || 0,
         getDuration: () => innerPlayerRef.current?.getDuration() || 0,
         isPaused: () => innerPlayerRef.current?.isPaused() ?? true,
+        requestFullscreen: () => innerPlayerRef.current?.requestFullscreen?.(),
+        getVideoElement: () =>
+          innerPlayerRef.current?.getVideoElement?.() ?? null,
       }),
       []
     );
@@ -76,12 +79,24 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
     };
 
     const handleToggleFullscreen = () => {
-      if (!containerRef.current) return;
-      if (!document.fullscreenElement) {
-        containerRef.current.requestFullscreen?.().catch(() => {});
-      } else {
+      // Prefer the player's own implementation: native <video> uses
+      // webkitEnterFullscreen on iPhone Safari where element fullscreen
+      // does not exist.
+      if (typeof document !== "undefined" && document.fullscreenElement) {
         document.exitFullscreen?.().catch(() => {});
+        return;
       }
+      const inner = innerPlayerRef.current;
+      if (inner?.requestFullscreen) {
+        try {
+          inner.requestFullscreen();
+        } catch {
+          // ignore — native controls remain available
+        }
+        return;
+      }
+      // Legacy fallback for players without their own implementation.
+      containerRef.current?.requestFullscreen?.().catch(() => {});
     };
 
     return (
@@ -107,7 +122,7 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
             variant="outline"
             className="border-white/20 bg-black/60 backdrop-blur-md text-[10px] sm:text-[11px] font-mono text-zinc-200 uppercase px-2 sm:px-2.5 py-0.5 shadow"
           >
-            {videoType}
+            {videoType === "localfile" ? "My File" : videoType}
           </Badge>
 
           {badge === "host" ? (

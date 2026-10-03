@@ -11,6 +11,7 @@ import {
   RoomRole,
 } from "@/lib/stream/realtimeClient";
 import { toast } from "sonner";
+import type { LocalFingerprint } from "@/lib/video/localfile";
 
 interface UseWatchSyncProps {
   slug: string;
@@ -88,6 +89,8 @@ export function useWatchSync({
   const [myRequestPending, setMyRequestPending] = useState(false);
   const [amMuted, setAmMuted] = useState(false);
   const [kickedOut, setKickedOut] = useState(false);
+  // ---- "My Files" local-file match badges (server-authoritative) ----
+  const [fileMatchMap, setFileMatchMap] = useState<Record<string, boolean | null>>({});
 
   const isHost = currentUser.id === hostId;
   const isCohost = myRole === "cohost";
@@ -102,6 +105,8 @@ export function useWatchSync({
   const roleMapRef = useRef<Record<string, RoomRole>>({});
   const onSourceChangedRef = useRef(onSourceChanged);
   const currentUserRef = useRef(currentUser);
+  /** My own local-file match (null = no file picked). Sent on heartbeat. */
+  const fileMatchRef = useRef<boolean | null>(null);
 
   useEffect(() => {
     hostIdRef.current = hostId;
@@ -246,6 +251,37 @@ export function useWatchSync({
     }
   }, [slug, playerRef]);
 
+  // ---- "My Files" match badges ----
+  // Server presence copies carry fileMatch; overlay them onto merged members
+  // (Stream-watcher copies predate them and would otherwise win the merge).
+  const syncFileMatchMap = useCallback((list: PartyMember[]) => {
+    setFileMatchMap((prev) => {
+      const next: Record<string, boolean | null> = {};
+      for (const m of list) {
+        if (!m?.id) continue;
+        next[m.id] = m.fileMatch === true ? true : m.fileMatch === false ? false : null;
+      }
+      const prevKeys = Object.keys(prev);
+      const nextKeys = Object.keys(next);
+      if (
+        prevKeys.length === nextKeys.length &&
+        nextKeys.every((k) => prev[k] === next[k])
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
+
+  /**
+   * Publish my local-file match status. Propagates on the next presence
+   * heartbeat (<=5s) so the host sees my Match/Different badge. Pass null
+   * when the file is cleared.
+   */
+  const setFileMatch = useCallback((match: boolean | null) => {
+    fileMatchRef.current = match;
+  }, []);
+
   // 1b. Server-backed presence heartbeat + polling.
   // This is the cross-device source of truth: every client POSTs its
   // heartbeat and GETs the full online list, so two different accounts on
@@ -265,6 +301,7 @@ export function useWatchSync({
             name: currentUserRef.current.name,
             image: currentUserRef.current.image,
             joinedAt: currentUserRef.current.joinedAt,
+            fileMatch: fileMatchRef.current,
           }),
         });
         if (!res.ok || stopped) {
@@ -283,6 +320,7 @@ export function useWatchSync({
           setMembers(
             mergeMembers(realtimeMembersRef.current, data.members)
           );
+          syncFileMatchMap(data.members);
         }
       } catch {
         // polling is best-effort
@@ -299,6 +337,7 @@ export function useWatchSync({
           setMembers(
             mergeMembers(realtimeMembersRef.current, data.members)
           );
+          syncFileMatchMap(data.members);
           checkHostPresence(data.members);
         }
       } catch {
@@ -387,7 +426,8 @@ export function useWatchSync({
       }).catch(() => {});
     };
     // ONLY re-subscribe if room slug or user ID changes
-  }, [slug, currentUser.id]);
+    // (syncFileMatchMap is useCallback-bound to nothing, so it never re-fires).
+  }, [slug, currentUser.id, syncFileMatchMap]);
 
   // 1c. Server-backed chat polling: merges durable history with realtime.
   useEffect(() => {
@@ -992,6 +1032,18 @@ export function useWatchSync({
     [slug]
   );
 
+  /**
+   * Advertise / stop the host's P2P stream (host only, server-enforced).
+   * Viewers polling the localfile endpoint see availability instantly.
+   */
+  const setP2PSharing = useCallback(
+    async (on: boolean) => {
+      await postModerationAction({ action: "p2pshare", on });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
   const changeVideoSource = useCallback(
     async (videoUrl: string) => {
       const data = await postModerationAction({ action: "source", videoUrl });
@@ -1007,13 +1059,38 @@ export function useWatchSync({
     [slug]
   );
 
+  /**
+   * Switch the room to a "My Files" movie (privileged only, server-enforced).
+   * Viewers then pick the same file on their own devices; only timestamps
+   * sync — bytes never leave anyone's device.
+   */
+  const switchToLocalFile = useCallback(
+    async (fingerprint: LocalFingerprint) => {
+      const data = await postModerationAction({
+        action: "source",
+        localFile: fingerprint,
+      });
+      if (data?.room) {
+        onSourceChangedRef.current?.({
+          videoSource: data.room.videoSource,
+          videoType: data.room.videoType,
+        });
+      }
+      toast.success("Switched to a local file — everyone picks it on their device.");
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [slug]
+  );
+
   // Overlay the authoritative role map onto the merged member list so
   // Stream-watcher copies (which carry no role) still render correctly.
+  // Same for local-file match badges (server presence copies win).
   const membersWithRoles = members.map((m) => ({
     ...m,
     role:
       roleMap[m.id] ??
       (m.id === hostId ? ("host" as RoomRole) : m.role),
+    fileMatch: fileMatchMap[m.id] ?? m.fileMatch ?? null,
   }));
 
   return {
@@ -1047,5 +1124,8 @@ export function useWatchSync({
     setSlowMode,
     setChatMuted,
     changeVideoSource,
+    switchToLocalFile,
+    setP2PSharing,
+    setFileMatch,
   };
 }

@@ -6,6 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { useLocalFilePick } from "@/hooks/useLocalFilePick";
+import {
+  formatBytes,
+  formatDuration,
+  LOCAL_FILE_ACCEPT,
+  type LocalFingerprint,
+} from "@/lib/video/localfile";
 
 interface ModerationPanelProps {
   slowModeSeconds: number;
@@ -14,6 +21,7 @@ interface ModerationPanelProps {
   onSetSlowMode: (seconds: number) => Promise<void>;
   onSetChatMuted: (muted: boolean) => Promise<void>;
   onChangeSource: (videoUrl: string) => Promise<void>;
+  onSwitchToLocalFile: (fp: LocalFingerprint, file: File) => Promise<void>;
 }
 
 const SLOW_OPTIONS = [0, 5, 10, 30];
@@ -30,9 +38,12 @@ export function ModerationPanel({
   onSetSlowMode,
   onSetChatMuted,
   onChangeSource,
+  onSwitchToLocalFile,
 }: ModerationPanelProps) {
   const [pending, setPending] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState("");
+  const [showFileSwitch, setShowFileSwitch] = useState(false);
+  const filePick = useLocalFilePick();
 
   const run = async (key: string, fn: () => Promise<void>, ok?: string) => {
     try {
@@ -150,6 +161,75 @@ export function ModerationPanel({
           Playback resets for everyone so all devices re-sync.
         </p>
       </form>
+
+      {/* Switch to a My Files movie on this device */}
+      <div className="space-y-1.5">
+        <button
+          type="button"
+          onClick={() => setShowFileSwitch((v) => !v)}
+          aria-expanded={showFileSwitch}
+          className="flex min-h-11 w-full items-center justify-between rounded-lg border border-border/70 bg-background/50 px-3 text-xs font-medium text-foreground cursor-pointer"
+        >
+          <span>📁 Switch to My File…</span>
+          <span className="text-muted-foreground" aria-hidden>{showFileSwitch ? "▲" : "▼"}</span>
+        </button>
+        {showFileSwitch && (
+          <div className="space-y-2 rounded-lg border border-border/50 p-2.5">
+            <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-background/60 px-3 text-xs font-medium hover:border-violet-500/50 transition-all">
+              <input
+                type="file"
+                accept={LOCAL_FILE_ACCEPT}
+                className="hidden"
+                aria-label="Choose a movie file to make the room file"
+                onChange={(e) => {
+                  void filePick.pickFile(e.target.files?.[0] ?? null);
+                  e.target.value = "";
+                }}
+              />
+              📂 {filePick.file ? filePick.file.name : "Choose movie file…"}
+            </label>
+
+            {(filePick.phase === "preflight" || filePick.phase === "fingerprint") && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                {filePick.phase === "preflight"
+                  ? "Checking compatibility…"
+                  : `Fingerprinting… ${Math.round(filePick.progress * 100)}%`}
+              </div>
+            )}
+            {filePick.phase === "error" && (
+              <p className="text-xs text-red-600 dark:text-red-400" role="alert">
+                ❌ {filePick.error}{filePick.tip ? ` ${filePick.tip}` : ""}
+              </p>
+            )}
+            {filePick.phase === "ready" && filePick.fp && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                  ✅ {formatBytes(filePick.fp.size)} · {formatDuration(filePick.fp.duration)}
+                </p>
+                <Button
+                  disabled={pending !== null}
+                  onClick={() => {
+                    if (!filePick.fp || !filePick.file) return;
+                    const fp = filePick.fp;
+                    const f = filePick.file;
+                    run("localsource", () => onSwitchToLocalFile(fp, f)).then(() => {
+                      filePick.reset();
+                      setShowFileSwitch(false);
+                    });
+                  }}
+                  className="w-full min-h-11 bg-violet-600 hover:bg-violet-500 text-white text-xs"
+                >
+                  {pending === "localsource" ? "Switching…" : "🎬 Make this the room file"}
+                </Button>
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Everyone picks the same file on their device; playback resets so all re-sync.
+            </p>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

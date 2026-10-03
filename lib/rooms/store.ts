@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { VideoType } from "@/lib/video/detector";
 import { setRoomState } from "@/lib/redis/roomState";
 import { seedHostRole, setRole } from "@/lib/redis/roles";
+import type { LocalFingerprint } from "@/lib/video/localfile";
 
 export interface RoomRecord {
   id: string;
@@ -287,12 +288,14 @@ export async function transferRoomHost(
 
 /**
  * Change the room's video source (privileged action). Resets playback to
- * paused-at-zero so every follower re-syncs to the new media.
+ * paused-at-zero so every follower re-syncs to the new media. For localfile
+ * sources, pass the host fingerprint so it is persisted for comparison.
  */
 export async function changeRoomSource(
   slug: string,
   videoSource: string,
-  videoType: VideoType
+  videoType: VideoType,
+  fingerprint?: LocalFingerprint
 ): Promise<RoomRecord | null> {
   const room = await getRoomBySlug(slug);
   if (!room) return null;
@@ -320,6 +323,16 @@ export async function changeRoomSource(
     serverTimestamp: Date.now(),
     hostId: room.hostId,
   });
+
+  // Persist a new host fingerprint when switching to a local file.
+  if (videoType === "localfile" && fingerprint) {
+    try {
+      const { setRoomFingerprint } = await import("@/lib/redis/localfile");
+      await setRoomFingerprint(slug, fingerprint);
+    } catch {
+      // best-effort
+    }
+  }
 
   try {
     const { broadcastRoomEvent } = await import("@/lib/stream/server");

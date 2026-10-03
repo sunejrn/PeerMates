@@ -19,6 +19,8 @@ interface ViewerListProps {
   isHost: boolean;
   mutedIds?: string[];
   controlRequests?: ControlRequestItem[];
+  /** "My Files" rooms: show per-viewer Match / Different file badges. */
+  showFileMatch?: boolean;
   onPromote: (userId: string) => Promise<void>;
   onDemote: (userId: string) => Promise<void>;
   onKick: (userId: string) => Promise<void>;
@@ -50,6 +52,28 @@ function RoleBadge({ role }: { role: RoomRole }) {
   return (
     <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
       Viewer
+    </Badge>
+  );
+}
+
+function FileMatchBadge({ match }: { match: boolean | null | undefined }) {
+  if (match === true) {
+    return (
+      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] px-1.5">
+        ✅ Match
+      </Badge>
+    );
+  }
+  if (match === false) {
+    return (
+      <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] px-1.5">
+        ⚠️ Different
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
+      No file
     </Badge>
   );
 }
@@ -88,6 +112,7 @@ export function ViewerList({
   isHost,
   mutedIds = [],
   controlRequests = [],
+  showFileMatch = false,
   onPromote,
   onDemote,
   onKick,
@@ -277,13 +302,14 @@ export function ViewerList({
                           </span>
                         )}
                       </span>
-                      <span className="mt-0.5 flex items-center gap-1.5">
+                      <span className="mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <RoleBadge role={m.role} />
                         {mutedSet.has(m.id) && (
                           <Badge variant="outline" className="text-[10px] px-1.5 text-red-500 border-red-500/30">
                             🔇 Muted
                           </Badge>
                         )}
+                        {showFileMatch && <FileMatchBadge match={m.fileMatch} />}
                       </span>
                     </span>
                     {showActions && (

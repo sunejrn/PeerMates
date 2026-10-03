@@ -1,10 +1,32 @@
-export type VideoType = "youtube" | "hls" | "mp4";
+export type VideoType = "youtube" | "hls" | "mp4" | "localfile";
 
 export interface VideoDetectionResult {
   isValid: boolean;
   type: VideoType | null;
   videoId?: string; // YouTube video ID if applicable
   cleanUrl: string;
+}
+
+/**
+ * "My Files" (bring-your-own-video) rooms. The actual bytes stay on each
+ * person's device — nothing is uploaded. videoSource stores a stable
+ * `localfile:<fpId>` pointer while the full fingerprint (size, duration,
+ * chunk hashes) lives in Redis for viewers to compare against.
+ */
+export const LOCALFILE_PREFIX = "localfile:";
+
+export function isLocalFileSource(src: string): boolean {
+  return typeof src === "string" && src.startsWith(LOCALFILE_PREFIX);
+}
+
+export function localFileSourceFor(fpId: string): string {
+  return `${LOCALFILE_PREFIX}${fpId}`;
+}
+
+export function localFileFpId(src: string): string | null {
+  if (!isLocalFileSource(src)) return null;
+  const id = src.slice(LOCALFILE_PREFIX.length).trim();
+  return id ? id : null;
 }
 
 export function extractYouTubeId(url: string): string | null {

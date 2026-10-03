@@ -10,6 +10,13 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { useLocalFilePick } from "@/hooks/useLocalFilePick";
+import {
+  formatBytes,
+  formatDuration,
+  LOCAL_FILE_ACCEPT,
+  RIGHTS_NOTICE,
+} from "@/lib/video/localfile";
 
 interface Preset {
   label: string;
@@ -42,6 +49,9 @@ export function RoomLobby() {
   const [title, setTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [sourceTab, setSourceTab] = useState<"link" | "myfiles">("link");
+  const [rightsOk, setRightsOk] = useState(false);
+  const filePick = useLocalFilePick();
 
   const detection = detectVideoSource(videoUrl);
 
@@ -66,6 +76,11 @@ export function RoomLobby() {
 
     if (!session?.user && checkHasCreatedOnce()) {
       setShowAuthModal(true);
+      return;
+    }
+
+    if (sourceTab === "myfiles") {
+      await handleCreateLocalFileRoom();
       return;
     }
 
@@ -114,6 +129,51 @@ export function RoomLobby() {
     }
   };
 
+  const handleCreateLocalFileRoom = async () => {
+    if (!filePick.file || !filePick.fp || filePick.phase !== "ready") {
+      toast.error("Pick a playable video file first.");
+      return;
+    }
+    if (!rightsOk) {
+      toast.error("Please confirm you have the right to play this file.");
+      return;
+    }
+    try {
+      setIsCreating(true);
+      const res = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title:
+            title.trim() ||
+            filePick.file.name.replace(/\.[^.]+$/, "") ||
+            "Watch Party",
+          localFile: filePick.fp,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        if (data.error === "AUTH_REQUIRED") {
+          setShowAuthModal(true);
+          return;
+        }
+        throw new Error(data.error || data.message || "Failed to create room");
+      }
+
+      if (!session?.user && typeof window !== "undefined") {
+        localStorage.setItem("watchtogether_has_created_once", "true");
+      }
+
+      toast.success("Watch Party created! Pick the file again inside the room.");
+      router.push(`/room/${data.slug}`);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create watch party");
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   return (
     <div className="w-full">
       {/* Responsive layout: Single-column on mobile/tablet, 2-column on lg+ desktop */}
@@ -125,13 +185,42 @@ export function RoomLobby() {
               Start a Watch Party
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Paste any YouTube URL, HLS stream (.m3u8), or direct video file link
-              to sync playback with your friends.
+              Paste any YouTube URL, HLS stream (.m3u8), or direct video file link —
+              or bring your own movie with My Files — to sync playback with your friends.
             </p>
           </div>
 
           <form onSubmit={handleCreateRoom} className="space-y-4 sm:space-y-5 text-left flex-1 flex flex-col justify-between">
             <div className="space-y-4">
+              {/* Source tabs: link vs bring-your-own file */}
+              <div
+                className="grid grid-cols-2 gap-1 p-1 bg-muted/60 rounded-xl border border-border"
+                role="tablist"
+                aria-label="Video source"
+              >
+                {(
+                  [
+                    { id: "link", label: "🔗 Link / URL" },
+                    { id: "myfiles", label: "📁 My Files" },
+                  ] as const
+                ).map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={sourceTab === t.id}
+                    onClick={() => setSourceTab(t.id)}
+                    className={`min-h-11 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      sourceTab === t.id
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Party Title (Optional)
@@ -144,6 +233,7 @@ export function RoomLobby() {
                 />
               </div>
 
+              {sourceTab === "link" ? (
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -174,9 +264,92 @@ export function RoomLobby() {
                   onChange={(e) => setVideoUrl(e.target.value)}
                   placeholder="https://www.youtube.com/watch?v=... or .m3u8"
                   className="h-11 sm:h-10 bg-background/80 border-input text-foreground focus-visible:ring-violet-500 font-mono text-xs sm:text-sm"
-                  required
+                  required={sourceTab === "link"}
                 />
               </div>
+              ) : (
+              <div className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Your movie file
+                </span>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Everyone picks the <strong className="text-foreground">same movie</strong> on
+                  their own device — nothing is uploaded, so multi-GB files work. Only
+                  timestamps sync.
+                </p>
+                <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-background/60 px-3 py-2 text-xs font-medium text-foreground hover:border-violet-500/50 transition-all">
+                  <input
+                    type="file"
+                    accept={LOCAL_FILE_ACCEPT}
+                    className="hidden"
+                    aria-label="Choose a movie file on this device"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] ?? null;
+                      setRightsOk(false);
+                      if (f && !title) {
+                        setTitle(f.name.replace(/\.[^.]+$/, ""));
+                      }
+                      void filePick.pickFile(f);
+                      e.target.value = "";
+                    }}
+                  />
+                  📂 {filePick.file ? filePick.file.name : "Choose movie file…"}
+                </label>
+
+                {(filePick.phase === "preflight" || filePick.phase === "fingerprint") && (
+                  <div className="space-y-1.5" role="status">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                      {filePick.phase === "preflight"
+                        ? "Checking compatibility…"
+                        : `Fingerprinting (3 × 1 MB)… ${Math.round(filePick.progress * 100)}%`}
+                    </div>
+                    {filePick.phase === "fingerprint" && (
+                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                        <div
+                          className="h-full bg-violet-500 transition-all"
+                          style={{ width: `${Math.round(filePick.progress * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {filePick.phase === "error" && (
+                  <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs space-y-1" role="alert">
+                    <p className="font-semibold text-red-600 dark:text-red-400">❌ {filePick.error}</p>
+                    {filePick.tip && <p className="text-muted-foreground">💡 {filePick.tip}</p>}
+                  </div>
+                )}
+
+                {filePick.phase === "ready" && filePick.fp && (
+                  <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs space-y-1">
+                    <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+                      ✅ Playable here — {formatBytes(filePick.fp.size)} · {formatDuration(filePick.fp.duration)}
+                    </p>
+                    {filePick.preflight?.warning && (
+                      <p className="text-amber-700 dark:text-amber-300">⚠️ {filePick.preflight.warning}</p>
+                    )}
+                    <p className="text-muted-foreground">
+                      Viewers compare their copy against yours automatically. You&apos;ll pick the
+                      file again inside the room (browsers can&apos;t keep it).
+                    </p>
+                  </div>
+                )}
+
+                <label className="flex items-start gap-2 cursor-pointer rounded-md px-1 py-2 min-h-11">
+                  <input
+                    type="checkbox"
+                    checked={rightsOk}
+                    onChange={(e) => setRightsOk(e.target.checked)}
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-violet-600"
+                  />
+                  <span className="text-[11px] leading-snug text-muted-foreground">
+                    {RIGHTS_NOTICE}
+                  </span>
+                </label>
+              </div>
+              )}
 
               {/* Presets - touch friendly min 44px tap targets */}
               <div className="space-y-2 pt-1">
@@ -201,7 +374,12 @@ export function RoomLobby() {
             {/* Submit Button - large 44px+ tap target */}
             <Button
               type="submit"
-              disabled={isCreating || (videoUrl.trim() !== "" && !detection.isValid)}
+              disabled={
+                isCreating ||
+                (sourceTab === "link" && videoUrl.trim() !== "" && !detection.isValid) ||
+                (sourceTab === "myfiles" &&
+                  (filePick.phase !== "ready" || !filePick.fp || !rightsOk))
+              }
               className="w-full h-12 sm:h-11 mt-4 bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-violet-600/25 transition-all cursor-pointer"
             >
               {isCreating ? (

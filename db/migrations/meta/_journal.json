@@ -15,6 +15,13 @@
       "when": 1790784000000,
       "tag": "0001_cozy_cohost",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791784000000,
+      "tag": "0002_localfile_source",
+      "breakpoints": true
     }
   ]
 }

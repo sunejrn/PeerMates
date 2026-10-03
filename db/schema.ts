@@ -53,7 +53,7 @@ export const verification = pgTable("verification", {
 
 // WatchTogether Core Tables
 
-export const videoTypeEnum = pgEnum("video_type", ["youtube", "hls", "mp4"]);
+export const videoTypeEnum = pgEnum("video_type", ["youtube", "hls", "mp4", "localfile"]);
 export const participantRoleEnum = pgEnum("participant_role", ["host", "cohost", "viewer"]);
 export const playbackEventTypeEnum = pgEnum("playback_event_type", [
   "play",

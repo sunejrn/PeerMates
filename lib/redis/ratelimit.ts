@@ -67,4 +67,6 @@ export const RATE_LIMITS = {
   controlRequest: { limit: 3, windowSeconds: 60 },
   /** Kick / mute / slow-mode / source changes. */
   moderation: { limit: 20, windowSeconds: 60 },
+  /** WebRTC signaling envelopes (setup only; trickle ICE is bursty). */
+  signaling: { limit: 60, windowSeconds: 60 },
 } as const;

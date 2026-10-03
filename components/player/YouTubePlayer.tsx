@@ -78,6 +78,19 @@ export const YouTubePlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           }
           return true;
         },
+        getVideoElement: () => null, // iframe-based: no media element to share
+        requestFullscreen: () => {
+          // Fullscreen the player container (works on desktop + Android
+          // Chrome; iPhone Safari has no element fullscreen for iframes).
+          try {
+            const p = containerRef.current?.requestFullscreen?.() as
+              | Promise<void>
+              | undefined;
+            p?.catch(() => {});
+          } catch {
+            // unsupported — the room's tap-to-play/tips cover iOS instead
+          }
+        },
       }),
       [isPlayerReady]
     );

@@ -68,6 +68,12 @@ export async function getPresence(slug: string): Promise<PartyMember[]> {
             image: parsed.image,
             role: parsed.role,
             joinedAt: parsed.joinedAt,
+            fileMatch:
+              parsed.fileMatch === true
+                ? true
+                : parsed.fileMatch === false
+                  ? false
+                  : null,
           });
         } catch {
           // skip corrupt entries

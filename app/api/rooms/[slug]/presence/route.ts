@@ -63,7 +63,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
     const body = await req.json();
-    const { id, name, image, joinedAt } = body ?? {};
+    const { id, name, image, joinedAt, fileMatch } = body ?? {};
     if (!id || !name) {
       return NextResponse.json(
         { error: "id and name are required" },
@@ -93,6 +93,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       image: image ? String(image) : undefined,
       role,
       joinedAt: typeof joinedAt === "number" ? joinedAt : Date.now(),
+      // Local-file match badge (boolean only; anything else => not picked).
+      fileMatch: fileMatch === true ? true : fileMatch === false ? false : null,
     };
     await heartbeatPresence(slug, member);
     const [members, roles] = await Promise.all([

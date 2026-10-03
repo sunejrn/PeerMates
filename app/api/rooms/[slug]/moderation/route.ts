@@ -15,11 +15,13 @@ import {
 } from "@/lib/redis/roles";
 import { removePresence } from "@/lib/redis/presence";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/redis/ratelimit";
-import { detectVideoSource } from "@/lib/video/detector";
+import { detectVideoSource, localFileSourceFor } from "@/lib/video/detector";
+import { isValidFingerprint } from "@/lib/video/localfile";
 import {
   removeStreamMember,
   broadcastRoomEvent,
 } from "@/lib/stream/server";
+import { setP2PSharing } from "@/lib/redis/localfile";
 import { resolveActorId, forbidden, rateLimited, errMessage } from "@/lib/rooms/actor";
 
 type RouteParams = { params: Promise<{ slug: string }> };
@@ -32,6 +34,8 @@ type RouteParams = { params: Promise<{ slug: string }> };
  * - slowmode { seconds: 0|5|10|30 } — chat slow mode for big rooms
  * - muteall { muted: boolean } — viewers read-only, privileged still chat
  * - source { videoUrl } — change the video source for everyone
+ * - source { localFile } — switch the room to a "My Files" fingerprint
+ * - p2pshare { on: boolean } — host-only P2P stream advertisement
  */
 export async function POST(req: NextRequest, { params }: RouteParams) {
   try {
@@ -136,7 +140,28 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     }
 
     // ---- Video source change ----
+    // Either { videoUrl } for links, or { localFile: fingerprint } when the
+    // host switches the room to a "My Files" movie on their device.
     if (action === "source") {
+      const localFile = body?.localFile;
+      if (localFile && typeof localFile === "object") {
+        if (!isValidFingerprint(localFile)) {
+          return NextResponse.json(
+            { error: "Invalid file fingerprint. Re-select the file and try again." },
+            { status: 400 }
+          );
+        }
+        const updated = await changeRoomSource(
+          slug,
+          localFileSourceFor(localFile.fpId),
+          "localfile",
+          localFile
+        );
+        if (!updated) {
+          return NextResponse.json({ error: "Room not found" }, { status: 404 });
+        }
+        return NextResponse.json({ success: true, room: updated });
+      }
       const videoUrl =
         typeof body?.videoUrl === "string" ? body.videoUrl.trim() : "";
       if (!videoUrl) {
@@ -163,10 +188,22 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ success: true, room: updated });
     }
 
+    // ---- P2P "Stream from host" toggle (HOST ONLY) ----
+    // Viewers join the host's stream; joins target room.hostId, so only the
+    // host may advertise sharing.
+    if (action === "p2pshare") {
+      if (actorId !== room.hostId) {
+        return forbidden("Only the host can share their stream.");
+      }
+      const on = body?.on !== false;
+      await setP2PSharing(slug, on);
+      return NextResponse.json({ success: true, sharing: on });
+    }
+
     return NextResponse.json(
       {
         error:
-          'action must be "kick", "mute", "unmute", "slowmode", "muteall", or "source"',
+          'action must be "kick", "mute", "unmute", "slowmode", "muteall", "source", or "p2pshare"',
       },
       { status: 400 }
     );

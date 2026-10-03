@@ -1,30 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { detectVideoSource } from "@/lib/video/detector";
+import { detectVideoSource, localFileSourceFor } from "@/lib/video/detector";
+import { isValidFingerprint } from "@/lib/video/localfile";
+import { setRoomFingerprint } from "@/lib/redis/localfile";
 import { createRoomInDb, getRecentRooms } from "@/lib/rooms/store";
 import { nanoid } from "nanoid";
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { title, videoUrl } = body;
+    const { title, videoUrl, localFile } = body;
 
-    if (!videoUrl || typeof videoUrl !== "string") {
-      return NextResponse.json(
-        { error: "A valid video URL is required." },
-        { status: 400 }
-      );
-    }
+    // "My Files" creation path: no URL — the host picked a file on their
+    // device. Only the tiny fingerprint travels; bytes stay local.
+    let videoSource: string;
+    let videoType: "youtube" | "hls" | "mp4" | "localfile";
+    let fingerprint: Parameters<typeof setRoomFingerprint>[1] | null = null;
 
-    const detection = detectVideoSource(videoUrl);
-    if (!detection.isValid || !detection.type) {
-      return NextResponse.json(
-        {
-          error:
-            "Invalid video URL. Please provide a YouTube link, an HLS (.m3u8) stream, or a direct MP4 file URL.",
-        },
-        { status: 400 }
-      );
+    if (localFile && typeof localFile === "object") {
+      if (!isValidFingerprint(localFile)) {
+        return NextResponse.json(
+          { error: "Invalid file fingerprint. Re-select your file and try again." },
+          { status: 400 }
+        );
+      }
+      fingerprint = localFile;
+      videoType = "localfile";
+      videoSource = localFileSourceFor(localFile.fpId);
+    } else {
+      if (!videoUrl || typeof videoUrl !== "string") {
+        return NextResponse.json(
+          { error: "A valid video URL is required." },
+          { status: 400 }
+        );
+      }
+
+      const detection = detectVideoSource(videoUrl);
+      if (!detection.isValid || !detection.type) {
+        return NextResponse.json(
+          {
+            error:
+              "Invalid video URL. Please provide a YouTube link, an HLS (.m3u8) stream, or a direct MP4 file URL.",
+          },
+          { status: 400 }
+        );
+      }
+      videoSource = detection.cleanUrl;
+      videoType = detection.type;
     }
 
     // Check user session
@@ -69,9 +91,14 @@ export async function POST(req: NextRequest) {
       hostId,
       hostName,
       hostImage,
-      videoSource: detection.cleanUrl,
-      videoType: detection.type,
+      videoSource,
+      videoType,
     });
+
+    // Persist the host fingerprint so viewers can compare their own file.
+    if (fingerprint) {
+      await setRoomFingerprint(slug, fingerprint);
+    }
 
     const response = NextResponse.json({
       success: true,

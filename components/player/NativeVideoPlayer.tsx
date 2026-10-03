@@ -12,12 +12,17 @@ import Hls from "hls.js";
 
 export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
   function NativeVideoPlayer(
-    { src, videoType, isHost = true, onPlayerEvent, onReady },
+    { src, videoType, isHost = true, canControl, localSrc, onAutoplayBlocked, onPlayerEvent, onReady },
     ref
   ) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const hlsRef = useRef<Hls | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
+
+    // "My Files" rooms play a per-device blob: URL; the shared `src` is just
+    // a `localfile:<fpId>` pointer and must never be assigned to <video>.
+    const effectiveSrc = videoType === "localfile" ? (localSrc ?? "") : src;
+    const controlsAllowed = canControl ?? isHost;
 
     useImperativeHandle(
       ref,
@@ -28,6 +33,15 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
               await videoRef.current.play();
             } catch (err) {
               console.warn("Autoplay / play blocked:", err);
+              // Autoplay-policy blocks surface as NotAllowedError; tell the
+              // room so it can show a tap-to-play overlay (iOS Safari needs
+              // a real user gesture for playback with sound).
+              if (
+                err instanceof DOMException &&
+                err.name === "NotAllowedError"
+              ) {
+                onAutoplayBlocked?.();
+              }
             }
           }
         },
@@ -50,13 +64,31 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         isPaused: () => {
           return videoRef.current?.paused ?? true;
         },
+        getVideoElement: () => videoRef.current,
+        requestFullscreen: () => {
+          const video = videoRef.current;
+          if (!video) return;
+          const safariVideo = video as HTMLVideoElement & {
+            webkitEnterFullscreen?: () => void;
+          };
+          // iPhone Safari has no element fullscreen API — the native video
+          // fullscreen method is the only path. Elsewhere, prefer the
+          // standard API and fall back to webkit.
+          if (typeof video.requestFullscreen === "function") {
+            video.requestFullscreen().catch(() => {
+              safariVideo.webkitEnterFullscreen?.();
+            });
+          } else {
+            safariVideo.webkitEnterFullscreen?.();
+          }
+        },
       }),
-      []
+      [onAutoplayBlocked]
     );
 
     useEffect(() => {
       const video = videoRef.current;
-      if (!video || !src) return;
+      if (!video || !effectiveSrc) return;
 
       setIsLoaded(false);
 
@@ -71,7 +103,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           });
           hlsRef.current = hls;
 
-          hls.loadSource(src);
+          hls.loadSource(effectiveSrc);
           hls.attachMedia(video);
 
           hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -96,15 +128,15 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           });
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
           // Native Safari HLS
-          video.src = src;
+          video.src = effectiveSrc;
           video.addEventListener("loadedmetadata", () => {
             setIsLoaded(true);
             onReady?.();
           });
         }
       } else {
-        // Direct MP4 / WebM
-        video.src = src;
+        // Direct MP4 / WebM / local blob: URL
+        video.src = effectiveSrc;
         const handleLoaded = () => {
           setIsLoaded(true);
           onReady?.();
@@ -121,7 +153,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           hlsRef.current = null;
         }
       };
-    }, [src, videoType]);
+    }, [effectiveSrc, videoType]);
 
     // Handle HTML5 video events
     useEffect(() => {
@@ -183,11 +215,27 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
       };
     }, [onPlayerEvent]);
 
+    // No local copy selected yet (My Files rooms): placeholder instead of a
+    // broken player. The room renders the file picker gate above this.
+    if (videoType === "localfile" && !localSrc) {
+      return (
+        <div className="relative h-full w-full bg-black flex flex-col items-center justify-center gap-2 p-6 text-center">
+          <span className="text-3xl" aria-hidden>📁</span>
+          <p className="text-xs sm:text-sm font-medium text-zinc-200">
+            No local file selected
+          </p>
+          <p className="text-[11px] sm:text-xs text-zinc-400 max-w-xs">
+            Pick the same movie file on this device to join synced playback.
+          </p>
+        </div>
+      );
+    }
+
     return (
       <div className="relative h-full w-full bg-black flex items-center justify-center">
         <video
           ref={videoRef}
-          controls={isHost}
+          controls={controlsAllowed}
           playsInline
           className="h-full w-full object-contain"
         />

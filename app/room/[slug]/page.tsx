@@ -8,6 +8,13 @@ import { RoomRecord } from "@/lib/rooms/store";
 import { PresenceBar } from "@/components/room/PresenceBar";
 import { ViewerList } from "@/components/room/ViewerList";
 import { ModerationPanel } from "@/components/room/ModerationPanel";
+import { LocalFileGate } from "@/components/room/LocalFileGate";
+import { StreamFromHostPanel } from "@/components/room/StreamFromHost";
+import {
+  createLocalObjectUrl,
+  revokeLocalObjectUrl,
+  type LocalFingerprint,
+} from "@/lib/video/localfile";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SyncStatusIndicator } from "@/components/room/SyncStatusIndicator";
 import { useWatchSync } from "@/hooks/useWatchSync";
@@ -35,6 +42,13 @@ export default function RoomPage({
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isRequestingControl, setIsRequestingControl] = useState(false);
   const [isClaimingHost, setIsClaimingHost] = useState(false);
+  // ---- "My Files" local playback state (per-device, never uploaded) ----
+  const [hostFp, setHostFp] = useState<LocalFingerprint | null>(null);
+  const [fpLoading, setFpLoading] = useState(false);
+  const [fpError, setFpError] = useState<string | null>(null);
+  const [localFile, setLocalFile] = useState<{ file: File; url: string } | null>(null);
+  const [localMatch, setLocalMatch] = useState<boolean | null>(null);
+  const [playBlocked, setPlayBlocked] = useState(false);
   // Mobile tab state for narrow viewports (< lg)
   const [mobileTab, setMobileTab] = useState<"video-info" | "chat">("video-info");
 
@@ -103,6 +117,9 @@ export default function RoomPage({
     setSlowMode,
     setChatMuted,
     changeVideoSource,
+    switchToLocalFile,
+    setP2PSharing,
+    setFileMatch,
   } = useWatchSync({
     slug,
     initialHostId: room?.hostId || "",
@@ -118,9 +135,107 @@ export default function RoomPage({
             }
           : prev
       );
+      // A source switch invalidates any picked local file on this device.
+      setLocalFile((prev) => {
+        if (prev) revokeLocalObjectUrl(prev.url);
+        return null;
+      });
+      setLocalMatch(null);
+      setFileMatch(null);
+      setPlayBlocked(false);
       toast.success("The video source was changed — re-syncing…");
     },
   });
+
+  const isLocalRoom = room?.videoType === "localfile";
+
+  // Load the host fingerprint for "My Files" rooms (tiny JSON).
+  const loadHostFile = async () => {
+    setFpLoading(true);
+    setFpError(null);
+    try {
+      const res = await fetch(`/api/rooms/${slug}/localfile`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Failed to load file info.");
+      setHostFp(data.fingerprint ?? null);
+    } catch (err) {
+      setHostFp(null);
+      setFpError(err instanceof Error ? err.message : "Failed to load file info.");
+    } finally {
+      setFpLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (room?.videoType === "localfile") {
+      void loadHostFile();
+    } else {
+      setHostFp(null);
+      setFpError(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, room?.videoSource, room?.videoType]);
+
+  // Revoke blob: URLs when replaced or on unmount (never leak them).
+  const localUrl = localFile?.url;
+  useEffect(() => {
+    return () => {
+      if (localUrl) revokeLocalObjectUrl(localUrl);
+    };
+  }, [localUrl]);
+
+  const handleFileJoin = (
+    file: File,
+    objectUrl: string,
+    _fp: LocalFingerprint,
+    match: boolean
+  ) => {
+    setLocalFile((prev) => {
+      if (prev && prev.url !== objectUrl) revokeLocalObjectUrl(prev.url);
+      return { file, url: objectUrl };
+    });
+    setLocalMatch(match);
+    setPlayBlocked(false);
+  };
+
+  const handleFileClear = () => {
+    setLocalFile((prev) => {
+      if (prev) revokeLocalObjectUrl(prev.url);
+      return null;
+    });
+    setLocalMatch(null);
+    setPlayBlocked(false);
+  };
+
+  const handleMakeRoomFile = async (fp: LocalFingerprint, file: File) => {
+    // Privileged: adopt this device's file as the room file, then play it.
+    await switchToLocalFile(fp);
+    handleFileJoin(file, createLocalObjectUrl(file), fp, true);
+    setFileMatch(true);
+    await loadHostFile();
+  };
+
+  const handleShareToggle = async (on: boolean) => {
+    try {
+      await setP2PSharing(on);
+      toast.success(on ? "Sharing your playback via P2P." : "Stopped P2P sharing.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Share toggle failed.");
+      throw err;
+    }
+  };
+
+  const getHostVideo = () =>
+    playerRef.current?.getVideoElement?.() ?? null;
+
+  const handleTapToPlay = async () => {
+    try {
+      await playerRef.current?.play();
+      setPlayBlocked(false);
+    } catch {
+      // Still blocked (e.g. no file yet) — keep the overlay up.
+    }
+  };
 
   const handleCopyLink = () => {
     if (typeof window !== "undefined") {
@@ -358,17 +473,37 @@ export default function RoomPage({
           )}
 
           {/* Unified Video Player - 16:9 aspect-video maintained across all screens */}
-          <div className="w-full">
+          <div className="w-full relative">
             <VideoPlayer
-              key={room.videoSource}
+              key={`${room.videoSource}|${localFile ? `${localFile.file.name}|${localFile.file.size}` : "nofile"}`}
               ref={playerRef}
               src={room.videoSource}
               videoType={room.videoType}
               isHost={isHost}
               canControl={canControl}
               roleBadge={isHost ? "host" : isCohost ? "cohost" : "viewer"}
+              localSrc={localFile?.url}
+              onAutoplayBlocked={() => setPlayBlocked(true)}
               onPlayerEvent={handleHostPlayerEvent}
             />
+            {/* iOS Safari blocks autoplay with sound: followers get a real
+                tap target that plays inside the user gesture. */}
+            {playBlocked && !canControl && (room.videoType !== "localfile" || localFile) && (
+              <button
+                type="button"
+                onClick={handleTapToPlay}
+                className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm cursor-pointer rounded-2xl p-6 text-center min-h-44"
+              >
+                <span className="text-4xl" aria-hidden>▶</span>
+                <span className="text-sm font-semibold text-white">
+                  Tap to join synced playback
+                </span>
+                <span className="text-[11px] text-zinc-300 max-w-xs">
+                  Your browser blocked autoplay with sound — one tap starts you in sync
+                  with everyone.
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Mobile Tab Switcher for Narrow Viewports (< lg) */}
@@ -481,6 +616,7 @@ export default function RoomPage({
               isHost={isHost}
               mutedIds={mutedIds}
               controlRequests={controlRequests}
+              showFileMatch={isLocalRoom}
               onPromote={promoteMember}
               onDemote={demoteMember}
               onKick={kickMember}
@@ -489,6 +625,35 @@ export default function RoomPage({
               onApproveRequest={approveControlRequest}
               onDenyRequest={denyControlRequest}
             />
+
+            {/* My Files gate + P2P fallback (local-file rooms only) */}
+            {isLocalRoom && (
+              <LocalFileGate
+                hostFingerprint={hostFp}
+                hostFileLoading={fpLoading}
+                hostFileError={fpError}
+                onRetryHostFile={loadHostFile}
+                isPrivileged={canControl}
+                hasActiveFile={!!localFile}
+                activeFileName={localFile?.file.name ?? null}
+                activeMatch={localMatch}
+                onFileJoin={handleFileJoin}
+                onFileClear={handleFileClear}
+                onMakeRoomFile={handleMakeRoomFile}
+                publishMatch={setFileMatch}
+              />
+            )}
+            {isLocalRoom && (isHost || localMatch !== true) && (
+              <StreamFromHostPanel
+                slug={slug}
+                hostId={hostId}
+                myId={session.user.id}
+                myName={session.user.name || "Viewer"}
+                isHost={isHost}
+                getHostVideo={getHostVideo}
+                onShareToggle={handleShareToggle}
+              />
+            )}
 
             {/* Moderation tools (host + co-hosts only) */}
             {canControl && (
@@ -499,6 +664,7 @@ export default function RoomPage({
                 onSetSlowMode={setSlowMode}
                 onSetChatMuted={setChatMuted}
                 onChangeSource={changeVideoSource}
+                onSwitchToLocalFile={handleMakeRoomFile}
               />
             )}
           </div>
