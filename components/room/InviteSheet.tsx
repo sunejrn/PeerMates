@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { qrImageUrl, roomUrl, whatsappShareUrl } from "@/lib/rooms/code";
@@ -21,6 +22,21 @@ export function InviteSheet({ slug, title, trigger }: InviteSheetProps) {
   const [copied, setCopied] = useState(false);
   const [qrError, setQrError] = useState(false);
   const link = roomUrl(slug);
+  // Portaled to document.body on mount (see below) — never inline.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Escape closes the sheet.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open ]);
 
   const handleCopy = async () => {
     try {
@@ -76,8 +92,10 @@ export function InviteSheet({ slug, title, trigger }: InviteSheetProps) {
         </Button>
       )}
 
-      {open && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Invite friends">
+      {mounted &&
+        open &&
+        createPortal(
+          <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="Invite friends">
           <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
           <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-md rounded-t-2xl border-t border-border bg-card p-4 sm:p-5 pb-[max(env(safe-area-inset-bottom),1rem)] space-y-4 max-h-[85dvh] overflow-y-auto">
             <div className="mx-auto h-1 w-10 rounded-full bg-muted" aria-hidden />
@@ -151,8 +169,9 @@ export function InviteSheet({ slug, title, trigger }: InviteSheetProps) {
               Close
             </button>
           </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 }
