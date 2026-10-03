@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { useLocalFilePick } from "@/hooks/useLocalFilePick";
 import {
@@ -191,7 +192,7 @@ export function ModerationPanel({
 
             {(filePick.phase === "preflight" || filePick.phase === "fingerprint") && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                <Spinner className="shrink-0 text-violet-500" />
                 {filePick.phase === "preflight"
                   ? "Checking compatibility…"
                   : `Fingerprinting… ${Math.round(filePick.progress * 100)}%`}

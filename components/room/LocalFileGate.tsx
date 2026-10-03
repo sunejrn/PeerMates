@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { useLocalFilePick } from "@/hooks/useLocalFilePick";
 import {
   compareFingerprints,
@@ -128,7 +129,7 @@ export function LocalFileGate({
       {/* Host file reference */}
       {hostFileLoading ? (
         <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+          <Spinner className="shrink-0 text-violet-500" />
           Loading host file info…
         </div>
       ) : hostFileError || !hostFingerprint ? (
@@ -202,7 +203,7 @@ export function LocalFileGate({
           {(phase === "preflight" || phase === "fingerprint") && (
             <div className="space-y-1.5" role="status">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                <Spinner className="shrink-0 text-violet-500" />
                 {phase === "preflight"
                   ? "Checking compatibility…"
                   : `Fingerprinting (reads 3 × 1 MB, not the whole file)… ${Math.round(progress * 100)}%`}

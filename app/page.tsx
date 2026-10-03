@@ -30,7 +30,7 @@ export default function Home() {
             </svg>
           </div>
           <span className="text-lg font-bold tracking-tight text-foreground">
-            WatchTogether
+            PeerMates
           </span>
           <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-400 hidden xs:inline-block">
             Realtime Sync

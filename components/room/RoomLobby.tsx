@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { useSession } from "@/lib/auth-client";
 import { AuthModal } from "@/components/auth/AuthModal";
@@ -121,10 +122,10 @@ export function RoomLobby() {
         localStorage.setItem("watchtogether_has_created_once", "true");
       }
 
-      toast.success("Watch Party room created!");
+      toast.success("PeerMates room created!");
       router.push(`/room/${data.slug}`);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to create watch party");
+      toast.error(err?.message || "Failed to create party");
     } finally {
       setIsCreating(false);
     }
@@ -148,7 +149,7 @@ export function RoomLobby() {
           title:
             title.trim() ||
             filePick.file.name.replace(/\.[^.]+$/, "") ||
-            "Watch Party",
+            "PeerMates Party",
           localFile: filePick.fp,
         }),
       });
@@ -166,10 +167,10 @@ export function RoomLobby() {
         localStorage.setItem("watchtogether_has_created_once", "true");
       }
 
-      toast.success("Watch Party created! Pick the file again inside the room.");
+      toast.success("PeerMates Party created! Pick the file again inside the room.");
       router.push(`/room/${data.slug}`);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to create watch party");
+      toast.error(err?.message || "Failed to create party");
     } finally {
       setIsCreating(false);
     }
@@ -183,7 +184,7 @@ export function RoomLobby() {
         <Card className="w-full lg:max-w-120 border-border bg-card/70 p-5 sm:p-8 backdrop-blur-xl shadow-xl shadow-violet-950/5 dark:shadow-violet-950/20 rounded-2xl flex flex-col justify-between">
           <div className="space-y-2 mb-6 text-left">
             <h2 className="text-xl sm:text-2xl font-bold text-card-foreground tracking-tight flex items-center gap-2">
-              Start a Watch Party
+              Start a PeerMates Party
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
               Paste any YouTube URL, HLS stream (.m3u8), or direct video file link —
@@ -300,7 +301,7 @@ export function RoomLobby() {
                 {(filePick.phase === "preflight" || filePick.phase === "fingerprint") && (
                   <div className="space-y-1.5" role="status">
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                      <Spinner className="shrink-0 text-violet-500" />
                       {filePick.phase === "preflight"
                         ? "Checking compatibility…"
                         : `Fingerprinting (3 × 1 MB)… ${Math.round(filePick.progress * 100)}%`}
@@ -385,11 +386,11 @@ export function RoomLobby() {
             >
               {isCreating ? (
                 <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                  <Spinner className="text-white" />
                   Creating Room...
                 </span>
               ) : (
-                "Create Watch Party"
+                "Create PeerMates Party"
               )}
             </Button>
           </form>
@@ -402,7 +403,7 @@ export function RoomLobby() {
               Instant Synchronized Streaming
             </span>
             <h3 className="text-2xl font-bold text-card-foreground">
-              How WatchTogether Works
+              How PeerMates Works
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Engineered with a host-authoritative sync model, millisecond transit correction, and persistent Upstash Redis caching.
@@ -474,7 +475,7 @@ export function RoomLobby() {
         open={showAuthModal}
         onOpenChange={setShowAuthModal}
         title="Sign In Required"
-        description="You have already used your 1 free party creation. Please sign in with Google or GitHub to create unlimited watch parties and invite your friends."
+        description="You have already used your 1 free party creation. Please sign in with Google or GitHub to create unlimited PeerMates parties and invite your friends."
       />
     </div>
   );

@@ -51,7 +51,7 @@ export const verification = pgTable("verification", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// WatchTogether Core Tables
+// PeerMates Core Tables
 
 export const videoTypeEnum = pgEnum("video_type", ["youtube", "hls", "mp4", "localfile"]);
 export const participantRoleEnum = pgEnum("participant_role", ["host", "cohost", "viewer"]);
@@ -65,7 +65,7 @@ export const playbackEventTypeEnum = pgEnum("playback_event_type", [
 export const rooms = pgTable("rooms", {
   id: uuid("id").defaultRandom().primaryKey(),
   slug: text("slug").notNull().unique(),
-  title: text("title").notNull().default("Watch Party"),
+  title: text("title").notNull().default("PeerMates Party"),
   hostId: text("host_id")
     .notNull()
     .references(() => user.id),

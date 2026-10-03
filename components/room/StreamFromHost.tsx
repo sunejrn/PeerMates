@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Spinner } from "@/components/ui/spinner";
 import { P2PHostSession, P2PViewerSession, type P2PState } from "@/lib/webrtc/p2p";
 import { P2P_MAX_RECEIVERS } from "@/lib/video/localfile";
 
@@ -293,7 +294,7 @@ export function StreamFromHostPanel({
           {isBusy && (
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-500 border-t-transparent" />
+                <Spinner className="shrink-0 text-cyan-500" />
                 {p2pState === "requesting" ? "Asking the host…" : "Connecting… (up to ~25s on tricky networks)"}
               </div>
               <Button onClick={stopWatching} variant="outline" className="w-full min-h-11 text-xs">

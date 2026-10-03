@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import type { useRoomSubtitles, SubtitleSize } from "@/hooks/useRoomSubtitles";
 
@@ -94,7 +95,7 @@ export function SubtitlesPanel({
           >
             {subs.uploading ? (
               <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                <Spinner className="text-violet-500" />
                 Syncing subtitles…
               </span>
             ) : (
@@ -114,7 +115,7 @@ export function SubtitlesPanel({
       )}
       {subs.metaLoading && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
-          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+          <Spinner className="size-3.5 shrink-0 text-violet-500" />
           Loading subtitles…
         </p>
       )}
@@ -199,7 +200,7 @@ export function SubtitlesPanel({
             </form>
             {(subs.translating || subs.trackLoading) && (
               <p className="flex items-center gap-2 text-[11px] text-muted-foreground" role="status">
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                <Spinner className="size-3.5 shrink-0 text-violet-500" />
                 {subs.translating ? "Translating (cached for next time)…" : "Loading captions…"}
               </p>
             )}
@@ -246,7 +247,7 @@ export function SubtitlesPanel({
             >
               {subs.recapLoading ? (
                 <span className="flex items-center gap-2">
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                  <Spinner className="text-violet-500" />
                   Catching you up…
                 </span>
               ) : (

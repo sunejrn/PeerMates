@@ -1,6 +1,6 @@
-# Implementation Plan: WatchTogether - Real-Time Synchronized Watch Party App
+# Implementation Plan: PeerMates - Real-Time Synchronized Watch Party App
 
-Build a host-authoritative, real-time synchronized watch party web application (**WatchTogether**) using Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Better-Auth, Neon (PostgreSQL) + Drizzle ORM, Upstash Redis, and the GetStream Chat SDK for real-time events, chat, and presence.
+Build a host-authoritative, real-time synchronized watch party web application (**PeerMates**) using Next.js 16 (App Router), TypeScript, Tailwind CSS, shadcn/ui, Better-Auth, Neon (PostgreSQL) + Drizzle ORM, Upstash Redis, and the GetStream Chat SDK for real-time events, chat, and presence.
 
 ## User Review Required
 

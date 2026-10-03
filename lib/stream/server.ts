@@ -9,7 +9,7 @@ const apiSecret = process.env.STREAM_API_SECRET;
 //   Stream dashboard first, otherwise channel.watch() fails and clients
 //   silently fall back to local-only BroadcastChannel).
 // - any authenticated user can watch/post without explicit membership,
-//   which is exactly what a share-link watch party needs.
+//   which is exactly what a share-link PeerMates party needs.
 export const STREAM_CHANNEL_TYPE = "livestream";
 
 export const isStreamConfigured = Boolean(apiKey && apiSecret);
@@ -82,7 +82,7 @@ export async function ensureStreamChannel(
 type MirrorableRole = "host" | "cohost" | "viewer";
 
 /**
- * Mirror a SyncMe room role onto the GetStream channel membership.
+ * Mirror a PeerMates room role onto the GetStream channel membership.
  * Hosts/co-hosts become channel moderators, viewers plain members.
  * Best-effort: never throws, so Stream outages can't break room flows.
  */

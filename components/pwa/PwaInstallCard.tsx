@@ -58,7 +58,7 @@ export function PwaInstallCard() {
         </div>
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-bold text-foreground">
-            Install SyncMe for the full experience
+            Install PeerMates for the full experience
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
             Fullscreen playback, faster loads, and home-screen access to your
@@ -82,7 +82,7 @@ export function PwaInstallCard() {
             disabled={busy}
             className="w-full min-h-11 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold disabled:opacity-60"
           >
-            {busy ? "Installing…" : "⬇ Install SyncMe"}
+            {busy ? "Installing…" : "⬇ Install PeerMates"}
           </Button>
         ) : (
           <div className="space-y-2">
@@ -105,7 +105,7 @@ export function PwaInstallCard() {
                   <strong className="text-foreground">Add to Home Screen</strong>.
                 </li>
                 <li>
-                  Tap <strong className="text-foreground">Add</strong> — SyncMe
+                  Tap <strong className="text-foreground">Add</strong> — PeerMates
                   opens fullscreen like a native app.
                 </li>
               </ol>

@@ -11,6 +11,7 @@ import { ALLOWED_REACTIONS } from "@/lib/chat/moderate";
 import { PTT_ENABLED } from "@/lib/chat/moderate";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { VoiceRecorder, RecordedVoice } from "./VoiceRecorder";
 import {
   FILE_MAX_BYTES,
@@ -766,7 +767,7 @@ export function ChatPanel({
       {/* Upload status */}
       {attachBusy && (
         <div className="flex items-center gap-2 border-t border-border/50 px-4 py-2 text-[11px] text-muted-foreground" role="status">
-          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+          <Spinner className="size-3.5 shrink-0 text-violet-500" />
           {attachBusy}
         </div>
       )}

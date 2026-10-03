@@ -1,4 +1,4 @@
-/* SyncMe service worker: installable app shell + offline fallback.
+/* PeerMates service worker: installable app shell + offline fallback.
  *
  * Strategy (free-tier friendly, no extra deps):
  * - Precache the app shell (/, /offline, manifest, icons) on install.

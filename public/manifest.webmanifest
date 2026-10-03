@@ -1,6 +1,6 @@
 {
-  "name": "SyncMe — Watch Parties in Sync",
-  "short_name": "SyncMe",
+  "name": "PeerMates — Watch Parties in Sync",
+  "short_name": "PeerMates",
   "description": "Watch videos together in real-time with frame-accurate sync, live chat, and presence.",
   "start_url": "/",
   "scope": "/",

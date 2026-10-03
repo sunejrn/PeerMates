@@ -35,7 +35,7 @@ export async function createRoomInDb(data: {
   const roomData: RoomRecord = {
     id: crypto.randomUUID(),
     slug: data.slug,
-    title: data.title || "Watch Party",
+    title: data.title || "PeerMates Party",
     hostId: data.hostId,
     videoSource: data.videoSource,
     videoType: data.videoType,

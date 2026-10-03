@@ -1,4 +1,4 @@
-# SyncMe (WatchTogether) 🍿
+# PeerMates 🍿
 
 Watch videos together in frame-accurate sync — YouTube, HLS, MP4, or your own
 movie files — with live chat, voice notes, AI-translated subtitles, and

@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AuthButton } from "@/components/auth/AuthButton";
+import { Spinner } from "@/components/ui/spinner";
 import { InviteSheet } from "@/components/room/InviteSheet";
 import { NicknameGate } from "@/components/room/NicknameGate";
 import { SubtitlesPanel } from "@/components/room/SubtitlesPanel";
@@ -70,7 +71,7 @@ export default function RoomPage({
         setRoom(data.room);
       } catch (err: unknown) {
         toast.error(
-          err instanceof Error ? err.message : "Failed to load watch party"
+          err instanceof Error ? err.message : "Failed to load PeerMates party"
         );
       } finally {
         setIsLoadingRoom(false);
@@ -107,7 +108,7 @@ export default function RoomPage({
     videoType: room?.videoType,
   });
 
-  // Synchronized Watch Party Engine (Phase 4, 5, 6 + roles/moderation)
+  // Synchronized PeerMates Engine (Phase 4, 5, 6 + roles/moderation)
   const {
     isHost,
     isCohost,
@@ -406,8 +407,8 @@ export default function RoomPage({
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
-          <p className="text-sm">Connecting to Watch Party...</p>
+          <Spinner className="size-8 text-violet-500" />
+          <p className="text-sm">Connecting to PeerMates...</p>
         </div>
       </div>
     );
@@ -419,7 +420,7 @@ export default function RoomPage({
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center text-foreground">
         <h1 className="text-3xl font-bold text-destructive">Room Not Found</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          The watch party for code{" "}
+          The PeerMates party for code{" "}
           <code className="font-mono text-foreground font-semibold">/{slug}</code>{" "}
           does not exist or has expired.
         </p>

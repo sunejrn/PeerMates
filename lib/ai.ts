@@ -125,7 +125,7 @@ async function callOpenRouter(prompt: string): Promise<string> {
         "Content-Type": "application/json",
         Authorization: `Bearer ${key}`,
         "HTTP-Referer": process.env.BETTER_AUTH_URL || "http://localhost:3000",
-        "X-Title": "SyncMe",
+        "X-Title": "PeerMates",
       },
       body: JSON.stringify({
         model: openRouterModel(),

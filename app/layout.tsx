@@ -29,7 +29,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "SyncMe",
+    title: "PeerMates",
   },
   icons: {
     icon: [

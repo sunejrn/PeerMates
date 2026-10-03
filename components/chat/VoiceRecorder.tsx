@@ -9,6 +9,7 @@ import {
   peaksFromSamples,
   pickAudioMime,
 } from "@/lib/chat/media";
+import { Spinner } from "@/components/ui/spinner";
 
 export interface RecordedVoice {
   blob: Blob;
@@ -471,7 +472,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
   if (phase === "sending") {
     return (
       <div className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground" role="status">
-        <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+        <Spinner className="text-violet-500" />
         Sending voice note…
       </div>
     );

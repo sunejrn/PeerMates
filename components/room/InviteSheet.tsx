@@ -64,8 +64,8 @@ export function InviteSheet({ slug, title, trigger }: InviteSheetProps) {
     try {
       if (navigator.share) {
         await navigator.share({
-          title: title ? `SyncMe: ${title}` : "SyncMe watch party",
-          text: `Join my watch party${title ? ` "${title}"` : ""}!`,
+          title: title ? `PeerMates: ${title}` : "PeerMates party",
+          text: `Join my PeerMates party${title ? ` "${title}"` : ""}!`,
           url: link,
         });
       } else {

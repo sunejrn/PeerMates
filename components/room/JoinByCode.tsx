@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { extractRoomCode, isValidRoomCode } from "@/lib/rooms/code";
 
@@ -36,7 +37,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
         setError("No party found for that code — check it and try again.");
         return;
       }
-      toast.success("Joining watch party…");
+      toast.success("Joining PeerMates party…");
       router.push(`/room/${slug}`);
     } catch {
       setError("Couldn't reach the party. Check your connection and retry.");
@@ -78,7 +79,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
           >
             {isJoining ? (
               <span className="flex items-center gap-2">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                <Spinner className="text-white" />
                 Joining…
               </span>
             ) : (

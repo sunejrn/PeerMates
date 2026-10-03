@@ -22,7 +22,7 @@ export function AuthModal({
   open,
   onOpenChange,
   title = "Sign in to Continue",
-  description = "You have used your 1 free watch party creation. Please sign in with Google or GitHub to create unlimited watch parties and join live rooms.",
+  description = "You have used your 1 free PeerMates party creation. Please sign in with Google or GitHub to create unlimited parties and join live rooms.",
 }: AuthModalProps) {
   const [pendingProvider, setPendingProvider] = useState<
     "google" | "github" | null

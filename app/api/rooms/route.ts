@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
         {
           error: "AUTH_REQUIRED",
           message:
-            "You have already used your 1 free watch party creation. Please sign in with GitHub to create unlimited watch parties.",
+            "You have already used your 1 free PeerMates party creation. Please sign in with Google or GitHub to create unlimited parties.",
         },
         { status: 403 }
       );
@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
 
     const room = await createRoomInDb({
       slug,
-      title: title && title.trim() ? title.trim() : "Watch Party",
+      title: title && title.trim() ? title.trim() : "PeerMates Party",
       hostId,
       hostName,
       hostImage,

@@ -26,7 +26,7 @@ export function roomUrl(code: string): string {
 }
 
 export function whatsappShareUrl(code: string, title?: string): string {
-  const text = `Join my SyncMe watch party${title ? ` "${title}"` : ""}: ${roomUrl(code)}`;
+  const text = `Join my PeerMates party${title ? ` "${title}"` : ""}: ${roomUrl(code)}`;
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
