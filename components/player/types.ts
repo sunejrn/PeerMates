@@ -14,6 +14,11 @@ export interface UnifiedPlayerRef {
   requestFullscreen?: () => void;
   /** Direct access for features like P2P captureStream(). */
   getVideoElement?: () => HTMLVideoElement | null;
+  /**
+   * Gentle drift correction: nudge playback speed (e.g. 0.92–1.08) instead
+   * of seeking. No-op on players that can't do it.
+   */
+  setPlaybackRate?: (rate: number) => void;
 }
 
 export interface PlayerStateEvent {
@@ -41,6 +46,13 @@ export interface VideoPlayerProps {
    * policy (NotAllowedError) so the room can show a tap-to-play overlay.
    */
   onAutoplayBlocked?: () => void;
+  /**
+   * Data Saver: cap HLS to its lowest rendition (exact byte savings are
+   * reported back through onFragmentBytes).
+   */
+  dataSaver?: boolean;
+  /** Exact HLS segment bytes (measured, not estimated). */
+  onFragmentBytes?: (bytes: number) => void;
   onPlayerEvent?: (event: PlayerStateEvent) => void;
   onReady?: () => void;
   autoPlay?: boolean;

@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useMemo, useRef, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession } from "@/lib/auth-client";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import { UnifiedPlayerRef } from "@/components/player/types";
@@ -10,6 +10,10 @@ import { ViewerList } from "@/components/room/ViewerList";
 import { ModerationPanel } from "@/components/room/ModerationPanel";
 import { LocalFileGate } from "@/components/room/LocalFileGate";
 import { StreamFromHostPanel } from "@/components/room/StreamFromHost";
+import { DataPanel } from "@/components/room/DataPanel";
+import { useDataSaver } from "@/hooks/useDataSaver";
+import { useDataMeter } from "@/hooks/useDataMeter";
+import { regionFromLocale } from "@/lib/data/pricing";
 import {
   createLocalObjectUrl,
   revokeLocalObjectUrl,
@@ -95,6 +99,8 @@ export default function RoomPage({
     hostId,
     syncState,
     driftSeconds,
+    connection,
+    reconnecting,
     members,
     messages,
     isHostBuffering,
@@ -236,6 +242,94 @@ export default function RoomPage({
       // Still blocked (e.g. no file yet) — keep the overlay up.
     }
   };
+
+  // ---- Low-Data Mode + session meter ----
+  const {
+    dataSaver,
+    audioOnly,
+    setEnabled: setDataSaver,
+    setAudioOnly,
+  } = useDataSaver();
+  const meter = useDataMeter();
+  const [detectedRegion, setDetectedRegion] = useState<string | null>(null);
+
+  // Auto-detect billing region from locale once (manual override wins).
+  // Mount-time external read; matches the existing fetch-on-mount effects
+  // in this file.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const code =
+      typeof navigator !== "undefined"
+        ? regionFromLocale(navigator.language)
+        : null;
+    setDetectedRegion(code);
+    if (code) meter.setRegion(code);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const handleFragmentBytes = useCallback(
+    (bytes: number) => {
+      meter.addBytes(bytes, true);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  // Estimate watch-time cost for sources we can't measure exactly
+  // (YouTube iframe, progressive MP4). HLS reports exact bytes; local
+  // files cost zero network bytes. Paused/hidden video accrues nothing.
+  const roomVideoType = room?.videoType;
+  useEffect(() => {
+    if (!roomVideoType) return;
+    const t = setInterval(() => {
+      const p = playerRef.current;
+      if (!p || p.isPaused()) return;
+      if (typeof document !== "undefined" && document.hidden) return;
+      meter.addWatchSeconds(roomVideoType, 1);
+    }, 1000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roomVideoType]);
+
+  // Hidden tab: followers pause local decoding (saves data + battery).
+  // Player-event emissions are suppressed while hidden, so a hidden host
+  // can never pause the room by accident.
+  useEffect(() => {
+    const onVis = () => {
+      if (typeof document === "undefined") return;
+      if (document.hidden) {
+        if (!canControl) {
+          try {
+            playerRef.current?.pause();
+          } catch {
+            // player not ready — nothing decoding yet
+          }
+        }
+      } else if (canControl) {
+        // Returning host/co-host: jump forward to where the room is so a
+        // stale local position never rewinds followers on the next action.
+        void (async () => {
+          try {
+            const res = await fetch(`/api/rooms/${slug}/state`);
+            if (!res.ok) return;
+            const st = (await res.json()).state;
+            const p = playerRef.current;
+            if (!st || !p) return;
+            const expected =
+              st.isPlaying && typeof st.serverTimestamp === "number"
+                ? st.currentTime + Math.max(0, (Date.now() - st.serverTimestamp) / 1000)
+                : st.currentTime;
+            if (Math.abs(expected - p.getCurrentTime()) > 1) p.seek(expected);
+          } catch {
+            // best-effort; normal sync converges anyway
+          }
+        })();
+      }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [canControl, slug]);
 
   const handleCopyLink = () => {
     if (typeof window !== "undefined") {
@@ -483,6 +577,8 @@ export default function RoomPage({
               canControl={canControl}
               roleBadge={isHost ? "host" : isCohost ? "cohost" : "viewer"}
               localSrc={localFile?.url}
+              dataSaver={dataSaver}
+              onFragmentBytes={handleFragmentBytes}
               onAutoplayBlocked={() => setPlayBlocked(true)}
               onPlayerEvent={handleHostPlayerEvent}
             />
@@ -504,7 +600,39 @@ export default function RoomPage({
                 </span>
               </button>
             )}
+            {/* Audio-only mode: video hidden, audio keeps playing. */}
+            {audioOnly && (room.videoType !== "localfile" || localFile) && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-zinc-950/95 rounded-2xl p-6 text-center">
+                <span className="text-4xl" aria-hidden>🎧</span>
+                <p className="text-sm font-semibold text-white">Audio-only mode</p>
+                <p className="text-[11px] text-zinc-400 max-w-xs">
+                  Video hidden to save screen &amp; battery — audio keeps playing in sync.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setAudioOnly(false)}
+                  className="mt-1 min-h-11 rounded-lg border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white cursor-pointer"
+                >
+                  Show video
+                </button>
+              </div>
+            )}
           </div>
+
+          {/* Reconnecting / offline banner */}
+          {reconnecting && (
+            <div
+              className="flex items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-700 dark:text-sky-300"
+              role="status"
+            >
+              <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
+              <span>
+                {connection === "offline"
+                  ? "📡 You're offline — waiting for network, then catching up to the host…"
+                  : "🔄 Reconnecting… catching up to the host's latest state."}
+              </span>
+            </div>
+          )}
 
           {/* Mobile Tab Switcher for Narrow Viewports (< lg) */}
           <div className="flex lg:hidden items-center justify-center w-full p-1 bg-muted/60 rounded-xl border border-border mt-1">
@@ -544,6 +672,7 @@ export default function RoomPage({
                 members={members}
                 currentUserId={session.user.id}
                 hostId={hostId}
+                noAvatars={dataSaver}
               />
             </Card>
 
@@ -617,6 +746,7 @@ export default function RoomPage({
               mutedIds={mutedIds}
               controlRequests={controlRequests}
               showFileMatch={isLocalRoom}
+              noAvatars={dataSaver}
               onPromote={promoteMember}
               onDemote={demoteMember}
               onKick={kickMember}
@@ -667,6 +797,24 @@ export default function RoomPage({
                 onSwitchToLocalFile={handleMakeRoomFile}
               />
             )}
+
+            {/* Low-Data Mode + live session meter */}
+            <DataPanel
+              dataSaver={dataSaver}
+              audioOnly={audioOnly}
+              onToggleSaver={setDataSaver}
+              onToggleAudio={setAudioOnly}
+              mbText={meter.mbText}
+              measuredText={meter.measuredText}
+              estimatedText={meter.estimatedText}
+              isEstimateOnly={room.videoType !== "hls"}
+              costText={meter.costText}
+              priceCountry={meter.price.country}
+              region={meter.region}
+              detectedRegion={detectedRegion}
+              onRegionChange={meter.setRegion}
+              onResetMeter={meter.reset}
+            />
           </div>
         </div>
 

@@ -12,6 +12,8 @@ interface PresenceBarProps {
   members: PartyMember[];
   currentUserId: string;
   hostId: string;
+  /** Data Saver: never download avatar images, render initials instead. */
+  noAvatars?: boolean;
 }
 
 /** Max avatars rendered — counts stay exact so 500 viewers stay cheap. */
@@ -21,6 +23,7 @@ export function PresenceBar({
   members,
   currentUserId,
   hostId,
+  noAvatars = false,
 }: PresenceBarProps) {
   const visible = members.slice(0, MAX_AVATARS);
   const overflow = members.length - visible.length;
@@ -42,7 +45,7 @@ export function PresenceBar({
             <Tooltip key={member.id}>
               <TooltipTrigger>
                 <div className="relative cursor-pointer transition-transform hover:z-20 hover:scale-110">
-                  {member.image ? (
+                  {member.image && !noAvatars ? (
                     <img
                       src={member.image}
                       alt={member.name}

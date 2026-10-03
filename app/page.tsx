@@ -1,5 +1,6 @@
 import { AuthButton } from "@/components/auth/AuthButton";
 import { RoomLobby } from "@/components/room/RoomLobby";
+import { PwaInstallCard } from "@/components/pwa/PwaInstallCard";
 
 export default function Home() {
   return (
@@ -63,8 +64,9 @@ export default function Home() {
         </div>
 
         {/* Responsive Room Creation Lobby */}
-        <div className="w-full max-w-2xl lg:max-w-4xl mx-auto">
+        <div className="w-full max-w-2xl lg:max-w-4xl mx-auto space-y-4">
           <RoomLobby />
+          <PwaInstallCard />
         </div>
       </main>
     </div>

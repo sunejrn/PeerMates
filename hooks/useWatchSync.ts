@@ -91,6 +91,8 @@ export function useWatchSync({
   const [kickedOut, setKickedOut] = useState(false);
   // ---- "My Files" local-file match badges (server-authoritative) ----
   const [fileMatchMap, setFileMatchMap] = useState<Record<string, boolean | null>>({});
+  // ---- Connectivity: "online" | "reconnecting" | "offline" ----
+  const [connection, setConnection] = useState<"online" | "reconnecting" | "offline">("online");
 
   const isHost = currentUser.id === hostId;
   const isCohost = myRole === "cohost";
@@ -105,6 +107,13 @@ export function useWatchSync({
   const roleMapRef = useRef<Record<string, RoomRole>>({});
   const onSourceChangedRef = useRef(onSourceChanged);
   const currentUserRef = useRef(currentUser);
+  const connectionRef = useRef(connection);
+  /** Consecutive failed state polls (2+ => reconnecting). */
+  const failCountRef = useRef(0);
+  /** Rate-nudge monitor timer + anchor for convergence checks. */
+  const nudgeTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const nudgeActiveRef = useRef(false);
+  const lastExpectedRef = useRef<{ position: number; at: number } | null>(null);
   /** My own local-file match (null = no file picked). Sent on heartbeat. */
   const fileMatchRef = useRef<boolean | null>(null);
 
@@ -115,6 +124,7 @@ export function useWatchSync({
     roleMapRef.current = roleMap;
     onSourceChangedRef.current = onSourceChanged;
     currentUserRef.current = currentUser;
+    connectionRef.current = connection;
   });
 
   const hasSeenHostOnlineRef = useRef(false);
@@ -161,6 +171,127 @@ export function useWatchSync({
     [slug]
   );
 
+  // ---- Gentle drift correction (no seek thrashing) ----
+  // Small drift (<=3s while playing): nudge playbackRate ±8% and let the
+  // position glide into sync. Large drift: ONE debounced seek. Below 0.5s:
+  // in sync, restore 1x speed.
+  const stopRateNudge = useCallback(() => {
+    if (nudgeTimerRef.current) {
+      clearInterval(nudgeTimerRef.current);
+      nudgeTimerRef.current = null;
+    }
+    if (nudgeActiveRef.current) {
+      nudgeActiveRef.current = false;
+      try {
+        playerRef.current?.setPlaybackRate?.(1);
+      } catch {
+        // seeking covers players without rate control
+      }
+    }
+  }, [playerRef]);
+
+  // Clear the nudge monitor on unmount so no timer outlives the room.
+  useEffect(() => {
+    return () => {
+      if (nudgeTimerRef.current) clearInterval(nudgeTimerRef.current);
+      nudgeActiveRef.current = false;
+    };
+  }, []);
+
+  const startRateNudge = useCallback(
+    (drift: number, expected: number) => {
+      const player = playerRef.current;
+      if (!player?.setPlaybackRate) {
+        // No rate control (older embeds): fall back to one debounced seek.
+        const now = Date.now();
+        if (now - lastSeekTimeRef.current > 1500) {
+          setSyncState("syncing");
+          lastSeekTimeRef.current = now;
+          isSyncingFromEventRef.current = true;
+          player?.seek(expected);
+          setTimeout(() => {
+            isSyncingFromEventRef.current = false;
+          }, 500);
+        }
+        return;
+      }
+      const rate = drift > 0 ? 1.08 : 0.92; // behind => speed up, ahead => slow down
+      try {
+        player.setPlaybackRate(rate);
+      } catch {
+        // fall through to monitor, which seeks if we never converge
+      }
+      nudgeActiveRef.current = true;
+      lastExpectedRef.current = { position: expected, at: Date.now() };
+      setSyncState("syncing");
+      if (nudgeTimerRef.current) clearInterval(nudgeTimerRef.current);
+      const startedAt = Date.now();
+      nudgeTimerRef.current = setInterval(() => {
+        const p = playerRef.current;
+        const anchor = lastExpectedRef.current;
+        if (!p || !anchor || canControlRef.current) {
+          stopRateNudge();
+          return;
+        }
+        const exp = anchor.position + (Date.now() - anchor.at) / 1000;
+        const d = exp - p.getCurrentTime();
+        setDriftSeconds(Math.abs(d));
+        if (Math.abs(d) < 0.4 || Date.now() - startedAt > 20000) {
+          stopRateNudge();
+          if (Math.abs(d) >= 0.4) {
+            // Never converged — one clean seek, no thrash loop.
+            p.seek(exp);
+            lastSeekTimeRef.current = Date.now();
+          }
+          setSyncState("synced");
+        }
+      }, 1000);
+    },
+    [playerRef, stopRateNudge]
+  );
+
+  /**
+   * Shared position correction for poll + realtime paths. Position only —
+   * callers keep their own play/pause handling.
+   */
+  const correctDrift = useCallback(
+    (expected: number, wantsPlaying: boolean) => {
+      const player = playerRef.current;
+      if (!player || canControlRef.current) return;
+      const drift = expected - player.getCurrentTime();
+      const absDrift = Math.abs(drift);
+      setDriftSeconds(absDrift);
+      if (absDrift <= 0.5) {
+        stopRateNudge();
+        setSyncState("synced");
+        return;
+      }
+      if (absDrift <= 3.0 && wantsPlaying && !player.isPaused()) {
+        // A nudge is already gliding us there — just refresh its anchor so
+        // fresh polls don't restart it (avoids timer churn).
+        if (nudgeActiveRef.current) {
+          lastExpectedRef.current = { position: expected, at: Date.now() };
+          setSyncState("syncing");
+          return;
+        }
+        startRateNudge(drift, expected);
+        return;
+      }
+      const now = Date.now();
+      if (now - lastSeekTimeRef.current > 1500) {
+        stopRateNudge();
+        setSyncState("syncing");
+        lastSeekTimeRef.current = now;
+        isSyncingFromEventRef.current = true;
+        player.seek(expected);
+        setTimeout(() => {
+          isSyncingFromEventRef.current = false;
+        }, 500);
+      }
+    },
+    [playerRef, startRateNudge, stopRateNudge]
+  );
+
   // Apply a server state snapshot to the local player (shared by the
   // initial fetch and the follower polling loop). Privileged users
   // (host + co-hosts) drive state and never follow.
@@ -183,23 +314,7 @@ export function useWatchSync({
         ? state.currentTime + Math.max(0, elapsed)
         : state.currentTime;
 
-      const local = player.getCurrentTime();
-      const drift = expected - local;
-      const absDrift = Math.abs(drift);
-      setDriftSeconds(absDrift);
-
-      const now = Date.now();
-      if (absDrift > 0.5 && now - lastSeekTimeRef.current > 1500) {
-        setSyncState("syncing");
-        lastSeekTimeRef.current = now;
-        isSyncingFromEventRef.current = true;
-        player.seek(expected);
-        setTimeout(() => {
-          isSyncingFromEventRef.current = false;
-        }, 500);
-      } else {
-        setSyncState("synced");
-      }
+      correctDrift(expected, state.isPlaying);
 
       if (state.isPlaying && player.isPaused()) {
         player.play();
@@ -207,8 +322,52 @@ export function useWatchSync({
         player.pause();
       }
     },
-    [playerRef]
+    [playerRef, correctDrift]
   );
+
+  /**
+   * Reconnect resync: fetch the host's latest Redis snapshot and converge
+   * with zero seek thrashing (nudge small drift, one seek for large).
+   * Returns true when the server answered.
+   */
+  const resyncFromServer = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/rooms/${slug}/state`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.state && !canControlRef.current) {
+        applyServerState(data.state);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }, [slug, applyServerState]);
+
+  // Browser online/offline signals: instant banner, resync on return.
+  useEffect(() => {
+    if (!slug) return;
+    const goOffline = () => {
+      failCountRef.current = 0;
+      setConnection("offline");
+      setSyncState("disconnected");
+    };
+    const goOnline = () => {
+      setConnection("reconnecting");
+      void resyncFromServer().then((ok) => {
+        if (ok) {
+          failCountRef.current = 0;
+          setConnection("online");
+        }
+      });
+    };
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+    return () => {
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+    };
+  }, [slug, resyncFromServer]);
 
   // 1. Initial Instant State Fetch from Redis (for new joiners).
   // Followers continuously re-poll below, so late host actions still sync.
@@ -522,6 +681,8 @@ export function useWatchSync({
   // 1d. Server-backed playback polling for followers.
   // Host writes state on every play/pause/seek + 3s heartbeat; followers
   // correct drift here. Works across devices even if Stream events drop.
+  // Consecutive failures (2+) flip the connection to "reconnecting" so the
+  // room shows a banner; the next success resyncs and clears it.
   useEffect(() => {
     if (!slug) return;
     let stopped = false;
@@ -531,11 +692,36 @@ export function useWatchSync({
       if (Date.now() - lastServerStateAtRef.current < 1500) return;
       try {
         const res = await fetch(`/api/rooms/${slug}/state`);
-        if (!res.ok) return;
+        if (!res.ok || stopped) {
+          if (!res.ok) {
+            failCountRef.current += 1;
+            if (
+              failCountRef.current >= 2 &&
+              connectionRef.current === "online"
+            ) {
+              setConnection("reconnecting");
+              setSyncState("disconnected");
+            }
+          }
+          return;
+        }
         const data = await res.json();
-        if (data.state && !stopped) applyServerState(data.state);
+        if (data.state && !stopped) {
+          applyServerState(data.state);
+          failCountRef.current = 0;
+          if (connectionRef.current !== "online") {
+            setConnection("online");
+          }
+        }
       } catch {
-        // ignore
+        failCountRef.current += 1;
+        if (
+          failCountRef.current >= 2 &&
+          connectionRef.current === "online"
+        ) {
+          setConnection("reconnecting");
+          setSyncState("disconnected");
+        }
       }
     };
     statePollTimerRef.current = setInterval(pollState, 2000);
@@ -741,29 +927,20 @@ export function useWatchSync({
           return;
         }
 
-        // SYNC ALGORITHM
+        // SYNC ALGORITHM (shared, thrash-free: nudge small drift, one seek
+        // for large drift — see correctDrift).
         const transitLatencySec = (Date.now() - event.serverTimestamp) / 1000;
         const expectedPosition =
           event.type === "playback.pause"
             ? event.position
             : event.position + transitLatencySec;
 
-        const currentLocalTime = player.getCurrentTime();
-        const drift = expectedPosition - currentLocalTime;
-        const absDrift = Math.abs(drift);
-
-        setDriftSeconds(absDrift);
-
-        const now = Date.now();
-        const hasDebouncePassed = now - lastSeekTimeRef.current > 1000;
-
-        if (absDrift > 0.5 && hasDebouncePassed) {
-          setSyncState("syncing");
-          lastSeekTimeRef.current = now;
-          player.seek(expectedPosition);
-        } else {
-          setSyncState("synced");
-        }
+        correctDrift(
+          expectedPosition,
+          event.type === "playback.play" ||
+            event.type === "playback.heartbeat" ||
+            event.type === "playback.seek"
+        );
 
         if (event.type === "playback.play") {
           if (player.isPaused()) {
@@ -792,9 +969,9 @@ export function useWatchSync({
       unsubPlayback();
       service.disconnect();
     };
-    // ONLY re-subscribe if room slug or user ID changes (fetchRoles is
-    // useCallback-bound to slug, so it never triggers extra re-subs).
-  }, [slug, currentUser.id, playerRef, fetchRoles]);
+    // ONLY re-subscribe if room slug or user ID changes (fetchRoles and
+    // correctDrift are useCallback-stable, so they never trigger re-subs).
+  }, [slug, currentUser.id, playerRef, fetchRoles, correctDrift]);
 
   // 3. Privileged heartbeat loop (host + co-hosts, every 3s while playing).
   // Viewers never send control events — enforced again server-side.
@@ -838,6 +1015,9 @@ export function useWatchSync({
   const handleHostPlayerEvent = useCallback(
     (event: PlayerStateEvent) => {
       if (!canControlRef.current || isSyncingFromEventRef.current) return;
+      // Never emit while the tab is hidden: Data Saver pauses local decoding
+      // there, and a hidden host must not pause the whole room by accident.
+      if (typeof document !== "undefined" && document.hidden) return;
 
       const serverTimestamp = Date.now();
       const player = playerRef.current;
@@ -1101,6 +1281,9 @@ export function useWatchSync({
     hostId,
     syncState,
     driftSeconds,
+    connection,
+    reconnecting: connection !== "online",
+    resyncFromServer,
     members: membersWithRoles,
     messages,
     isHostBuffering,

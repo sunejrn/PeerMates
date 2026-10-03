@@ -78,6 +78,22 @@ export const YouTubePlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           }
           return true;
         },
+        setPlaybackRate: (rate: number) => {
+          if (
+            playerRef.current &&
+            isPlayerReady &&
+            playerRef.current.setPlaybackRate &&
+            Number.isFinite(rate)
+          ) {
+            try {
+              playerRef.current.setPlaybackRate(
+                Math.min(1.25, Math.max(0.75, rate))
+              );
+            } catch {
+              // unsupported — seeking covers it
+            }
+          }
+        },
         getVideoElement: () => null, // iframe-based: no media element to share
         requestFullscreen: () => {
           // Fullscreen the player container (works on desktop + Android

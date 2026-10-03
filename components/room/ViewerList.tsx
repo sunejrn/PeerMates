@@ -21,6 +21,8 @@ interface ViewerListProps {
   controlRequests?: ControlRequestItem[];
   /** "My Files" rooms: show per-viewer Match / Different file badges. */
   showFileMatch?: boolean;
+  /** Data Saver: never download avatar images, render initials instead. */
+  noAvatars?: boolean;
   onPromote: (userId: string) => Promise<void>;
   onDemote: (userId: string) => Promise<void>;
   onKick: (userId: string) => Promise<void>;
@@ -78,8 +80,8 @@ function FileMatchBadge({ match }: { match: boolean | null | undefined }) {
   );
 }
 
-function Avatar({ member, ring }: { member: PartyMember; ring: string }) {
-  if (member.image) {
+function Avatar({ member, ring, noAvatars = false }: { member: PartyMember; ring: string; noAvatars?: boolean }) {
+  if (member.image && !noAvatars) {
     return (
       <img
         src={member.image}
@@ -113,6 +115,7 @@ export function ViewerList({
   mutedIds = [],
   controlRequests = [],
   showFileMatch = false,
+  noAvatars = false,
   onPromote,
   onDemote,
   onKick,
@@ -283,6 +286,7 @@ export function ViewerList({
                   >
                     <Avatar
                       member={m}
+                      noAvatars={noAvatars}
                       ring={
                         m.id === hostId
                           ? "border-amber-500"

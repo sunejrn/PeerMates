@@ -47,6 +47,8 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         requestFullscreen: () => innerPlayerRef.current?.requestFullscreen?.(),
         getVideoElement: () =>
           innerPlayerRef.current?.getVideoElement?.() ?? null,
+        setPlaybackRate: (rate: number) =>
+          innerPlayerRef.current?.setPlaybackRate?.(rate),
       }),
       []
     );
