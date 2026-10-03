@@ -22,7 +22,7 @@ const geistMono = Geist_Mono({
 
 /* metadata */
 export const metadata: Metadata = {
-  title: "WatchTogether - Real-Time Synchronized Watch Parties",
+  title: "PeerMates - Real-Time Synchronized Watch Parties",
   description:
     "Watch videos together in real-time with frame-accurate sync, live chat, and presence.",
   manifest: "/manifest.webmanifest",

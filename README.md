@@ -3,7 +3,7 @@
 Watch videos together in frame-accurate sync — YouTube, HLS, MP4, or your own
 movie files — with live chat, voice notes, AI-translated subtitles, and
 host-controlled playback for up to ~500 viewers per room.
-
+   
 ## Screenshots
 
 | Lobby (desktop) | Guest join (desktop) |
