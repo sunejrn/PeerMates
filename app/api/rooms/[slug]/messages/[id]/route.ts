@@ -7,7 +7,7 @@ import { resolveActorId, forbidden, errMessage } from "@/lib/rooms/actor";
 type RouteParams = { params: Promise<{ slug: string; id: string }> };
 
 /**
- * DELETE /api/rooms/[slug]/messages/[id]
+ * DELETE /api/rooms/[slug]/messages/[id].
  * Tombstone a message. Allowed for the author, or host/co-hosts
  * (moderation). The realtime copy is deleted best-effort by the deleter's
  * client; every client converges via the poll tombstone within seconds.
