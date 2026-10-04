@@ -5,7 +5,7 @@ movie files — with live chat, voice notes, AI-translated subtitles, and
 host-controlled playback for up to ~500 viewers per room.
    
 ## Screenshots
-
+  
 | Lobby (desktop) | Guest join (desktop) |
 | --- | --- |
 | ![Lobby on desktop](public/screenshots/lobby-desktop.png) | ![Guest nickname join on desktop](public/screenshots/room-join-desktop.png) |
