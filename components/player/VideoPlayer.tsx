@@ -20,6 +20,7 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
       isHost = true,
       canControl: canControlProp,
       roleBadge,
+      controlLabel: controlLabelProp,
       onPlayerEvent,
     } = props;
     const canControl = canControlProp ?? isHost;
@@ -166,11 +167,12 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
             duration={duration}
             isHost={canControl}
             controlLabel={
-              badge === "host"
+              controlLabelProp ??
+              (badge === "host"
                 ? "👑 Host Controlling"
                 : badge === "cohost"
                   ? "🎬 Co-host Controlling"
-                  : undefined
+                  : undefined)
             }
             onPlay={() => innerPlayerRef.current?.play()}
             onPause={() => innerPlayerRef.current?.pause()}

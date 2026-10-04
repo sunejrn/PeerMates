@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, uuid, pgEnum, doublePrecision } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, uuid, pgEnum, doublePrecision, jsonb, integer } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -107,3 +107,58 @@ export type User = typeof user.$inferSelect;
 export type Room = typeof rooms.$inferSelect;
 export type RoomParticipant = typeof roomParticipants.$inferSelect;
 export type PlaybackEvent = typeof playbackEvents.$inferSelect;
+
+// Party Replay: saved watch-party moments (timestamps + text only —
+// video bytes are never stored, keeping it free-tier and copyright-safe).
+
+/** Replay visibility chosen by the host at party end. */
+export const replayVisibilityEnum = pgEnum("replay_visibility", [
+  "public",
+  "circle",
+  "private",
+]);
+
+export const partyReplays = pgTable("party_replays", {
+  /** Short public id (nanoid) used in /replay/[id] links. */
+  id: text("id").primaryKey(),
+  roomSlug: text("room_slug").notNull(),
+  title: text("title").notNull().default("PeerMates Party"),
+  videoType: videoTypeEnum("video_type").notNull().default("youtube"),
+  /** Remote source only (mp4/hls/youtube). Local files replay from the
+      viewer's own copy, verified against fileFingerprint. */
+  videoSource: text("video_source"),
+  fileFingerprint: jsonb("file_fingerprint"),
+  durationSec: doublePrecision("duration_sec").notNull().default(0),
+  viewerCount: integer("viewer_count").notNull().default(0),
+  visibility: replayVisibilityEnum("visibility").notNull().default("public"),
+  /** Reactions-per-10s curve across the runtime. */
+  buckets: jsonb("buckets").notNull().default([]),
+  /** Top non-adjacent buckets: [{ t, count, label }]. */
+  peaks: jsonb("peaks").notNull().default([]),
+  highlights: jsonb("highlights").notNull().default({}),
+  topEmoji: text("top_emoji"),
+  hostId: text("host_id").notNull(),
+  hostName: text("host_name"),
+  endedAt: timestamp("ended_at").notNull().defaultNow(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+/**
+ * One replayable moment: reaction, chat message, voice note, or pinned
+ * comment — always anchored to a video timestamp (seconds).
+ */
+export const partyEvents = pgTable("party_events", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  /** Set when the party is finalized into a replay (null while buffering). */
+  replayId: text("replay_id"),
+  roomSlug: text("room_slug").notNull(),
+  userId: text("user_id").notNull(),
+  userName: text("user_name"),
+  type: text("type").notNull(),
+  videoTime: doublePrecision("video_time").notNull().default(0),
+  payload: jsonb("payload"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export type PartyReplay = typeof partyReplays.$inferSelect;
+export type PartyEvent = typeof partyEvents.$inferSelect;

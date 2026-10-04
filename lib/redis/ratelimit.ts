@@ -79,4 +79,8 @@ export const RATE_LIMITS = {
   aiPerUser: { limit: 10, windowSeconds: 3600 },
   /** AI translate/recap global room budget (free-tier guard). */
   aiGlobal: { limit: 60, windowSeconds: 3600 },
+  /** Replay event capture per user (500-viewer bursts stay smooth). */
+  replayEvent: { limit: 120, windowSeconds: 60 },
+  /** Replay event capture global room budget (burst headroom). */
+  replayGlobal: { limit: 2000, windowSeconds: 60 },
 } as const;

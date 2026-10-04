@@ -283,6 +283,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           controls={controlsAllowed}
           playsInline
           crossOrigin="anonymous"
+          preload="auto"
           className="h-full w-full object-contain syncme-subs"
         >
           {/* Keyed track: swapping languages remounts only the track node —

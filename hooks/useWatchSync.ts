@@ -1054,7 +1054,9 @@ export function useWatchSync({
 
   /**
    * Rich send: text and/or attachment, optional reply quote + moment pin.
-   * Same single-id fan-out as sendMessage, so no duplicates.
+   * Same single-id fan-out as sendMessage, so no duplicates. An explicit
+   * id may be supplied (replay capture correlates the chat bubble with the
+   * replay event); otherwise one is minted inside sendMessage.
    */
   const sendRich = useCallback(
     async (opts: {
@@ -1062,11 +1064,13 @@ export function useWatchSync({
       replyTo?: MessageReplyRef;
       attachment?: MessageAttachment;
       moment?: number;
+      id?: string;
     }): Promise<boolean> => {
       const service = serviceRef.current;
       if (!service) return false;
       try {
         await service.sendMessage(opts.text ?? "", {
+          id: opts.id,
           replyTo: opts.replyTo,
           attachment: opts.attachment,
           moment: opts.moment,

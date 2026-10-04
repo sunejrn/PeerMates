@@ -32,6 +32,8 @@ import { NicknameGate } from "@/components/room/NicknameGate";
 import { SubtitlesPanel } from "@/components/room/SubtitlesPanel";
 import { useGuestIdentity } from "@/hooks/useGuestIdentity";
 import { useRoomSubtitles } from "@/hooks/useRoomSubtitles";
+import { useReplayCapture } from "@/hooks/useReplayCapture";
+import { EndPartyPanel } from "@/components/replay/EndPartyPanel";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -100,6 +102,14 @@ export default function RoomPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [effectiveId, effectiveName, session?.user?.image, room?.hostId, joinedAt]
   );
+
+  // ---- Party Replay capture primitives (wrappers below, after sync) ----
+  const { captureSend, captureReaction, captureDelete } = useReplayCapture({
+    slug,
+    actorId: effectiveId,
+    actorName: effectiveName,
+    getVideoTime: () => playerRef.current?.getCurrentTime() ?? 0,
+  });
 
   // ---- Room subtitles (host/co-host upload, per-user language + size) ----
   const subs = useRoomSubtitles({
@@ -252,6 +262,51 @@ export default function RoomPage({
       throw err;
     }
   };
+
+  // ---- Party Replay capture wrappers (fire-and-forget, never break chat) ----
+  const sendRichCaptured = useCallback(
+    async (opts: {
+      text?: string;
+      replyTo?: { id: string; text: string; userName: string };
+      attachment?: {
+        kind: "image" | "voice" | "file";
+        url: string;
+        name?: string;
+        size?: number;
+        mime?: string;
+        duration?: number;
+        waveform?: number[];
+      };
+      moment?: number;
+    }): Promise<boolean> => {
+      const messageId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const ok = await sendRich({ ...opts, id: messageId });
+      if (ok !== false) captureSend({ ...opts, messageId });
+      return ok;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sendRich, captureSend]
+  );
+
+  const reactCaptured = useCallback(
+    (id: string, emoji: string) => {
+      void reactToMessage(id, emoji);
+      captureReaction(id, emoji);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reactToMessage, captureReaction]
+  );
+
+  const deleteCaptured = useCallback(
+    (id: string) => {
+      void deleteMessage(id).then(() => captureDelete(id));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deleteMessage, captureDelete]
+  );
 
   const getHostVideo = () =>
     playerRef.current?.getVideoElement?.() ?? null;
@@ -768,6 +823,15 @@ export default function RoomPage({
               />
             )}
 
+            {/* Party Replay: end-of-party save (host only, server-enforced) */}
+            <EndPartyPanel
+              slug={slug}
+              actorId={effectiveId}
+              isHost={isHost}
+              viewerCount={members.length}
+              getDuration={() => playerRef.current?.getDuration() ?? 0}
+            />
+
             {/* Subtitles + AI (everyone; upload is privileged server-side) */}
             <SubtitlesPanel
               subs={subs}
@@ -804,7 +868,7 @@ export default function RoomPage({
           <ChatPanel
             messages={messages}
             currentUserId={effectiveId}
-            onSendMessage={sendRich}
+            onSendMessage={sendRichCaptured}
             uploadMedia={uploadMedia}
             slowModeSeconds={chatSettings.slowModeSeconds}
             chatMuted={chatSettings.chatMuted}
@@ -814,8 +878,8 @@ export default function RoomPage({
             typingUsers={typingUsers}
             onTyping={sendTyping}
             canDeleteAny={canControl}
-            onReact={reactToMessage}
-            onDelete={deleteMessage}
+            onReact={reactCaptured}
+            onDelete={deleteCaptured}
             canControl={canControl}
             onCaptureMoment={() => playerRef.current?.getCurrentTime() ?? 0}
             onPinJump={(seconds) => {

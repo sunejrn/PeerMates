@@ -36,6 +36,11 @@ export interface VideoPlayerProps {
   /** Badge shown on the player: host crown, co-host clapper, or follower. */
   roleBadge?: "host" | "cohost" | "viewer";
   /**
+   * Overrides the glass-controls role label (e.g. replays show their own
+   * label instead of "Host Controlling"). Defaults from roleBadge.
+   */
+  controlLabel?: string;
+  /**
    * "My Files" rooms: per-device blob: URL for the viewer's own copy.
    * When videoType is localfile and this is missing, the player renders a
    * "pick your file" placeholder instead of a broken video.

@@ -8,6 +8,13 @@
       "when": 1791024435871,
       "tag": "0000_peaceful_vivisector",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791220800000,
+      "tag": "0001_party_replay",
+      "breakpoints": true
     }
   ]
 }
