@@ -92,6 +92,7 @@ Copy `.env.example` to `.env.local` and fill in:
 | `DATABASE_URL` | Neon dashboard → connection string |
 | `BETTER_AUTH_SECRET` | any random 32+ char string |
 | `BETTER_AUTH_URL` | `http://localhost:3000` locally; prod URL on Vercel |
+| `NEXT_PUBLIC_SITE_URL` | `https://peermates.vercel.app` — canonical URL for invite links, QR codes, shares |
 | `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub → Settings → Developer settings → OAuth Apps |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud Console → APIs & Services → Credentials |
 | `STREAM_API_KEY` / `STREAM_API_SECRET` / `NEXT_PUBLIC_STREAM_API_KEY` | [getstream.io](https://getstream.io) dashboard |

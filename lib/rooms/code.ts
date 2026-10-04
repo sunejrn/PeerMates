@@ -19,10 +19,27 @@ export function isValidRoomCode(code: string): boolean {
   return /^[a-z0-9]{4,16}$/.test(code);
 }
 
+/**
+ * Canonical site origin. NEXT_PUBLIC_SITE_URL wins so invite links, QR
+ * codes, and shares always point at production
+ * (https://peermates.vercel.app) even when the host is browsing localhost.
+ * Falls back to the current origin (local dev without the env var).
+ */
+export function siteOrigin(): string {
+  const configured = (process.env.NEXT_PUBLIC_SITE_URL || "").replace(/\/+$/, "");
+  if (configured) return configured;
+  if (typeof window !== "undefined" && window.location.origin) {
+    return window.location.origin;
+  }
+  return "";
+}
+
 export function roomUrl(code: string): string {
-  const base =
-    typeof window !== "undefined" ? window.location.origin : "";
-  return `${base}/room/${code}`;
+  return `${siteOrigin()}/room/${code}`;
+}
+
+export function replayLink(id: string): string {
+  return `${siteOrigin()}/replay/${id}`;
 }
 
 export function whatsappShareUrl(code: string, title?: string): string {

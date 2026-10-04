@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { fmtClock } from "@/lib/replay/highlights";
+import { replayLink } from "@/lib/rooms/code";
 
 export interface WrappedMeta {
   id: string;
@@ -18,8 +19,7 @@ export interface WrappedMeta {
 }
 
 function replayUrl(id: string): string {
-  const base = typeof window !== "undefined" ? window.location.origin : "";
-  return `${base}/replay/${id}`;
+  return replayLink(id);
 }
 
 /** Mini heatmap sparkline (SVG, no chart lib — light on low-end phones). */
