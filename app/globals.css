@@ -224,6 +224,19 @@
     position: sticky;
     top: 3.5rem;
   }
+
+  .room-video-pin {
+    position: sticky;
+    top: 3.5rem;            /* header h-14 */
+    z-index: 30;
+    background: var(--background);
+    padding-bottom: 0.5rem;
+  }
+
+  .room-chat-dock {
+    height: calc(100dvh - 3.5rem - 56.25vw - 5rem);
+    min-height: 16rem;
+  }
 }
 @media (max-width: 1023.98px) and (min-width: 640px) {
   .room-video-sticky {
