@@ -53,9 +53,6 @@ export function PwaInstallCard() {
   return (
     <Card className="w-full border-border bg-card/70 p-4 sm:p-5 backdrop-blur-xl shadow-lg rounded-2xl text-left">
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-tr from-violet-600 via-indigo-600 to-pink-500 text-lg shadow-md shadow-violet-500/20">
-          📲
-        </div>
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-bold text-foreground">
             Install PeerMates for the full experience
@@ -80,9 +77,9 @@ export function PwaInstallCard() {
           <Button
             onClick={handleInstall}
             disabled={busy}
-            className="w-full min-h-11 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold disabled:opacity-60"
+            className="w-full min-h-11 bg-[#333] dark:bg-white dark:text-black border text-white  text-xs font-semibold disabled:opacity-60"
           >
-            {busy ? "Installing…" : "⬇ Install PeerMates"}
+            {busy ? "Installing…" : "Install PeerMates"}
           </Button>
         ) : (
           <div className="space-y-2">

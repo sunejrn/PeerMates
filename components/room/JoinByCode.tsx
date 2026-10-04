@@ -75,7 +75,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
           <Button
             type="submit"
             disabled={isJoining || (code.trim() !== "" && !normalized)}
-            className="h-12 min-h-11 min-w-11 px-5 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold cursor-pointer shrink-0 disabled:opacity-50"
+            className="h-12 min-h-11 min-w-11 px-5 bg-[#333] dark:bg-white dark:text-black border text-white font-semibold cursor-pointer shrink-0 disabled:opacity-50"
           >
             {isJoining ? (
               <span className="flex items-center gap-2">

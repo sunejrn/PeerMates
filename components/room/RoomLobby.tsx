@@ -178,17 +178,17 @@ export function RoomLobby() {
 
   return (
     <div className="w-full">
-      {/* Responsive layout: Single-column on mobile/tablet, 2-column on lg+ desktop */}
-      <div className="flex flex-col lg:flex-row items-stretch justify-center gap-6 lg:gap-8 max-w-5xl mx-auto">
-        {/* Form Card (Max 480px on desktop, 100% on mobile) */}
-        <Card className="w-full lg:max-w-120 border-border bg-card/70 p-5 sm:p-8 backdrop-blur-xl shadow-xl shadow-violet-950/5 dark:shadow-violet-950/20 rounded-2xl flex flex-col justify-between">
+      {/* Three cards on lg/xl with gaps; single column on mobile/medium */}
+      <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-3 items-stretch justify-center gap-6 max-w-6xl mx-auto">
+        {/* Form Card */}
+        <Card className="w-full border-border bg-card/70 p-5 sm:p-8 backdrop-blur-xl shadow-xl shadow-violet-950/5 dark:shadow-violet-950/20 rounded-2xl flex flex-col justify-between">
           <div className="space-y-2 mb-6 text-left">
             <h2 className="text-xl sm:text-2xl font-bold text-card-foreground tracking-tight flex items-center gap-2">
               Start a PeerMates Party
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Paste any YouTube URL, HLS stream (.m3u8), or direct video file link —
-              or bring your own movie with My Files — to sync playback with your friends.
+              Paste any YouTube URL, HLS stream (.m3u8), or direct video file link
+              or bring your own movie with My Files to sync playback with your friends.
             </p>
           </div>
 
@@ -382,7 +382,7 @@ export function RoomLobby() {
                 (sourceTab === "myfiles" &&
                   (filePick.phase !== "ready" || !filePick.fp || !rightsOk))
               }
-              className="w-full h-12 sm:h-11 mt-4 bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold shadow-lg shadow-violet-600/25 transition-all cursor-pointer"
+              className="w-full h-12 sm:h-11 mt-4 bg-[#333] dark:bg-white dark:text-black border text-white font-semibold shadow-none transition-all cursor-pointer"
             >
               {isCreating ? (
                 <span className="flex items-center gap-2">
@@ -396,12 +396,9 @@ export function RoomLobby() {
           </form>
         </Card>
 
-        {/* Desktop Supporting "How it works" Panel (Visible on lg+) */}
-        <div className="hidden lg:flex flex-1 flex-col justify-between rounded-2xl border border-border bg-card/40 p-8 backdrop-blur-md text-left space-y-6">
+        {/* How PeerMates works — second column on lg/xl, stacked below on mobile */}
+        <div className="flex w-full flex-col justify-between rounded-2xl border border-border bg-card/40 p-6 sm:p-8 backdrop-blur-md text-left space-y-6">
           <div className="space-y-3">
-            <span className="inline-block rounded-full bg-violet-500/10 border border-violet-500/20 px-3 py-1 text-xs font-semibold text-violet-600 dark:text-violet-400">
-              Instant Synchronized Streaming
-            </span>
             <h3 className="text-2xl font-bold text-card-foreground">
               How PeerMates Works
             </h3>
@@ -412,9 +409,6 @@ export function RoomLobby() {
 
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-600 dark:text-violet-400 font-bold text-sm">
-                1
-              </div>
               <div className="space-y-0.5">
                 <h4 className="text-sm font-semibold text-foreground">
                   Frame-Accurate Host Control
@@ -426,9 +420,6 @@ export function RoomLobby() {
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-bold text-sm">
-                2
-              </div>
               <div className="space-y-0.5">
                 <h4 className="text-sm font-semibold text-foreground">
                   Unified Player Engine
@@ -440,9 +431,6 @@ export function RoomLobby() {
             </div>
 
             <div className="flex items-start gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold text-sm">
-                3
-              </div>
               <div className="space-y-0.5">
                 <h4 className="text-sm font-semibold text-foreground">
                   Realtime Presence & Host Migration
@@ -462,11 +450,9 @@ export function RoomLobby() {
             </span>
           </div>
         </div>
-      </div>
 
-      {/* Join with a code — same width as the create card on desktop */}
-      <div className="w-full max-w-2xl lg:max-w-4xl mx-auto">
-        <div className="w-full lg:max-w-120">
+        {/* Join with a code — third column on lg/xl, stacked on mobile/medium */}
+        <div className="flex w-full">
           <JoinByCode />
         </div>
       </div>

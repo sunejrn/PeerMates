@@ -9,7 +9,7 @@ import { PresenceBar } from "@/components/room/PresenceBar";
 import { ViewerList } from "@/components/room/ViewerList";
 import { ModerationPanel } from "@/components/room/ModerationPanel";
 import { LocalFileGate } from "@/components/room/LocalFileGate";
-import { StreamFromHostPanel } from "@/components/room/StreamFromHost";
+import { StreamFromHostPanel, HostStreamMain } from "@/components/room/StreamFromHost";
 import { DataPanel } from "@/components/room/DataPanel";
 import { useDataSaver } from "@/hooks/useDataSaver";
 import { useDataMeter } from "@/hooks/useDataMeter";
@@ -61,6 +61,8 @@ export default function RoomPage({
   const [playBlocked, setPlayBlocked] = useState(false);
   // Mobile tab state for narrow viewports (< lg)
   const [mobileTab, setMobileTab] = useState<"video-info" | "chat">("video-info");
+  // Large-screen sidebar tabs: chat stays hidden until the user opens it.
+  const [deskTab, setDeskTab] = useState<"info" | "chat">("info");
   // Mobile navigation drawer (Claude/Codex-style slide-in)
   const [navOpen, setNavOpen] = useState(false);
 
@@ -236,6 +238,48 @@ export default function RoomPage({
     });
     setLocalMatch(match);
     setPlayBlocked(false);
+    // A re-picked file after a refresh lands back where the room is
+    // (server state wins, device backup covers a host gap).
+    void (async () => {
+      try {
+        const [serverRes, saved] =
+          await Promise.all([
+            fetch(`/api/rooms/${slug}/state`).then((r) =>
+              r.ok ? r.json() : null
+            ).catch(() => null),
+            typeof window !== "undefined"
+              ? window.localStorage.getItem(`peermates:pos:${slug}`)
+              : null,
+          ]);
+        const st = serverRes?.state;
+        let target: number | null = null;
+        if (st && typeof st.currentTime === "number") {
+          target = st.isPlaying && typeof st.serverTimestamp === "number"
+            ? st.currentTime + Math.max(0, (Date.now() - st.serverTimestamp) / 1000)
+            : st.currentTime;
+        } else if (saved) {
+          try {
+            const parsed = JSON.parse(saved) as { t?: number };
+            if (typeof parsed?.t === "number" && parsed.t > 1) target = parsed.t;
+          } catch {
+            // ignore corrupt backup
+          }
+        }
+        if (target !== null && target > 1) {
+          // Wait for the fresh blob URL to load metadata before seeking.
+          for (let i = 0; i < 20; i++) {
+            const p = playerRef.current;
+            if (p && p.getDuration() > 0) {
+              p.seek(Math.max(0, target - 0.5));
+              break;
+            }
+            await new Promise((r) => setTimeout(r, 300));
+          }
+        }
+      } catch {
+        // best-effort resume
+      }
+    })();
   };
 
   const handleFileClear = () => {
@@ -271,7 +315,7 @@ export default function RoomPage({
       text?: string;
       replyTo?: { id: string; text: string; userName: string };
       attachment?: {
-        kind: "image" | "voice" | "file";
+        kind: "image" | "video" | "voice" | "file";
         url: string;
         name?: string;
         size?: number;
@@ -312,6 +356,89 @@ export default function RoomPage({
 
   const getHostVideo = () =>
     playerRef.current?.getVideoElement?.() ?? null;
+
+  // ---- Refresh persistence: device backup of the room position ----
+  // Server Redis state is authoritative and survives host leaves; this
+  // local backup covers the gap before the first poll after a refresh
+  // and lets a re-picked local file jump straight back in.
+  useEffect(() => {
+    if (!slug) return;
+    const key = `peermates:pos:${slug}`;
+    const save = () => {
+      try {
+        const p = playerRef.current;
+        if (!p) return;
+        const t = p.getCurrentTime();
+        if (!Number.isFinite(t) || t < 1) return;
+        window.localStorage.setItem(
+          key,
+          JSON.stringify({ t, at: Date.now() })
+        );
+      } catch {
+        // storage full/blocked — server state still covers sync
+      }
+    };
+    const timer = setInterval(save, 3000);
+    window.addEventListener("beforeunload", save);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("beforeunload", save);
+      save();
+    };
+  }, [slug]);
+
+  // Player ready (link/URL rooms): resume from server state first,
+  // device backup second — so a mistaken refresh never restarts the movie.
+  const canControlRefSafe = useRef(canControl);
+  useEffect(() => {
+    canControlRefSafe.current = canControl;
+  }, [canControl]);
+  const handlePlayerReady = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/rooms/${slug}/state`);
+      let target: number | null = null;
+      let playing = false;
+      if (res.ok) {
+        const data = await res.json();
+        const st = data.state;
+        if (st && typeof st.currentTime === "number" && st.currentTime > 1) {
+          target =
+            st.isPlaying && typeof st.serverTimestamp === "number"
+              ? st.currentTime + Math.max(0, (Date.now() - st.serverTimestamp) / 1000)
+              : st.currentTime;
+          playing = Boolean(st.isPlaying);
+        }
+      }
+      if (target === null && typeof window !== "undefined") {
+        try {
+          const saved = window.localStorage.getItem(`peermates:pos:${slug}`);
+          if (saved) {
+            const parsed = JSON.parse(saved) as { t?: number };
+            if (typeof parsed?.t === "number" && parsed.t > 1) target = parsed.t;
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const p = playerRef.current;
+      if (p && target !== null && target > 1) {
+        const dur = p.getDuration();
+        const safe = dur > 0 ? Math.min(target, Math.max(0, dur - 2)) : target;
+        if (Math.abs(p.getCurrentTime() - safe) > 1.5) p.seek(safe);
+        // Followers rejoin playback; hosts stay paused to avoid surprise audio.
+        if (playing && !canControlRefSafe.current) {
+          try {
+            await p.play();
+          } catch {
+            setPlayBlocked(true);
+          }
+        }
+      }
+    } catch {
+      // best-effort
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug]);
 
   const handleTapToPlay = async () => {
     try {
@@ -458,6 +585,16 @@ export default function RoomPage({
       // player not ready — ignore
     }
   }, []);
+
+  // Live-chat count tracks visible messages only — deleting a message
+  // drops the number on the tab/headers immediately.
+  const visibleMessageCount = useMemo(
+    () => messages.filter((m) => !m.deleted).length,
+    [messages]
+  );
+  // File-less joiners in local-file rooms watch the host stream directly
+  // in the main slot — no file they may not have is ever required.
+  const needsHostStream = isLocalRoom && !localFile && !canControl;
 
   // Loading state
   if (isAuthPending || isLoadingRoom) {
@@ -648,7 +785,7 @@ export default function RoomPage({
                 }}
                 className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted text-left"
               >
-                Live chat ({messages.length})
+                Live chat ({visibleMessageCount})
               </button>
               <div className="mt-2 border-t border-border pt-3 px-3 flex flex-col gap-2">
                 <span className="font-mono text-xs text-muted-foreground">#{slug}</span>
@@ -666,10 +803,12 @@ export default function RoomPage({
         </div>
       )}
 
-      {/* Main Room Layout: left scrolls, right chat stays fixed on desktop */}
+      {/* Main Room Layout.
+          Mobile/medium: single column, sticky video, tab switcher flow.
+          Large: video pinned on the left, tabbed sidebar on the right. */}
       <main className="room-layout flex flex-1 flex-col lg:flex-row lg:items-start p-3 sm:p-6 gap-4 sm:gap-6 max-w-[1600px] mx-auto w-full">
-        {/* Left Column: Video Player & Controls (scrolls with page) */}
-        <div className="flex flex-1 flex-col gap-3 sm:gap-4 min-w-0">
+        {/* Left Column: Video Player (pinned on lg, sticky-scroll below lg) */}
+        <div className="room-video-pin flex flex-col gap-3 sm:gap-4 min-w-0 lg:flex-1">
           {/* Host Buffering Notice Banner */}
           {isHostBuffering && !isHost && (
             <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
@@ -678,26 +817,48 @@ export default function RoomPage({
             </div>
           )}
 
-          {/* Unified Video Player - 16:9 aspect-video maintained across all screens */}
-          <div className="w-full relative">
-            <VideoPlayer
-              key={`${room.videoSource}|${localFile ? `${localFile.file.name}|${localFile.file.size}` : "nofile"}`}
-              ref={playerRef}
-              src={room.videoSource}
-              videoType={room.videoType}
-              isHost={isHost}
-              canControl={canControl}
-              roleBadge={isHost ? "host" : isCohost ? "cohost" : "viewer"}
-              localSrc={localFile?.url}
-              dataSaver={dataSaver}
-              onFragmentBytes={handleFragmentBytes}
-              onAutoplayBlocked={() => setPlayBlocked(true)}
-              onPlayerEvent={handleHostPlayerEvent}
-              markers={momentMarkers}
-              onMarkerTap={canControl ? handleMarkerTap : undefined}
-              subtitleTrackUrl={subs.trackUrl}
-              subtitleSize={subs.size}
-            />
+          {/* Unified Video Player - 16:9. Sticky below lg so scrolling
+              info/chat passes underneath; fixed in place on lg. */}
+          <div className="room-video-sticky w-full relative">
+            {needsHostStream ? (
+              <HostStreamMain
+                slug={slug}
+                hostId={hostId}
+                myId={effectiveId}
+                myName={effectiveName || "Viewer"}
+              />
+            ) : (
+              <>
+                <VideoPlayer
+                  key={`${room.videoSource}|${localFile ? `${localFile.file.name}|${localFile.file.size}` : "nofile"}`}
+                  ref={playerRef}
+                  src={room.videoSource}
+                  videoType={room.videoType}
+                  isHost={isHost}
+                  canControl={canControl}
+                  roleBadge={isHost ? "host" : isCohost ? "cohost" : "viewer"}
+                  localSrc={localFile?.url}
+                  dataSaver={dataSaver}
+                  onFragmentBytes={handleFragmentBytes}
+                  onAutoplayBlocked={() => setPlayBlocked(true)}
+                  onPlayerEvent={handleHostPlayerEvent}
+                  onReady={handlePlayerReady}
+                  markers={momentMarkers}
+                  onMarkerTap={canControl ? handleMarkerTap : undefined}
+                  subtitleTrackUrl={subs.trackUrl}
+                  subtitleSize={subs.size}
+                />
+                {/* File-less viewers get a one-tap path to the host stream
+                    right under the waiting player. */}
+                {isLocalRoom && !localFile && (
+                  <p className="mt-2 rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 text-[11px] text-muted-foreground">
+                    No file needed — you&apos;ll watch the host&apos;s playback
+                    automatically below. Have the same movie? Pick it in
+                    “My Files” for frame-accurate sync.
+                  </p>
+                )}
+              </>
+            )}
             {/* iOS Safari blocks autoplay with sound: followers get a real
                 tap target that plays inside the user gesture. */}
             {playBlocked && !canControl && (room.videoType !== "localfile" || localFile) && (
@@ -770,15 +931,52 @@ export default function RoomPage({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Live Chat ({messages.length})
+              Live Chat ({visibleMessageCount})
+            </button>
+          </div>
+        </div>
+
+        {/* Right Sidebar (lg+): tabbed Watching & Info / Chat with its own
+            fixed height — internal scroll only, page and video stay put.
+            On mobile this wrapper dissolves (display:contents) so both
+            panels keep flowing naturally under the mobile tab switcher. */}
+        <div className="room-sidebar contents lg:flex lg:flex-col lg:w-[340px] xl:w-[380px] lg:shrink-0 lg:gap-3">
+          {/* Desktop Tab Switcher (large screens only) */}
+          <div className="hidden lg:flex items-center justify-center w-full p-1 bg-muted rounded-lg border border-border shrink-0">
+            <button
+              type="button"
+              onClick={() => setDeskTab("info")}
+              aria-pressed={deskTab === "info"}
+              className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                deskTab === "info"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Watching &amp; Info ({members.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeskTab("chat")}
+              aria-pressed={deskTab === "chat"}
+              className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                deskTab === "chat"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Chat ({visibleMessageCount})
             </button>
           </div>
 
-          {/* Video Info & Controls Panel (Visible on Desktop OR when mobileTab === 'video-info') */}
+          {/* Video Info & Controls Panel.
+              Mobile: follows the mobile tab. Large: follows the desk tab
+              and scrolls inside the sidebar (scrollbar hidden) — never
+              under the video, never moving the page. */}
           <div
-            className={`flex flex-col gap-3 sm:gap-4 ${
-              mobileTab === "video-info" ? "flex" : "hidden lg:flex"
-            }`}
+            className={`room-info-scroll no-scrollbar min-w-0 flex-col gap-3 sm:gap-4 ${
+              mobileTab === "video-info" ? "flex" : "hidden"
+            } ${deskTab === "info" ? "lg:flex" : "lg:hidden"} lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-0.5 lg:pb-1`}
           >
             {/* Presence Bar */}
             <Card className="border-border bg-card px-3 sm:px-4 py-2 rounded-lg">
@@ -896,6 +1094,8 @@ export default function RoomPage({
                 isHost={isHost}
                 getHostVideo={getHostVideo}
                 onShareToggle={handleShareToggle}
+                hostHasFile={isHost && !!localFile}
+                viewerNeedsAuto={!canControl && !localFile}
               />
             )}
 
@@ -946,14 +1146,15 @@ export default function RoomPage({
               onResetMeter={meter.reset}
             />
           </div>
-        </div>
 
-        {/* Right Column: Live Chat Panel — fixed on desktop, tabbed on mobile */}
-        <div
-          className={`room-chat-dock w-full lg:w-[340px] xl:w-[380px] shrink-0 flex min-h-0 flex-col ${
-            mobileTab === "chat" ? "flex" : "hidden lg:flex"
-          }`}
-        >
+          {/* Live Chat Panel.
+              Mobile: follows the mobile tab. Large: hidden until the user
+              opens the Chat tab, fills the sidebar, closes anytime. */}
+          <div
+            className={`room-chat-dock w-full shrink-0 min-h-0 flex-col ${
+              mobileTab === "chat" ? "flex" : "hidden"
+            } ${deskTab === "chat" ? "lg:flex" : "lg:hidden"} lg:w-full lg:flex-1`}
+          >
           <ChatPanel
             messages={messages}
             currentUserId={effectiveId}
@@ -979,6 +1180,7 @@ export default function RoomPage({
               }
             }}
           />
+          </div>
         </div>
       </main>
     </div>

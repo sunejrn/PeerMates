@@ -106,8 +106,14 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
   const livePeaksRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const startAtRef = useRef(0);
-  const downAtRef = useRef(0);
   const holdModeRef = useRef(false);
+  /** Finger still down (for the hold-to-record timer). */
+  const pressedRef = useRef(false);
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Suppress the click that follows a hold-release. */
+  const suppressClickRef = useRef(false);
+  /** Guard against double-tap double-start (StrictMode / fast thumbs). */
+  const startingRef = useRef(false);
 
   const fail = (message: string) => {
     onError?.(message);
@@ -148,6 +154,9 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
 
   useEffect(() => {
     return () => {
+      if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+      pressedRef.current = false;
       cleanup();
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
@@ -182,7 +191,11 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
   const beginRecording = async () => {
     const current = phaseRef.current;
     if (current !== "idle" && current !== "preview") return;
+    // Double-tap / StrictMode guard: one permission prompt at a time.
+    if (startingRef.current) return;
+    startingRef.current = true;
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      startingRef.current = false;
       fail("Voice recording isn't supported in this browser.");
       return;
     }
@@ -246,6 +259,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
         if (s >= VOICE_MAX_SECONDS) stopRecording(false);
       }, 250);
     } catch (err) {
+      startingRef.current = false;
       if (
         err instanceof DOMException &&
         (err.name === "NotAllowedError" || err.name === "SecurityError")
@@ -254,7 +268,9 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
       } else {
         fail("Couldn't start recording. Try again.");
       }
+      return;
     }
+    startingRef.current = false;
   };
 
   const stopRecording = (cancelled: boolean) => {
@@ -481,31 +497,36 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
     );
   }
 
-  // Idle: TAP to start (primary), HOLD also works. 44px target.
+  // Idle: TAP starts locked recording, HOLD records until release.
+  // Both work on web + mobile. A hold-release never retriggers via the
+  // follow-up click (suppressed), so the mic can't flash-loop.
+  const clearHoldTimer = () => {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    holdTimerRef.current = null;
+  };
+
   return (
     <button
       type="button"
       disabled={disabled}
-      aria-label={ptt ? "Hold to talk" : "Tap to record voice note (or hold)"}
-      title={ptt ? "Hold to talk" : "Tap to record"}
+      aria-label={ptt ? "Hold to talk, tap to record" : "Tap or hold to record voice note"}
+      title={ptt ? "Hold to talk (or tap to record)" : "Tap or hold to record"}
       onPointerDown={(e) => {
         if (disabled) return;
-        downAtRef.current = Date.now();
+        pressedRef.current = true;
+        suppressClickRef.current = false;
         holdModeRef.current = false;
-        try {
-          (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-        } catch {
-          // ignore
-        }
         startXRef.current = e.clientX;
-        // Hold-to-record: only begin on a sustained press; a quick tap is
-        // handled by onClick (toggle mode) so single taps never get stuck.
-        window.setTimeout(() => {
-          if (phaseRef.current !== "idle" || disabled) return;
-          // Still pressed after 350ms => hold mode.
+        clearHoldTimer();
+        // Sustained press => hold mode (release stops to preview,
+        // or auto-sends in push-to-talk). Quick taps use onClick.
+        holdTimerRef.current = setTimeout(() => {
+          holdTimerRef.current = null;
+          if (!pressedRef.current || disabled) return;
+          if (phaseRef.current !== "idle") return;
           holdModeRef.current = true;
           void beginRecording();
-        }, 350);
+        }, 280);
       }}
       onPointerMove={(e) => {
         if (phaseRef.current !== "recording") return;
@@ -515,9 +536,12 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
         setCancelArmed(armed);
       }}
       onPointerUp={() => {
-        // Hold mode: release stops to preview (or cancels on slide).
+        pressedRef.current = false;
+        clearHoldTimer();
+        // Hold mode: release stops to preview (PTT skips preview on send).
         if (holdModeRef.current && phaseRef.current === "recording") {
           holdModeRef.current = false;
+          suppressClickRef.current = true;
           stopRecording(cancelRef.current);
           return;
         }
@@ -527,20 +551,32 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
         holdModeRef.current = false;
       }}
       onPointerCancel={() => {
+        pressedRef.current = false;
+        clearHoldTimer();
         if (phaseRef.current === "recording") stopRecording(true);
         else if (phaseRef.current === "acquiring") pendingStopRef.current = true;
         holdModeRef.current = false;
       }}
+      onPointerLeave={() => {
+        // Finger slid far off: keep recording (slide-left cancels),
+        // but a release outside still ends the hold via pointerup.
+        pressedRef.current = false;
+      }}
       onClick={() => {
-        // Quick tap (not a hold): toggle into locked recording.
+        // Tap-to-record (web + mobile): one tap locks into recording,
+        // Stop/Send finish it. Ignored right after a hold-release.
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          return;
+        }
         if (disabled || holdModeRef.current) return;
         if (phaseRef.current === "idle") void beginRecording();
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full cursor-pointer touch-none select-none disabled:opacity-50 ${
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full cursor-pointer touch-manipulation select-none disabled:opacity-50 ${
         transparentIdle
-          ? "text-muted-foreground hover:text-foreground"
-          : "border border-border bg-background text-xs font-medium"
+          ? "text-muted-foreground hover:text-foreground active:text-foreground"
+          : "border border-border bg-background text-xs font-medium active:bg-muted"
       }`}
     >
       {transparentIdle ? <Mic size={20} /> : "Mic"}

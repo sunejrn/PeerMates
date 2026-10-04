@@ -33,7 +33,8 @@ interface ViewerListProps {
 }
 
 const ROW_HEIGHT = 64;
-const LIST_MAX_HEIGHT = 336;
+// Five rows visible, then scroll — scrollbar hidden for a clean look.
+const LIST_MAX_HEIGHT = 320;
 const OVERSCAN = 5;
 
 function RoleBadge({ role }: { role: RoomRole }) {
@@ -251,7 +252,7 @@ export function ViewerList({
         <div
           ref={scrollRef}
           onScroll={(e) => setScrollTop((e.target as HTMLDivElement).scrollTop)}
-          className="overflow-y-auto overscroll-contain"
+          className="no-scrollbar overflow-y-auto overscroll-contain"
           style={{ maxHeight: LIST_MAX_HEIGHT }}
           role="list"
           aria-label="Room viewers"

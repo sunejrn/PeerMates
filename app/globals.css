@@ -199,6 +199,38 @@
   height: 0;
 }
 
+/* Generic hidden-scrollbar scroller (people/watching list). */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Sticky video: mobile + medium only. The movie stays pinned while
+   info/chat scroll beneath it. Large screens use a fixed two-column
+   room (video left, tabbed sidebar right), so no sticky is needed there. */
+.room-video-sticky {
+  z-index: 30;
+  background: var(--background);
+  padding-bottom: 0.25rem;
+}
+@media (max-width: 1023.98px) {
+  .room-video-sticky {
+    position: sticky;
+    top: 3.5rem;
+  }
+}
+@media (max-width: 1023.98px) and (min-width: 640px) {
+  .room-video-sticky {
+    top: 4rem;
+  }
+}
+
 /* WhatsApp-style typing dots */
 .typing-dot {
   width: 7px;
@@ -227,21 +259,57 @@
   }
 }
 
-/* Room layout: desktop chat is fixed on the right, left scrolls.
-   Mobile (<lg): single column with tab switcher, chat is normal flow. */
+/* Room layout.
+   Mobile/medium (<lg): single column, video sticky, chat is normal flow.
+   Large (lg+): two columns pinned under the header — the video sticks
+   in place on the left no matter what, and the right sidebar gets its
+   own fixed height with internal scroll (scrollbar hidden), so the
+   Watching & Info content scrolls without ever moving the page or
+   the video. */
 .room-chat-dock {
   height: 30rem;
   height: min(30rem, calc(100dvh - 24rem));
 }
 @media (min-width: 1024px) {
-  .room-layout {
-    align-items: flex-start;
+  .room-video-pin {
+    position: sticky;
+    top: 5.5rem;
+    align-self: flex-start;
+  }
+  .room-sidebar {
+    position: sticky;
+    top: 5.5rem;
+    align-self: flex-start;
+    height: calc(100vh - 7rem);
+    height: calc(100dvh - 7rem);
+    max-height: calc(100vh - 7rem);
+    max-height: calc(100dvh - 7rem);
+    min-height: 0;
+  }
+  /* Forced independent scroll for Watching & Info: viewport-capped with
+     enforced overflow, so it scrolls on large screens no matter what
+     the flex parents resolve to. Scrollbar stays hidden. */
+  .room-info-scroll {
+    min-height: 0;
+    max-height: calc(100vh - 11rem);
+    max-height: calc(100dvh - 11rem);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .room-info-scroll > * {
+    flex-shrink: 0;
+  }
+  .room-info-scroll::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
   }
   .room-chat-dock {
-    position: sticky;
-    top: 5rem;
-    height: calc(100dvh - 6rem);
-    max-height: calc(100dvh - 6rem);
-    align-self: flex-start;
+    position: static;
+    height: 100%;
+    max-height: 100%;
   }
 }

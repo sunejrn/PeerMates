@@ -44,23 +44,8 @@ export function AuthModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="border-border bg-popover text-popover-foreground backdrop-blur-xl sm:max-w-md shadow-2xl">
+      <DialogContent className="border-border bg-popover text-popover-foreground backdrop-blur-xl sm:max-w-md shadow-none">
         <DialogHeader className="space-y-3 text-center sm:text-left">
-          <div className="mx-auto sm:mx-0 flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-600/15 border border-violet-500/30 text-violet-600 dark:text-violet-400">
-            <svg
-              className="h-6 w-6"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-              />
-            </svg>
-          </div>
           <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
             {title}
           </DialogTitle>

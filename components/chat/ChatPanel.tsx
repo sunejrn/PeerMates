@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   ChatMessage,
   ChatSendError,
@@ -269,6 +270,44 @@ function ImageBubble({
   );
 }
 
+// ---------- Video bubble (native player, tap-to-play) ----------
+
+function VideoBubble({
+  attachment,
+  onExpand,
+}: {
+  attachment: MessageAttachment;
+  onExpand: () => void;
+}) {
+  return (
+    <div className="relative max-w-full">
+      <video
+        src={attachment.url}
+        controls
+        playsInline
+        preload="metadata"
+        className="max-h-64 w-auto max-w-full rounded-lg bg-black object-contain"
+      />
+      <button
+        type="button"
+        onClick={onExpand}
+        aria-label="Expand video"
+        title="Expand video"
+        className="absolute right-1.5 top-1.5 flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-sm text-white cursor-pointer hover:bg-black/80"
+      >
+        ⤢
+      </button>
+      {attachment.name && (
+        <p className="mt-1 truncate text-[10px] opacity-70 font-mono">
+          {attachment.name}
+          {typeof attachment.size === "number" &&
+            ` · ${formatBytes(attachment.size)}`}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ---------- Main panel ----------
 
 export function ChatPanel({
@@ -300,6 +339,11 @@ export function ChatPanel({
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [pickerTab, setPickerTab] = useState<"emoji" | "gif" | "stickers">("emoji");
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
+  const [videoLightbox, setVideoLightbox] = useState<{ url: string; name: string } | null>(null);
+  // Portals render into document.body — always above the sticky video
+  // on every viewport. Lazily true on the client; portal content lives
+  // outside the React root so there is no hydration mismatch.
+  const [mounted] = useState(() => typeof document !== "undefined");
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [flashId, setFlashId] = useState<string | null>(null);
   /** While recording/previewing voice, the text row hides so 360px never overflows. */
@@ -316,10 +360,14 @@ export function ChatPanel({
 
   useEffect(() => {
     // Only auto-scroll when the user was already near the bottom, so
-    // reading history never gets yanked away. The input bar stays pinned
-    // because the scroll container is flex-1 min-h-0 (bar is shrink-0).
+    // reading history never gets yanked away. Scroll the message
+    // container itself (never scrollIntoView on the sentinel — that
+    // scrolls the whole page and drags the pinned input bar with it).
     if (stickToBottomRef.current) {
-      scrollBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      const el = scrollHostRef.current;
+      if (el) {
+        el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+      }
     }
   }, [messages, typingUsers]);
 
@@ -331,6 +379,7 @@ export function ChatPanel({
         setAttachOpen(false);
         setEmojiOpen(false);
         setLightbox(null);
+        setVideoLightbox(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -360,6 +409,9 @@ export function ChatPanel({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || inputDisabled) return;
+    // Sending always dismisses the emoji/GIF/sticker panel.
+    setEmojiOpen(false);
+    setAttachOpen(false);
     try {
       setIsSending(true);
       const ok = await onSendMessage({ text: inputText, ...buildOpts() });
@@ -450,6 +502,9 @@ export function ChatPanel({
     text: string,
     attachment: MessageAttachment
   ): Promise<boolean> => {
+    // Media sends also dismiss the emoji/GIF/sticker panel.
+    setEmojiOpen(false);
+    setAttachOpen(false);
     const ok = await onSendMessage({ text, ...buildOpts(), attachment });
     if (ok !== false) {
       setInputText("");
@@ -481,30 +536,73 @@ export function ChatPanel({
   };
 
   const handleImageFile = async (file: File) => {
+    await handleMediaFiles([file]);
+  };
+
+  // One or many photos and/or videos: images are compressed on-device,
+  // videos ride the file CDN path with a video bubble. Each file sends
+  // as its own message so captions stay readable.
+  const handleMediaFiles = async (files: File[]) => {
+    const list = files.filter(Boolean).slice(0, 10);
+    if (list.length === 0) return;
     setAttachOpen(false);
-    setAttachBusy("Compressing image…");
-    try {
-      const { blob } = await compressImage(file, (_stage, f) => {
-        if (f < 1) setAttachBusy(`Compressing image… ${Math.round(f * 100)}%`);
-      });
-      setAttachBusy("Uploading image…");
-      const { url } = await resolveMediaUrl(
-        blob,
-        file.name.replace(/\.[^.]+$/, "") + ".jpg",
-        "image"
-      );
-      await sendAttachmentMessage(inputText, {
-        kind: "image",
-        url,
-        name: file.name,
-        size: blob.size,
-        mime: "image/jpeg",
-      });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Image failed to send.");
-    } finally {
-      setAttachBusy(null);
+    setEmojiOpen(false);
+    const caption = inputText;
+    for (let i = 0; i < list.length; i++) {
+      const file = list[i];
+      const isVideo =
+        file.type.startsWith("video/") ||
+        /\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(file.name);
+      try {
+        if (isVideo) {
+          if (file.size > FILE_MAX_BYTES) {
+            toast.error(
+              `${file.name}: videos are limited to ${formatBytes(FILE_MAX_BYTES)}.`
+            );
+            continue;
+          }
+          setAttachBusy(
+            `Uploading video ${i + 1}/${list.length}…`
+          );
+          const { url } = await resolveMediaUrl(file, file.name, "file");
+          await sendAttachmentMessage(i === 0 ? caption : "", {
+            kind: "video",
+            url,
+            name: file.name,
+            size: file.size,
+            mime: file.type || undefined,
+          });
+        } else {
+          setAttachBusy(
+            `Compressing image ${i + 1}/${list.length}…`
+          );
+          const { blob } = await compressImage(file, (_stage, f) => {
+            if (f < 1)
+              setAttachBusy(
+                `Compressing image ${i + 1}/${list.length}… ${Math.round(f * 100)}%`
+              );
+          });
+          setAttachBusy(`Uploading image ${i + 1}/${list.length}…`);
+          const { url } = await resolveMediaUrl(
+            blob,
+            file.name.replace(/\.[^.]+$/, "") + ".jpg",
+            "image"
+          );
+          await sendAttachmentMessage(i === 0 ? caption : "", {
+            kind: "image",
+            url,
+            name: file.name,
+            size: blob.size,
+            mime: "image/jpeg",
+          });
+        }
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : `${file.name} failed to send.`
+        );
+      }
     }
+    setAttachBusy(null);
   };
 
   const handleDocFile = async (file: File) => {
@@ -699,6 +797,19 @@ export function ChatPanel({
                             <VoiceBubble attachment={msg.attachment} mine={isMe} />
                           </div>
                         )}
+                        {msg.attachment?.kind === "video" && (
+                          <div className="mb-1">
+                            <VideoBubble
+                              attachment={msg.attachment}
+                              onExpand={() =>
+                                setVideoLightbox({
+                                  url: msg.attachment!.url,
+                                  name: msg.attachment!.name || "Shared video",
+                                })
+                              }
+                            />
+                          </div>
+                        )}
                         {msg.attachment?.kind === "file" && (
                           <div className="mb-1">
                             {(() => {
@@ -812,6 +923,22 @@ export function ChatPanel({
         </div>
       )}
 
+      {/* Pin draft indicator — above the input so the send bar stays
+          pinned at the bottom and never shifts. */}
+      {pinDraft !== null && (
+        <div className="flex items-center gap-2 border-t border-border bg-muted px-3 py-1.5 text-[11px] shrink-0">
+          <span className="min-w-0 flex-1 truncate">Pinned to {formatClock(pinDraft)} — host taps jump the video</span>
+          <button
+            type="button"
+            onClick={() => setPinDraft(null)}
+            aria-label="Remove moment pin"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Chat Input — WhatsApp-style pill bar with safe-area padding.
           Typing swaps the mic for a circular send button; the voice
           recorder owns the full row while recording/previewing. */}
@@ -835,12 +962,13 @@ export function ChatPanel({
             ref={imageInputRef}
             type="file"
             accept="image/*,video/*"
+            multiple
             className="hidden"
-            aria-label="Attach photos or videos"
+            aria-label="Attach photos or videos (multiple allowed)"
             onChange={(e) => {
-              const f = e.target.files?.[0];
+              const files = e.target.files ? Array.from(e.target.files) : [];
               e.target.value = "";
-              if (f) void handleImageFile(f);
+              if (files.length > 0) void handleMediaFiles(files);
             }}
           />
           <input
@@ -879,17 +1007,18 @@ export function ChatPanel({
               if (f) void handleDocFile(f);
             }}
           />
-          {voiceActive ? (
-            <VoiceRecorder
-              disabled={inputDisabled}
-              ptt={PTT_ENABLED}
-              onSend={handleVoiceSend}
-              onError={(m) => toast.error(m)}
-              onActiveChange={setVoiceActive}
-            />
-          ) : (
-            <>
-              <div className="flex min-h-12 min-w-0 flex-1 items-center gap-0.5 rounded-full border border-border bg-muted py-1 pl-1.5 pr-1.5">
+          {/* Single stable recorder instance: it stays mounted while the
+              pill chrome hides around it, so starting a recording can
+              never unmount (and kill) itself mid-gesture. */}
+          <div
+            className={
+              voiceActive
+                ? "flex min-w-0 flex-1 items-center"
+                : "flex min-h-12 min-w-0 flex-1 items-center gap-0.5 rounded-full border border-border bg-muted py-1 pl-1.5 pr-1.5"
+            }
+          >
+            {!voiceActive && (
+              <>
                 <button
                   type="button"
                   onClick={() => {
@@ -932,55 +1061,44 @@ export function ChatPanel({
                   aria-label="Type a message"
                   className="min-w-0 flex-1 bg-transparent px-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
                 />
-                {!hasText && (
-                  <VoiceRecorder
-                    disabled={inputDisabled}
-                    ptt={PTT_ENABLED}
-                    transparentIdle
-                    onSend={handleVoiceSend}
-                    onError={(m) => toast.error(m)}
-                    onActiveChange={setVoiceActive}
-                  />
-                )}
-              </div>
-              {hasText && (
-                <button
-                  type="submit"
-                  disabled={isSending || inputDisabled}
-                  aria-label="Send message"
-                  title="Send"
-                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-foreground text-background cursor-pointer disabled:opacity-50"
-                >
-                  {isSending ? (
-                    <span className="text-sm">…</span>
-                  ) : (
-                    <Send size={18} />
-                  )}
-                </button>
+              </>
+            )}
+            {(!hasText || voiceActive) && (
+              <VoiceRecorder
+                key="chat-voice-recorder"
+                disabled={inputDisabled}
+                ptt={PTT_ENABLED}
+                transparentIdle={!voiceActive}
+                onSend={handleVoiceSend}
+                onError={(m) => toast.error(m)}
+                onActiveChange={setVoiceActive}
+              />
+            )}
+          </div>
+          {hasText && !voiceActive && (
+            <button
+              type="submit"
+              disabled={isSending || inputDisabled}
+              aria-label="Send message"
+              title="Send"
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-foreground text-background cursor-pointer disabled:opacity-50"
+            >
+              {isSending ? (
+                <span className="text-sm">…</span>
+              ) : (
+                <Send size={18} />
               )}
-            </>
+            </button>
           )}
         </form>
       </div>
 
-      {/* Pin draft indicator */}
-      {pinDraft !== null && (
-        <div className="flex items-center gap-2 border-t border-border bg-muted px-3 py-1.5 text-[11px]">
-          <span>Pinned to {formatClock(pinDraft)} — host taps jump the video</span>
-          <button
-            type="button"
-            onClick={() => setPinDraft(null)}
-            aria-label="Remove moment pin"
-            className="flex h-11 w-11 items-center justify-center rounded-lg cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* Attach sheet — Document / Photos & videos / Camera / Audio / Stickers */}
-      {attachOpen && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-label="Attach options">
+      {/* Attach sheet — Document / Photos & videos / Camera / Audio / Stickers.
+          Portaled to body so the sticky room video can never cover it. */}
+      {mounted &&
+        attachOpen &&
+        createPortal(
+          <div className="fixed inset-0 z-[60]" role="dialog" aria-label="Attach options">
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setAttachOpen(false)}
@@ -1028,12 +1146,15 @@ export function ChatPanel({
               <X size={18} />
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Message action sheet (long-press menu) */}
-      {menuMsg && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-label="Message actions">
+      {/* Message action sheet (long-press menu) — portaled above video */}
+      {mounted &&
+        menuMsg &&
+        createPortal(
+          <div className="fixed inset-0 z-[60]" role="dialog" aria-label="Message actions">
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setMenuFor(null)}
@@ -1097,16 +1218,19 @@ export function ChatPanel({
               Cancel
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Image lightbox */}
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-50 flex flex-col bg-black/95 p-4 pb-[max(env(safe-area-inset-bottom),1rem)]"
-          role="dialog"
-          aria-label="Expanded image"
-        >
+      {/* Image lightbox — portaled above video */}
+      {mounted &&
+        lightbox &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[60] flex flex-col bg-black/95 p-4 pb-[max(env(safe-area-inset-bottom),1rem)]"
+            role="dialog"
+            aria-label="Expanded image"
+          >
           <div className="flex items-center justify-between gap-2">
             <span className="truncate text-xs text-zinc-300">{lightbox.name}</span>
             <div className="flex gap-2">
@@ -1137,8 +1261,55 @@ export function ChatPanel({
               className="max-h-full max-w-full rounded-lg object-contain"
             />
           </div>
-        </div>
+        </div>,
+        document.body
       )}
+
+      {/* Video lightbox — portaled above video */}
+      {mounted &&
+        videoLightbox &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[60] flex flex-col bg-black/95 p-4 pb-[max(env(safe-area-inset-bottom),1rem)]"
+            role="dialog"
+            aria-label="Expanded video"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-xs text-zinc-300">{videoLightbox.name}</span>
+              <div className="flex gap-2">
+                <a
+                  href={videoLightbox.url}
+                  download={videoLightbox.name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Download video"
+                  className="flex h-11 px-3 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-xs text-white"
+                >
+                  Download
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setVideoLightbox(null)}
+                  aria-label="Close video"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="flex flex-1 items-center justify-center overflow-hidden py-2">
+              <video
+                src={videoLightbox.url}
+                controls
+                autoPlay
+                playsInline
+                preload="auto"
+                className="max-h-full max-w-full rounded-lg bg-black object-contain"
+              />
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

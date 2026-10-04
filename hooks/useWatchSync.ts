@@ -443,9 +443,10 @@ export function useWatchSync({
       }
     }
 
-    if (!isHostRef.current) {
-      fetchInitialRedisState();
-    }
+    // Everyone resumes: followers land on the live position, and a
+    // refreshed host (or one who left and came back) lands back on the
+    // persisted position instead of restarting from 0.
+    fetchInitialRedisState();
   }, [slug, playerRef]);
 
   // ---- "My Files" match badges ----

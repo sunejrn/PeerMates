@@ -27,7 +27,7 @@ const MAX_INLINE_BYTES = 200 * 1024;
 
 function sanitizeAttachment(raw: unknown):
   | {
-      kind: "image" | "voice" | "file";
+      kind: "image" | "video" | "voice" | "file";
       url: string;
       name?: string;
       size?: number;
@@ -38,7 +38,7 @@ function sanitizeAttachment(raw: unknown):
   | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const a = raw as Record<string, unknown>;
-  if (a.kind !== "image" && a.kind !== "voice" && a.kind !== "file") {
+  if (a.kind !== "image" && a.kind !== "video" && a.kind !== "voice" && a.kind !== "file") {
     return undefined;
   }
   if (typeof a.url !== "string" || !a.url) return undefined;

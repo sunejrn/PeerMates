@@ -33,7 +33,7 @@ export interface MessageReplyRef {
 }
 
 export interface MessageAttachment {
-  kind: "image" | "voice" | "file";
+  kind: "image" | "video" | "voice" | "file";
   /** Stream CDN URL, or a small data: URL when Stream is unreachable. */
   url: string;
   name?: string;
@@ -127,7 +127,10 @@ export function toChatMessage(raw: unknown): ChatMessage | null {
   let attachment: MessageAttachment | undefined;
   if (
     attRaw &&
-    (attRaw.kind === "image" || attRaw.kind === "voice" || attRaw.kind === "file") &&
+    (attRaw.kind === "image" ||
+      attRaw.kind === "video" ||
+      attRaw.kind === "voice" ||
+      attRaw.kind === "file") &&
     typeof attRaw.url === "string" &&
     attRaw.url.length > 0 &&
     attRaw.url.length < 2_000_000
@@ -240,6 +243,7 @@ export interface RealtimePlaybackEvent {
 
 function attachmentLabel(a: MessageAttachment): string {
   if (a.kind === "image") return "Photo";
+  if (a.kind === "video") return "Video";
   if (a.kind === "voice") return "Voice note";
   return `${a.name || "File"}`;
 }
