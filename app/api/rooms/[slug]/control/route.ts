@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         requestedAt: Date.now(),
       });
       await broadcastRoomEvent(slug, {
-        type: "room.control_requested",
+        type: "room_control_requested",
         userId: actorId,
         name,
       });
@@ -124,7 +124,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         await setRole(slug, target, "cohost");
         await mirrorMemberRole(slug, target, "cohost");
         await broadcastRoomEvent(slug, {
-          type: "room.roles_changed",
+          type: "room_roles_changed",
           userId: target,
           role: "cohost",
         });

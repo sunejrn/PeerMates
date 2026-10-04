@@ -59,12 +59,12 @@ export function ModerationPanel({
   };
 
   return (
-    <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-sm space-y-4">
+    <Card className="border-border bg-card p-3 sm:p-4 rounded-lg space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          🛡️ Moderation
+        <h3 className="text-xs font-medium text-muted-foreground">
+          Moderation
         </h3>
-        <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground">
+        <Badge variant="outline" className="text-[10px] font-mono text-muted-foreground rounded-lg">
           {memberCount} in room
         </Badge>
       </div>
@@ -87,10 +87,10 @@ export function ModerationPanel({
                 disabled={pending !== null}
                 onClick={() => run(`slow-${s}`, () => onSetSlowMode(s))}
                 aria-pressed={active}
-                className={`min-h-11 rounded-lg border text-xs font-semibold transition-all cursor-pointer disabled:opacity-60 ${
+                className={`min-h-11 rounded-lg border text-xs font-medium transition-all cursor-pointer disabled:opacity-60 ${
                   active
-                    ? "border-violet-500 bg-violet-500/15 text-violet-600 dark:text-violet-300"
-                    : "border-border bg-background/60 text-muted-foreground hover:text-foreground"
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {pending === `slow-${s}` ? "…" : s === 0 ? "Off" : `${s}s`}
@@ -101,7 +101,7 @@ export function ModerationPanel({
       </div>
 
       {/* Mute-all */}
-      <div className="flex items-center justify-between gap-2 rounded-lg border border-border/70 bg-background/50 px-3 py-2">
+      <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2">
         <div className="space-y-0.5">
           <p className="text-xs font-medium text-foreground">Mute all viewers</p>
           <p className="text-[11px] text-muted-foreground">
@@ -118,7 +118,7 @@ export function ModerationPanel({
             run("muteall", () => onSetChatMuted(!chatMuted))
           }
           className={`relative h-11 w-16 shrink-0 rounded-full border transition-colors cursor-pointer disabled:opacity-60 ${
-            chatMuted ? "bg-red-500/80 border-red-500" : "bg-muted border-border"
+            chatMuted ? "bg-foreground border-foreground" : "bg-muted border-border"
           }`}
         >
           <span
@@ -153,7 +153,7 @@ export function ModerationPanel({
           <Button
             type="submit"
             disabled={!sourceUrl.trim() || pending !== null}
-            className="h-11 px-4 shrink-0 bg-violet-600 hover:bg-violet-500 text-white text-xs"
+            className="h-11 px-4 shrink-0 text-xs rounded-lg"
           >
             {pending === "source" ? "…" : "Switch"}
           </Button>
@@ -169,14 +169,14 @@ export function ModerationPanel({
           type="button"
           onClick={() => setShowFileSwitch((v) => !v)}
           aria-expanded={showFileSwitch}
-          className="flex min-h-11 w-full items-center justify-between rounded-lg border border-border/70 bg-background/50 px-3 text-xs font-medium text-foreground cursor-pointer"
+          className="flex min-h-11 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground cursor-pointer"
         >
-          <span>📁 Switch to My File…</span>
+          <span>Switch to My File…</span>
           <span className="text-muted-foreground" aria-hidden>{showFileSwitch ? "▲" : "▼"}</span>
         </button>
         {showFileSwitch && (
-          <div className="space-y-2 rounded-lg border border-border/50 p-2.5">
-            <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-background/60 px-3 text-xs font-medium hover:border-violet-500/50 transition-all">
+          <div className="space-y-2 rounded-lg border border-border p-2.5">
+            <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-background px-3 text-xs font-medium transition-all">
               <input
                 type="file"
                 accept={LOCAL_FILE_ACCEPT}
@@ -187,26 +187,26 @@ export function ModerationPanel({
                   e.target.value = "";
                 }}
               />
-              📂 {filePick.file ? filePick.file.name : "Choose movie file…"}
+              {filePick.file ? filePick.file.name : "Choose movie file…"}
             </label>
 
             {(filePick.phase === "preflight" || filePick.phase === "fingerprint") && (
               <div className="flex items-center gap-2 text-xs text-muted-foreground" role="status">
-                <Spinner className="shrink-0 text-violet-500" />
+                <Spinner className="shrink-0" />
                 {filePick.phase === "preflight"
                   ? "Checking compatibility…"
                   : `Fingerprinting… ${Math.round(filePick.progress * 100)}%`}
               </div>
             )}
             {filePick.phase === "error" && (
-              <p className="text-xs text-red-600 dark:text-red-400" role="alert">
-                ❌ {filePick.error}{filePick.tip ? ` ${filePick.tip}` : ""}
+              <p className="text-xs text-destructive" role="alert">
+                {filePick.error}{filePick.tip ? ` ${filePick.tip}` : ""}
               </p>
             )}
             {filePick.phase === "ready" && filePick.fp && (
               <div className="space-y-1.5">
-                <p className="text-xs text-emerald-700 dark:text-emerald-300">
-                  ✅ {formatBytes(filePick.fp.size)} · {formatDuration(filePick.fp.duration)}
+                <p className="text-xs text-foreground">
+                  {formatBytes(filePick.fp.size)} · {formatDuration(filePick.fp.duration)}
                 </p>
                 <Button
                   disabled={pending !== null}
@@ -219,9 +219,9 @@ export function ModerationPanel({
                       setShowFileSwitch(false);
                     });
                   }}
-                  className="w-full min-h-11 bg-violet-600 hover:bg-violet-500 text-white text-xs"
+                  className="w-full min-h-11 text-xs rounded-lg"
                 >
-                  {pending === "localsource" ? "Switching…" : "🎬 Make this the room file"}
+                  {pending === "localsource" ? "Switching…" : "Make this the room file"}
                 </Button>
               </div>
             )}

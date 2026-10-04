@@ -115,7 +115,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     await setSubtitleMeta(slug, meta);
 
     await broadcastRoomEvent(slug, {
-      type: "room.subtitles_changed",
+      type: "room_subtitles_changed",
       hash,
       name,
     });

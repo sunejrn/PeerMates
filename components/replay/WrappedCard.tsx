@@ -123,18 +123,18 @@ export function WrappedCard({ meta }: { meta: WrappedMeta }) {
   };
 
   return (
-    <Card className="border-border bg-card/60 p-4 rounded-xl backdrop-blur-sm shadow-sm space-y-3">
+    <Card className="border-border bg-card p-4 rounded-lg space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          🎉 Party Wrapped
+        <h3 className="text-xs font-medium text-muted-foreground">
+          Party Wrapped
         </h3>
         <span className="text-[11px] text-muted-foreground font-mono">
           {meta.viewerCount} {meta.viewerCount === 1 ? "viewer" : "viewers"}
         </span>
       </div>
 
-      <div className="rounded-xl border border-violet-500/30 bg-gradient-to-br from-violet-600/15 via-indigo-500/10 to-pink-500/15 p-3 space-y-2">
-        <p className="truncate text-sm font-bold text-foreground">{meta.title}</p>
+      <div className="rounded-lg border border-border bg-muted p-3 space-y-2">
+        <p className="truncate text-sm font-semibold text-foreground">{meta.title}</p>
         <HeatSpark buckets={meta.buckets} peaks={meta.peaks} />
         <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
           <span className="min-w-0 flex-1 truncate">
@@ -143,7 +143,7 @@ export function WrappedCard({ meta }: { meta: WrappedMeta }) {
           </span>
           <a
             href={url}
-            className="shrink-0 font-semibold text-violet-600 dark:text-violet-300 underline underline-offset-2"
+            className="shrink-0 font-medium text-foreground underline underline-offset-2"
           >
             Watch replay →
           </a>
@@ -155,28 +155,28 @@ export function WrappedCard({ meta }: { meta: WrappedMeta }) {
           href={`https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-[#25D366] px-2 text-xs font-bold text-white"
+          className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-border px-2 text-xs font-medium"
           aria-label="Share to WhatsApp Status"
         >
-          <span aria-hidden>💬</span> WhatsApp
+          WhatsApp
         </a>
         <a
           href={`https://x.com/intent/post?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-foreground px-2 text-xs font-bold text-background"
+          className="flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-foreground px-2 text-xs font-medium text-background"
           aria-label="Share to X"
         >
-          <span aria-hidden>𝕏</span> Post to X
+          Post to X
         </a>
         <Button
           type="button"
           variant="outline"
           onClick={shareInstagram}
           disabled={downloading}
-          className="min-h-11 text-xs cursor-pointer"
+          className="min-h-11 text-xs cursor-pointer rounded-lg"
         >
-          {downloading ? "Rendering…" : "📸 Instagram Story"}
+          {downloading ? "Rendering…" : "Instagram Story"}
         </Button>
         <Button
           type="button"

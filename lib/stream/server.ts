@@ -134,9 +134,10 @@ export async function broadcastRoomEvent(
   if (!streamServerClient) return;
   try {
     const channel = streamServerClient.channel(STREAM_CHANNEL_TYPE, slug);
-    // Custom room.* events are outside Stream's typed EVENT_MAP, so they go
-    // through a narrow unknown-cast at this single choke point. Clients also
-    // poll, so this broadcast is an enhancement, not a requirement.
+    // Custom room_* events are outside Stream's typed EVENT_MAP (dots are
+    // rejected by Stream code 4), so they go through a narrow unknown-cast
+    // at this single choke point. Clients also poll, so this broadcast is
+    // an enhancement, not a requirement.
     await channel.sendEvent(event as unknown as Parameters<typeof channel.sendEvent>[0]);
   } catch (err) {
     console.warn(

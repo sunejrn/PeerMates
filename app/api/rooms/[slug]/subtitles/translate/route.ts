@@ -137,7 +137,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const vtt = cuesToVtt(merged);
       await setVtt(meta.hash, lang, vtt);
       await addSubtitleLang(slug, lang);
-      await broadcastRoomEvent(slug, { type: "room.subtitles_changed", hash: meta.hash, lang });
+      await broadcastRoomEvent(slug, { type: "room_subtitles_changed", hash: meta.hash, lang });
       return NextResponse.json({ vtt, lang, cached: false });
     } catch (err) {
       if (err instanceof AIQuotaError) {

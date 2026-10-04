@@ -31,7 +31,7 @@ export function PresenceBar({
   return (
     <div className="flex items-center gap-2 overflow-x-auto py-1 px-1 scrollbar-none">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mr-1 shrink-0">
-        <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+        <span className="flex h-2 w-2 rounded-full bg-foreground/40" />
         <span>Watching ({members.length}):</span>
       </div>
 
@@ -50,41 +50,25 @@ export function PresenceBar({
                       src={member.image}
                       alt={member.name}
                       loading="lazy"
-                      className={`h-8 w-8 rounded-full border-2 object-cover ${
-                        isHost
-                          ? "border-amber-500 shadow-md shadow-amber-500/20"
-                          : isCohost
-                            ? "border-cyan-500"
-                            : isMe
-                              ? "border-violet-500"
-                              : "border-border"
-                      }`}
+                      className="h-8 w-8 rounded-full border border-border object-cover"
                     />
                   ) : (
                     <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-bold text-white ${
-                        isHost
-                          ? "bg-amber-600 border-amber-500"
-                          : isCohost
-                            ? "bg-cyan-600 border-cyan-500"
-                            : isMe
-                              ? "bg-violet-600 border-violet-500"
-                              : "bg-muted-foreground/40 border-border text-foreground"
-                      }`}
+                      className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-muted text-xs font-semibold text-foreground"
                     >
                       {member.name.charAt(0).toUpperCase()}
                     </div>
                   )}
 
-                  {/* Host Crown / Co-host Badge */}
+                  {/* Host / Co-host marker — text only */}
                   {isHost && (
-                    <div className="absolute -top-1.5 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-amber-500 text-[9px] text-black font-bold shadow">
-                      👑
+                    <div className="absolute -top-1.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-lg border border-border bg-background px-1 text-[9px] font-semibold">
+                      H
                     </div>
                   )}
                   {!isHost && isCohost && (
-                    <div className="absolute -top-1.5 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-cyan-500 text-[9px] text-black font-bold shadow">
-                      🎬
+                    <div className="absolute -top-1.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-lg border border-border bg-background px-1 text-[9px] font-semibold">
+                      C
                     </div>
                   )}
                 </div>
@@ -99,7 +83,7 @@ export function PresenceBar({
                   {isHost && (
                     <Badge
                       variant="outline"
-                      className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] px-1 py-0"
+                      className="text-[10px] px-1 py-0 rounded-lg"
                     >
                       Host
                     </Badge>
@@ -107,7 +91,7 @@ export function PresenceBar({
                   {!isHost && isCohost && (
                     <Badge
                       variant="outline"
-                      className="border-cyan-500/40 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 text-[10px] px-1 py-0"
+                      className="text-[10px] px-1 py-0 rounded-lg"
                     >
                       Co-host
                     </Badge>

@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         await removeControlRequest(slug, target);
         await removeStreamMember(slug, target);
         await broadcastRoomEvent(slug, {
-          type: "room.kicked",
+          type: "room_kicked",
           userId: target,
         });
         return NextResponse.json({ success: true, action, userId: target });
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       settings.slowModeSeconds = seconds;
       await setSettings(slug, settings);
       await broadcastRoomEvent(slug, {
-        type: "room.settings_changed",
+        type: "room_settings_changed",
         slowModeSeconds: seconds,
       });
       return NextResponse.json({ success: true, settings });
@@ -133,7 +133,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       settings.chatMuted = body?.muted !== false;
       await setSettings(slug, settings);
       await broadcastRoomEvent(slug, {
-        type: "room.settings_changed",
+        type: "room_settings_changed",
         chatMuted: settings.chatMuted,
       });
       return NextResponse.json({ success: true, settings });

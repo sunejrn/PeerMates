@@ -179,19 +179,58 @@ export function toChatMessage(raw: unknown): ChatMessage | null {
   };
 }
 
+/**
+ * Stream custom event names MUST NOT contain dots — Stream reserves "." and
+ * rejects them with code 4 ("please use underscores or dashes instead").
+ * We use underscores everywhere (e.g. playback_heartbeat). The normalizer
+ * below also accepts legacy dotted names for backward compat.
+ */
+export type RealtimeEventType =
+  | "playback_play"
+  | "playback_pause"
+  | "playback_seek"
+  | "playback_heartbeat"
+  | "playback_buffering"
+  | "room_host_changed"
+  | "room_roles_changed"
+  | "room_settings_changed"
+  | "room_source_changed"
+  | "room_control_requested"
+  | "room_subtitles_changed"
+  | "room_kicked";
+
+export function normalizeEventType(t: unknown): RealtimeEventType | null {
+  if (typeof t !== "string") return null;
+  const fixed = t.replace(/\./g, "_") as RealtimeEventType;
+  switch (fixed) {
+    case "playback_play":
+    case "playback_pause":
+    case "playback_seek":
+    case "playback_heartbeat":
+    case "playback_buffering":
+    case "room_host_changed":
+    case "room_roles_changed":
+    case "room_settings_changed":
+    case "room_source_changed":
+    case "room_control_requested":
+    case "room_subtitles_changed":
+    case "room_kicked":
+      return fixed;
+    default:
+      return null;
+  }
+}
+
+export function isPlaybackEventType(t: string): boolean {
+  return t.startsWith("playback_") || t.startsWith("playback.");
+}
+
+export function isRoomEventType(t: string): boolean {
+  return t.startsWith("room_") || t.startsWith("room.");
+}
+
 export interface RealtimePlaybackEvent {
-  type:
-    | "playback.play"
-    | "playback.pause"
-    | "playback.seek"
-    | "playback.heartbeat"
-    | "playback.buffering"
-    | "room.host_changed"
-    | "room.roles_changed"
-    | "room.settings_changed"
-    | "room.source_changed"
-    | "room.control_requested"
-    | "room.kicked";
+  type: RealtimeEventType;
   position?: number;
   serverTimestamp?: number;
   newHostId?: string;
@@ -200,9 +239,9 @@ export interface RealtimePlaybackEvent {
 }
 
 function attachmentLabel(a: MessageAttachment): string {
-  if (a.kind === "image") return "📷 Photo";
-  if (a.kind === "voice") return "🎤 Voice note";
-  return `📎 ${a.name || "File"}`;
+  if (a.kind === "image") return "Photo";
+  if (a.kind === "voice") return "Voice note";
+  return `${a.name || "File"}`;
 }
 
 /**
@@ -331,16 +370,17 @@ export class RealtimeChannelService {
 
         // Listen to custom events, chat, and presence/watcher changes
         channel.on((event: any) => {
-          if (event.type && event.type.startsWith("playback.")) {
+          const normalized = normalizeEventType(event?.type);
+          if (normalized && normalized.startsWith("playback_")) {
             const pbEvent: RealtimePlaybackEvent = {
-              type: event.type as any,
+              type: normalized,
               position: (event as any).position,
               serverTimestamp: (event as any).serverTimestamp,
             };
             this.eventListeners.forEach((cb) => cb(pbEvent));
-          } else if (event.type && event.type.startsWith("room.")) {
+          } else if (normalized && normalized.startsWith("room_")) {
             const roomEvent: RealtimePlaybackEvent = {
-              type: event.type as any,
+              type: normalized,
               newHostId: (event as any).newHostId,
               userId: (event as any).userId,
               role: (event as any).role,
@@ -406,10 +446,15 @@ export class RealtimeChannelService {
           const data = e.data;
           if (!data) return;
 
-          if (data.type && data.type.startsWith("playback.")) {
-            this.eventListeners.forEach((cb) => cb(data));
-          } else if (data.type && data.type.startsWith("room.")) {
-            this.eventListeners.forEach((cb) => cb(data));
+          const normalized = normalizeEventType(data.type);
+          if (normalized && normalized.startsWith("playback_")) {
+            this.eventListeners.forEach((cb) =>
+              cb({ ...data, type: normalized })
+            );
+          } else if (normalized && normalized.startsWith("room_")) {
+            this.eventListeners.forEach((cb) =>
+              cb({ ...data, type: normalized })
+            );
           } else if (data.type === "chat.message") {
             const incoming = toChatMessage(data.message);
             if (incoming) this.messageListeners.forEach((cb) => cb(incoming));
@@ -511,9 +556,14 @@ export class RealtimeChannelService {
   }
 
   async sendPlaybackEvent(event: RealtimePlaybackEvent): Promise<void> {
+    // Defensive: never send a dotted type to Stream (code 4 rejection).
+    const safe: RealtimePlaybackEvent = {
+      ...event,
+      type: normalizeEventType(event.type) ?? event.type,
+    };
     if (this.streamChannel && this.streamLive) {
       try {
-        await this.streamChannel.sendEvent(event as any);
+        await this.streamChannel.sendEvent(safe as any);
       } catch (err) {
         console.warn("Stream sendEvent failed (state polling covers sync):", err);
       }
@@ -521,7 +571,7 @@ export class RealtimeChannelService {
 
     // Local bridge dispatch (same-browser tabs)
     if (this.localBroadcast) {
-      this.localBroadcast.postMessage(event);
+      this.localBroadcast.postMessage(safe);
     }
     // NOTE: durable cross-device playback propagation happens via
     // POST /api/rooms/[slug]/state in useWatchSync (saveStateToRedis),

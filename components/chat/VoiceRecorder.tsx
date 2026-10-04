@@ -9,6 +9,7 @@ import {
   peaksFromSamples,
   pickAudioMime,
 } from "@/lib/chat/media";
+import { Mic } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 
 export interface RecordedVoice {
@@ -27,6 +28,8 @@ interface VoiceRecorderProps {
   disabled?: boolean;
   /** Parent hides the text input while recording/previewing to avoid 360px overflow. */
   onActiveChange?: (active: boolean) => void;
+  /** Render the idle mic as a transparent icon for pill-style chat bars. */
+  transparentIdle?: boolean;
 }
 
 type Phase = "idle" | "acquiring" | "recording" | "preview" | "sending";
@@ -67,7 +70,7 @@ function Waveform({
  *   Discard + Play + Speed + SEND, so there is always somewhere to tap.
  * - Slide left >80px still cancels (kept from previous behaviour).
  */
-export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, onActiveChange }: VoiceRecorderProps) {
+export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, onActiveChange, transparentIdle = false }: VoiceRecorderProps) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [seconds, setSeconds] = useState(0);
   const [cancelArmed, setCancelArmed] = useState(false);
@@ -369,15 +372,15 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
   // Parent hides the text input while active, so this never overflows 360px.
   if (phase === "recording" || phase === "acquiring") {
     return (
-      <div className="flex h-11 min-w-0 flex-1 items-center gap-1.5 rounded-xl border border-red-500/40 bg-red-500/5 px-1.5 select-none" role="status" aria-label="Recording voice note">
+      <div className="flex h-11 min-w-0 flex-1 items-center gap-1.5 rounded-lg border border-border bg-muted px-1.5 select-none" role="status" aria-label="Recording voice note">
         <button
           type="button"
           onClick={() => stopRecording(true)}
           aria-label="Cancel recording"
           title="Cancel"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-lg text-muted-foreground hover:text-destructive cursor-pointer"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm text-muted-foreground hover:text-foreground cursor-pointer"
         >
-          🗑
+          ✕
         </button>
         <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 animate-pulse" aria-hidden />
         <span className="font-mono text-xs text-foreground tabular-nums shrink-0 w-10">
@@ -397,9 +400,9 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
           onClick={() => stopRecording(cancelArmed)}
           aria-label="Stop recording and review"
           title="Stop and review"
-          className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-xl bg-violet-600 px-2.5 text-xs font-bold text-white cursor-pointer"
+          className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-lg bg-primary px-2.5 text-xs font-medium text-primary-foreground cursor-pointer"
         >
-          ⏹ <span className="hidden min-[380px]:inline">Stop</span>
+          Stop
         </button>
       </div>
     );
@@ -408,7 +411,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
   // Preview UI — fixed h-11 row with Discard + Play + waveform + speed + SEND.
   if (phase === "preview" && previewUrl) {
     return (
-      <div className="flex h-11 min-w-0 flex-1 items-center gap-1 rounded-xl border border-border bg-muted/40 px-1.5">
+      <div className="flex h-11 min-w-0 flex-1 items-center gap-1 rounded-lg border border-border bg-muted/40 px-1.5">
         <audio
           ref={audioRef}
           src={previewUrl}
@@ -432,15 +435,15 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
           onClick={discardPreview}
           aria-label="Discard recording"
           title="Discard"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-destructive cursor-pointer"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
         >
-          🗑
+          ✕
         </button>
         <button
           type="button"
           onClick={togglePreview}
           aria-label={isPlaying ? "Pause preview" : "Play preview"}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-violet-600 text-sm text-white cursor-pointer"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-sm text-primary-foreground cursor-pointer"
         >
           {isPlaying ? "⏸" : "▶"}
         </button>
@@ -461,9 +464,9 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
           onClick={sendPreview}
           aria-label="Send voice note"
           title="Send voice note"
-          className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-xl bg-violet-600 px-3 text-xs font-bold text-white cursor-pointer"
+          className="flex h-11 min-w-11 shrink-0 items-center justify-center gap-1 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground cursor-pointer"
         >
-          ➤ <span className="hidden min-[380px]:inline">Send</span>
+          Send
         </button>
       </div>
     );
@@ -471,8 +474,8 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
 
   if (phase === "sending") {
     return (
-      <div className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground" role="status">
-        <Spinner className="text-violet-500" />
+      <div className="flex h-11 min-w-0 flex-1 items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 text-xs text-muted-foreground" role="status">
+        <Spinner className="text-foreground" />
         Sending voice note…
       </div>
     );
@@ -534,9 +537,13 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
         if (phaseRef.current === "idle") void beginRecording();
       }}
       onContextMenu={(e) => e.preventDefault()}
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/80 text-lg cursor-pointer touch-none select-none disabled:opacity-50"
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full cursor-pointer touch-none select-none disabled:opacity-50 ${
+        transparentIdle
+          ? "text-muted-foreground hover:text-foreground"
+          : "border border-border bg-background text-xs font-medium"
+      }`}
     >
-      🎤
+      {transparentIdle ? <Mic size={20} /> : "Mic"}
     </button>
   );
 }

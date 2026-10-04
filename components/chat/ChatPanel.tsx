@@ -9,10 +9,20 @@ import {
 } from "@/lib/stream/realtimeClient";
 import { ALLOWED_REACTIONS } from "@/lib/chat/moderate";
 import { PTT_ENABLED } from "@/lib/chat/moderate";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { VoiceRecorder, RecordedVoice } from "./VoiceRecorder";
+import { EmojiPicker } from "./EmojiPicker";
+import {
+  Paperclip,
+  Sticker,
+  Send,
+  FileText,
+  Image as ImageIcon,
+  Camera,
+  Music,
+  Pin,
+  X,
+} from "lucide-react";
 import {
   FILE_MAX_BYTES,
   INLINE_MAX_BYTES,
@@ -79,6 +89,17 @@ function copyText(text: string) {
   }
 }
 
+type AttachOptionId = "document" | "photos" | "camera" | "audio" | "stickers" | "pin";
+
+const ATTACH_OPTIONS: { id: AttachOptionId; title: string; desc: string }[] = [
+  { id: "document", title: "Document", desc: "" },
+  { id: "photos", title: "Photos & videos", desc: "Compressed on-device before sending" },
+  { id: "camera", title: "Camera", desc: "Take a photo to share" },
+  { id: "audio", title: "Audio", desc: "Send an audio file" },
+  { id: "stickers", title: "Stickers", desc: "Tap a sticker to send it instantly" },
+  { id: "pin", title: "Pin to moment", desc: "Tag this message with the video moment" },
+];
+
 function fallbackCopy(text: string, done: () => void) {
   try {
     const ta = document.createElement("textarea");
@@ -142,8 +163,8 @@ function VoiceBubble({
           }
         }}
         aria-label={isPlaying ? "Pause voice note" : "Play voice note"}
-        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full cursor-pointer ${
-          mine ? "bg-white/20 text-white" : "bg-violet-600 text-white"
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg cursor-pointer border border-border ${
+          mine ? "bg-background text-foreground" : "bg-foreground text-background"
         }`}
       >
         {isPlaying ? "⏸" : "▶"}
@@ -215,26 +236,25 @@ function ImageBubble({
           type="button"
           onClick={onExpand}
           aria-label="Expand image"
-          className="block max-w-full cursor-pointer overflow-hidden rounded-xl"
+          className="block max-w-full cursor-pointer overflow-hidden rounded-lg"
         >
           <img
             src={attachment.url}
             alt={attachment.name || "Shared photo"}
             loading="lazy"
-            className="max-h-64 w-auto max-w-full rounded-xl object-cover"
+            className="max-h-64 w-auto max-w-full rounded-lg object-cover"
           />
         </button>
       ) : (
         <button
           type="button"
           onClick={onLoad}
-          className={`flex min-h-11 min-w-44 items-center gap-2 rounded-xl border px-3 py-2 text-xs cursor-pointer ${
+          className={`flex min-h-11 min-w-44 items-center gap-2 rounded-lg border px-3 py-2 text-xs cursor-pointer ${
             mine
-              ? "border-white/25 bg-white/10 text-white"
-              : "border-border bg-background/60 text-foreground"
+              ? "border-border bg-background/10 text-inherit"
+              : "border-border bg-background text-foreground"
           }`}
         >
-          <span aria-hidden>🖼️</span>
           <span className="text-left">
             Tap to load image
             {typeof attachment.size === "number" && (
@@ -277,6 +297,8 @@ export function ChatPanel({
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
   const [attachBusy, setAttachBusy] = useState<string | null>(null);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [pickerTab, setPickerTab] = useState<"emoji" | "gif" | "stickers">("emoji");
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const [loadedImages, setLoadedImages] = useState<Set<string>>(new Set());
   const [flashId, setFlashId] = useState<string | null>(null);
@@ -287,7 +309,10 @@ export function ChatPanel({
   const stickToBottomRef = useRef(true);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     // Only auto-scroll when the user was already near the bottom, so
@@ -296,7 +321,7 @@ export function ChatPanel({
     if (stickToBottomRef.current) {
       scrollBottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
-  }, [messages]);
+  }, [messages, typingUsers]);
 
   // Close menus on Escape for keyboard users.
   useEffect(() => {
@@ -304,6 +329,7 @@ export function ChatPanel({
       if (e.key === "Escape") {
         setMenuFor(null);
         setAttachOpen(false);
+        setEmojiOpen(false);
         setLightbox(null);
       }
     };
@@ -313,6 +339,8 @@ export function ChatPanel({
 
   const viewersMuted = chatMuted && !isPrivileged;
   const inputDisabled = userMuted || viewersMuted || isSending;
+  /** WhatsApp rule: any draft text swaps the mic for the send button. */
+  const hasText = inputText.trim().length > 0 || pinDraft !== null;
   const disabledReason = userMuted
     ? "You are muted in this room"
     : viewersMuted
@@ -364,6 +392,20 @@ export function ChatPanel({
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     setFlashId(id);
     setTimeout(() => setFlashId((prev) => (prev === id ? null : prev)), 1600);
+  };
+
+  const handleAttachOption = (id: AttachOptionId) => {
+    setAttachOpen(false);
+    if (id === "document") fileInputRef.current?.click();
+    else if (id === "photos") imageInputRef.current?.click();
+    else if (id === "camera") cameraInputRef.current?.click();
+    else if (id === "audio") audioInputRef.current?.click();
+    else if (id === "stickers") {
+      setPickerTab("stickers");
+      setEmojiOpen(true);
+    } else if (id === "pin" && onCaptureMoment) {
+      setPinDraft(Math.floor(onCaptureMoment()));
+    }
   };
 
   const openCopy = (msg: ChatMessage) => {
@@ -502,14 +544,14 @@ export function ChatPanel({
           : `${typingUsers.length} people are typing…`;
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-2xl border border-border bg-card/75 backdrop-blur-xl shadow-xl">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
       {/* Chat Header */}
-      <div className="flex items-center justify-between border-b border-border/80 px-4 py-3 bg-muted/20">
-        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <span>💬 Party Chat</span>
+      <div className="flex items-center justify-between border-b border-border px-4 py-3">
+        <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+          <span>Party Chat</span>
           {slowModeSeconds > 0 && (
-            <span className="rounded-md border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-              🐢 {slowModeSeconds}s slow
+            <span className="rounded-lg border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {slowModeSeconds}s slow
             </span>
           )}
         </h3>
@@ -520,10 +562,10 @@ export function ChatPanel({
 
       {/* Moderation notices */}
       {(userMuted || viewersMuted) && (
-        <div className="border-b border-red-500/20 bg-red-500/5 px-4 py-2 text-[11px] text-red-600 dark:text-red-400" role="status">
+        <div className="border-b border-border bg-muted px-4 py-2 text-[11px] text-foreground" role="status">
           {userMuted
-            ? "🔇 You are muted and cannot send messages."
-            : "🔇 Chat is muted for viewers right now."}
+            ? "You are muted and cannot send messages."
+            : "Chat is muted for viewers right now."}
         </div>
       )}
 
@@ -543,7 +585,6 @@ export function ChatPanel({
         <div className="space-y-3">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center text-xs text-muted-foreground">
-              <span className="text-2xl mb-2">🍿</span>
               <span>No messages yet. Say hello to everyone!</span>
             </div>
           ) : (
@@ -587,16 +628,16 @@ export function ChatPanel({
                         setMenuFor(msg.id);
                       }
                     }}
-                    className={`relative max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed select-none ${
-                      flashId === msg.id ? "ring-2 ring-violet-500" : ""
+                    className={`relative max-w-[85%] rounded-lg px-3.5 py-2 text-xs leading-relaxed select-none ${
+                      flashId === msg.id ? "ring-1 ring-foreground" : ""
                     } ${
                       isMe
-                        ? "bg-linear-to-r from-violet-600 to-indigo-600 text-white rounded-tr-xs shadow-sm shadow-violet-500/10"
-                        : "bg-muted text-foreground border border-border/70 rounded-tl-xs"
+                        ? "bg-foreground text-background"
+                        : "bg-muted text-foreground border border-border"
                     }`}
                   >
                     {msg.deleted ? (
-                      <span className="italic opacity-70">🚫 This message was deleted.</span>
+                      <span className="italic opacity-70">This message was deleted.</span>
                     ) : (
                       <>
                         {/* Reply quote */}
@@ -604,11 +645,7 @@ export function ChatPanel({
                           <button
                             type="button"
                             onClick={() => jumpToMessage(msg.replyTo!.id)}
-                            className={`mb-1.5 block w-full truncate rounded-lg border-l-2 px-2 py-1 text-left text-[11px] cursor-pointer ${
-                              isMe
-                                ? "border-white/50 bg-white/10 text-white/90"
-                                : "border-violet-500/60 bg-background/60 text-muted-foreground"
-                            }`}
+                            className="mb-1.5 block w-full truncate rounded-lg border-l-2 border-border bg-background/60 px-2 py-1 text-left text-[11px] cursor-pointer text-muted-foreground"
                             title="Jump to quoted message"
                           >
                             <span className="font-semibold">{msg.replyTo.userName}: </span>
@@ -622,23 +659,17 @@ export function ChatPanel({
                             <button
                               type="button"
                               onClick={() => onPinJump?.(msg.moment as number)}
-                              className={`mb-1.5 inline-flex min-h-11 items-center gap-1 rounded-lg px-2.5 text-[11px] font-semibold cursor-pointer ${
-                                isMe
-                                  ? "bg-white/15 text-white"
-                                  : "bg-violet-500/10 text-violet-700 dark:text-violet-300 border border-violet-500/30"
-                              }`}
+                              className="mb-1.5 inline-flex min-h-11 items-center gap-1 rounded-lg border border-border px-2.5 text-[11px] font-medium cursor-pointer"
                               title="Jump video to this moment (host/co-host)"
                             >
-                              📌 {formatClock(msg.moment)}
+                              Pin {formatClock(msg.moment)}
                             </button>
                           ) : (
                             <span
-                              className={`mb-1.5 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] opacity-80 ${
-                                isMe ? "bg-white/10 text-white" : "bg-background/60 text-muted-foreground"
-                              }`}
+                              className="mb-1.5 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] opacity-80"
                               title="Pinned moment — the host can jump the video here"
                             >
-                              🕐 {formatClock(msg.moment)}
+                              {formatClock(msg.moment)}
                             </span>
                           )
                         )}
@@ -671,7 +702,7 @@ export function ChatPanel({
                         {msg.attachment?.kind === "file" && (
                           <div className="mb-1">
                             {(() => {
-                              const { icon, label } = fileIcon(
+                              const { label } = fileIcon(
                                 msg.attachment!.name || "",
                                 msg.attachment!.mime
                               );
@@ -681,15 +712,10 @@ export function ChatPanel({
                                   download={msg.attachment!.name || true}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className={`flex min-h-11 items-center gap-2.5 rounded-xl px-3 py-2 ${
-                                    isMe
-                                      ? "bg-white/10 text-white"
-                                      : "bg-background/60 text-foreground border border-border/60"
-                                  }`}
+                                  className="flex min-h-11 items-center gap-2.5 rounded-lg border border-border px-3 py-2"
                                 >
-                                  <span className="text-xl shrink-0" aria-hidden>{icon}</span>
                                   <span className="min-w-0 flex-1">
-                                    <span className="block truncate text-xs font-semibold">
+                                    <span className="block truncate text-xs font-medium">
                                       {msg.attachment!.name || label}
                                     </span>
                                     {typeof msg.attachment!.size === "number" && (
@@ -698,7 +724,7 @@ export function ChatPanel({
                                       </span>
                                     )}
                                   </span>
-                                  <span className="shrink-0 text-sm" aria-hidden>⬇️</span>
+                                  <span className="shrink-0 text-xs" aria-hidden>Download</span>
                                 </a>
                               );
                             })()}
@@ -719,10 +745,10 @@ export function ChatPanel({
                           type="button"
                           onClick={() => onReact?.(msg.id, emoji)}
                           aria-label={`React ${emoji} (${users.length})`}
-                          className={`flex min-h-11 items-center gap-1 rounded-full border px-2 text-xs cursor-pointer ${
+                          className={`flex min-h-11 items-center gap-1 rounded-lg border px-2 text-xs cursor-pointer ${
                             myReactions.has(emoji)
-                              ? "border-violet-500 bg-violet-500/15 text-foreground"
-                              : "border-border bg-background/60 text-muted-foreground"
+                              ? "border-foreground text-foreground"
+                              : "border-border bg-background text-muted-foreground"
                           }`}
                         >
                           <span aria-hidden>{emoji}</span>
@@ -735,21 +761,35 @@ export function ChatPanel({
               );
             })
           )}
+          {/* WhatsApp-style typing bubble */}
+          {typingUsers.length > 0 && (
+            <div className="flex flex-col items-start" aria-live="polite">
+              <div className="flex items-center gap-1.5 mb-1 px-1">
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {typingUsers.length === 1
+                    ? typingUsers[0].name
+                    : `${typingUsers.length} people`}
+                </span>
+              </div>
+              <div
+                className="flex items-center gap-1 rounded-lg border border-border bg-muted px-3.5 py-3"
+                role="status"
+                aria-label={typingLabel ?? "Someone is typing"}
+              >
+                <span className="typing-dot" />
+                <span className="typing-dot typing-dot-2" />
+                <span className="typing-dot typing-dot-3" />
+              </div>
+            </div>
+          )}
           <div ref={scrollBottomRef} />
         </div>
       </div>
 
-      {/* Typing indicator */}
-      {typingLabel && (
-        <div className="border-t border-border/50 px-4 py-1.5 text-[11px] text-muted-foreground italic" role="status">
-          {typingLabel}
-        </div>
-      )}
-
       {/* Reply draft */}
       {replyDraft && (
-        <div className="flex items-center gap-2 border-t border-border/80 bg-muted/30 px-3 py-2">
-          <div className="min-w-0 flex-1 truncate rounded-lg border-l-2 border-violet-500 bg-background/60 px-2 py-1 text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-2 border-t border-border bg-muted px-3 py-2">
+          <div className="min-w-0 flex-1 truncate rounded-lg border-l-2 border-border bg-background px-2 py-1 text-[11px] text-muted-foreground">
             <span className="font-semibold text-foreground">Replying to {replyDraft.userName}: </span>
             {replyDraft.text || "(attachment)"}
           </div>
@@ -766,111 +806,167 @@ export function ChatPanel({
 
       {/* Upload status */}
       {attachBusy && (
-        <div className="flex items-center gap-2 border-t border-border/50 px-4 py-2 text-[11px] text-muted-foreground" role="status">
-          <Spinner className="size-3.5 shrink-0 text-violet-500" />
+        <div className="flex items-center gap-2 border-t border-border px-4 py-2 text-[11px] text-muted-foreground" role="status">
+          <Spinner className="size-3.5 shrink-0" />
           {attachBusy}
         </div>
       )}
 
-      {/* Chat Input pinned to bottom with safe-area padding.
-          WhatsApp-style: single fixed h-11 row. While the voice recorder owns
-          the row (recording/preview/sending), the text field + send hide so
-          360px never overflows — the voice bar always carries its own
-          Cancel + Stop/Send buttons. */}
-      <form
-        onSubmit={handleSubmit}
-        className="flex shrink-0 items-center gap-1.5 border-t border-border/80 p-2.5 sm:p-3 bg-muted/20 pb-[max(env(safe-area-inset-bottom),0.75rem)]"
-      >
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          aria-label="Attach a photo"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            if (f) void handleImageFile(f);
-          }}
-        />
-        <input
-          ref={fileInputRef}
-          type="file"
-          className="hidden"
-          aria-label="Attach a file"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = "";
-            if (f) void handleDocFile(f);
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => setAttachOpen(true)}
-          disabled={inputDisabled}
-          aria-label="Attach photo or file"
-          hidden={voiceActive}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/80 text-lg cursor-pointer disabled:opacity-50"
-        >
-          📎
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (pinDraft !== null) {
-              setPinDraft(null);
-            } else if (onCaptureMoment) {
-              setPinDraft(Math.floor(onCaptureMoment()));
-            }
-          }}
-          disabled={inputDisabled}
-          hidden={voiceActive}
-          aria-label={pinDraft !== null ? `Pinned to ${formatClock(pinDraft)}, tap to remove` : "Pin message to current video moment"}
-          title={pinDraft !== null ? `Pinned to ${formatClock(pinDraft)}` : "Pin to current moment"}
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border text-base cursor-pointer disabled:opacity-50 ${
-            pinDraft !== null
-              ? "border-violet-500 bg-violet-500/15"
-              : "border-border bg-background/80"
-          }`}
-        >
-          📌
-        </button>
-        {!voiceActive && (
-          <Input
-            value={inputText}
-            onChange={(e) => {
-              setInputText(e.target.value);
-              if (e.target.value.length > 0) onTyping?.();
+      {/* Chat Input — WhatsApp-style pill bar with safe-area padding.
+          Typing swaps the mic for a circular send button; the voice
+          recorder owns the full row while recording/previewing. */}
+      <div className="relative shrink-0 border-t border-border p-2 sm:p-2.5 pb-[max(env(safe-area-inset-bottom),0.625rem)]">
+        {emojiOpen && !voiceActive && (
+          <EmojiPicker
+            key={pickerTab}
+            initialTab={pickerTab}
+            onPick={(emoji) => {
+              setInputText((prev) => prev + emoji);
+              inputRef.current?.focus();
             }}
-            placeholder={disabledReason}
-            disabled={inputDisabled}
-            aria-label="Chat message"
-            className="h-11 sm:h-11 bg-background/80 border-input text-sm text-foreground focus-visible:ring-violet-500 disabled:opacity-60 min-w-0 flex-1"
+            onSendSticker={(emoji) => {
+              setEmojiOpen(false);
+              void onSendMessage({ text: emoji });
+            }}
           />
         )}
-        <VoiceRecorder
-          disabled={inputDisabled}
-          ptt={PTT_ENABLED}
-          onSend={handleVoiceSend}
-          onError={(m) => toast.error(m)}
-          onActiveChange={setVoiceActive}
-        />
-        {!voiceActive && (
-          <Button
-            type="submit"
-            size="sm"
-            disabled={(!inputText.trim() && pinDraft === null) || inputDisabled}
-            className="h-11 sm:h-11 px-4 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold cursor-pointer shrink-0 disabled:opacity-50"
-          >
-            {isSending ? "…" : "Send"}
-          </Button>
-        )}
-      </form>
+        <form onSubmit={handleSubmit} className="flex items-center gap-1.5">
+          <input
+            ref={imageInputRef}
+            type="file"
+            accept="image/*,video/*"
+            className="hidden"
+            aria-label="Attach photos or videos"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void handleImageFile(f);
+            }}
+          />
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            aria-label="Attach a document"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void handleDocFile(f);
+            }}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            aria-label="Take a photo"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void handleImageFile(f);
+            }}
+          />
+          <input
+            ref={audioInputRef}
+            type="file"
+            accept="audio/*"
+            className="hidden"
+            aria-label="Attach audio"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void handleDocFile(f);
+            }}
+          />
+          {voiceActive ? (
+            <VoiceRecorder
+              disabled={inputDisabled}
+              ptt={PTT_ENABLED}
+              onSend={handleVoiceSend}
+              onError={(m) => toast.error(m)}
+              onActiveChange={setVoiceActive}
+            />
+          ) : (
+            <>
+              <div className="flex min-h-12 min-w-0 flex-1 items-center gap-0.5 rounded-full border border-border bg-muted py-1 pl-1.5 pr-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmojiOpen(false);
+                    setAttachOpen(true);
+                  }}
+                  disabled={inputDisabled}
+                  aria-label="Attach"
+                  title="Attach"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-50"
+                >
+                  <Paperclip size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAttachOpen(false);
+                    setPickerTab("emoji");
+                    setEmojiOpen((v) => !v);
+                  }}
+                  disabled={inputDisabled}
+                  aria-label="Emoji, GIF and stickers"
+                  title="Emoji, GIF and stickers"
+                  aria-pressed={emojiOpen}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full cursor-pointer disabled:opacity-50 ${
+                    emojiOpen ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Sticker size={20} />
+                </button>
+                <input
+                  ref={inputRef}
+                  value={inputText}
+                  onChange={(e) => {
+                    setInputText(e.target.value);
+                    if (e.target.value.length > 0) onTyping?.();
+                  }}
+                  placeholder={disabledReason}
+                  disabled={inputDisabled}
+                  aria-label="Type a message"
+                  className="min-w-0 flex-1 bg-transparent px-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
+                />
+                {!hasText && (
+                  <VoiceRecorder
+                    disabled={inputDisabled}
+                    ptt={PTT_ENABLED}
+                    transparentIdle
+                    onSend={handleVoiceSend}
+                    onError={(m) => toast.error(m)}
+                    onActiveChange={setVoiceActive}
+                  />
+                )}
+              </div>
+              {hasText && (
+                <button
+                  type="submit"
+                  disabled={isSending || inputDisabled}
+                  aria-label="Send message"
+                  title="Send"
+                  className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-foreground text-background cursor-pointer disabled:opacity-50"
+                >
+                  {isSending ? (
+                    <span className="text-sm">…</span>
+                  ) : (
+                    <Send size={18} />
+                  )}
+                </button>
+              )}
+            </>
+          )}
+        </form>
+      </div>
 
       {/* Pin draft indicator */}
       {pinDraft !== null && (
-        <div className="flex items-center gap-2 border-t border-violet-500/30 bg-violet-500/5 px-3 py-1.5 text-[11px] text-violet-700 dark:text-violet-300">
-          <span>📌 Pinned to {formatClock(pinDraft)} — host taps jump the video</span>
+        <div className="flex items-center gap-2 border-t border-border bg-muted px-3 py-1.5 text-[11px]">
+          <span>Pinned to {formatClock(pinDraft)} — host taps jump the video</span>
           <button
             type="button"
             onClick={() => setPinDraft(null)}
@@ -882,34 +978,54 @@ export function ChatPanel({
         </div>
       )}
 
-      {/* Attach bottom sheet */}
+      {/* Attach sheet — Document / Photos & videos / Camera / Audio / Stickers */}
       {attachOpen && (
-        <div className="fixed inset-0 z-50" role="dialog" aria-label="Attach">
+        <div className="fixed inset-0 z-50" role="dialog" aria-label="Attach options">
           <div
             className="absolute inset-0 bg-black/60"
             onClick={() => setAttachOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-card p-4 pb-[max(env(safe-area-inset-bottom),1rem)] space-y-2">
-            <button
-              type="button"
-              onClick={() => imageInputRef.current?.click()}
-              className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border px-4 text-sm text-foreground cursor-pointer"
-            >
-              <span aria-hidden>📷</span> Photo (compressed on-device)
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border px-4 text-sm text-foreground cursor-pointer"
-            >
-              <span aria-hidden>📎</span> File (up to {formatBytes(FILE_MAX_BYTES)})
-            </button>
+          <div className="absolute inset-x-0 bottom-0 rounded-lg border-t border-border bg-popover text-popover-foreground p-3 pb-[max(env(safe-area-inset-bottom),1rem)]">
+            <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted" aria-hidden />
+            {ATTACH_OPTIONS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => handleAttachOption(opt.id)}
+                className="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left cursor-pointer hover:bg-muted"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border">
+                  {opt.id === "document" ? (
+                    <FileText size={18} />
+                  ) : opt.id === "photos" ? (
+                    <ImageIcon size={18} />
+                  ) : opt.id === "camera" ? (
+                    <Camera size={18} />
+                  ) : opt.id === "audio" ? (
+                    <Music size={18} />
+                  ) : opt.id === "stickers" ? (
+                    <Sticker size={18} />
+                  ) : (
+                    <Pin size={18} />
+                  )}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{opt.title}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {opt.id === "document"
+                      ? `Send a file (up to ${formatBytes(FILE_MAX_BYTES)})`
+                      : opt.desc}
+                  </span>
+                </span>
+              </button>
+            ))}
             <button
               type="button"
               onClick={() => setAttachOpen(false)}
-              className="flex min-h-11 w-full items-center justify-center rounded-xl text-sm text-muted-foreground cursor-pointer"
+              aria-label="Close attach options"
+              className="mx-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground cursor-pointer"
             >
-              Cancel
+              <X size={18} />
             </button>
           </div>
         </div>
@@ -922,7 +1038,7 @@ export function ChatPanel({
             className="absolute inset-0 bg-black/60"
             onClick={() => setMenuFor(null)}
           />
-          <div className="absolute inset-x-0 bottom-0 rounded-t-2xl border-t border-border bg-card p-4 pb-[max(env(safe-area-inset-bottom),1rem)] space-y-2">
+          <div className="absolute inset-x-0 bottom-0 rounded-lg border-t border-border bg-card p-4 pb-[max(env(safe-area-inset-bottom),1rem)] space-y-2">
             <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Quick reactions">
               {ALLOWED_REACTIONS.map((emoji) => (
                 <button
@@ -933,7 +1049,7 @@ export function ChatPanel({
                     setMenuFor(null);
                   }}
                   aria-label={`React ${emoji}`}
-                  className="flex min-h-11 items-center justify-center rounded-xl border border-border text-xl cursor-pointer hover:bg-muted"
+                  className="flex min-h-11 items-center justify-center rounded-lg border border-border text-xl cursor-pointer hover:bg-muted"
                 >
                   {emoji}
                 </button>
@@ -942,9 +1058,9 @@ export function ChatPanel({
             <button
               type="button"
               onClick={() => openCopy(menuMsg)}
-              className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border px-4 text-sm text-foreground cursor-pointer"
+              className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border px-4 text-sm text-foreground cursor-pointer"
             >
-              <span aria-hidden>📋</span> Copy
+              Copy
             </button>
             <button
               type="button"
@@ -957,9 +1073,9 @@ export function ChatPanel({
                 });
                 setMenuFor(null);
               }}
-              className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border px-4 text-sm text-foreground cursor-pointer"
+              className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border px-4 text-sm text-foreground cursor-pointer"
             >
-              <span aria-hidden>↩️</span> Reply
+              Reply
             </button>
             {(menuMsg.user.id === currentUserId || canDeleteAny) && (
               <button
@@ -968,15 +1084,15 @@ export function ChatPanel({
                   setMenuFor(null);
                   onDelete?.(menuMsg.id);
                 }}
-                className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-red-500/30 px-4 text-sm text-red-500 cursor-pointer"
+                className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border px-4 text-sm cursor-pointer"
               >
-                <span aria-hidden>🗑️</span> Delete
+                Delete
               </button>
             )}
             <button
               type="button"
               onClick={() => setMenuFor(null)}
-              className="flex min-h-11 w-full items-center justify-center rounded-xl text-sm text-muted-foreground cursor-pointer"
+              className="flex min-h-11 w-full items-center justify-center rounded-lg text-sm text-muted-foreground cursor-pointer"
             >
               Cancel
             </button>
@@ -1000,15 +1116,15 @@ export function ChatPanel({
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Download image"
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white"
+                className="flex h-11 px-3 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-xs text-white"
               >
-                ⬇️
+                Download
               </a>
               <button
                 type="button"
                 onClick={() => setLightbox(null)}
                 aria-label="Close image"
-                className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/20 bg-white/10 text-white cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white cursor-pointer"
               >
                 ✕
               </button>

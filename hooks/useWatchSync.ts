@@ -576,7 +576,7 @@ export function useWatchSync({
             id: "role-change",
           });
           serviceRef.current?.sendPlaybackEvent({
-            type: "room.host_changed",
+            type: "room_host_changed",
             newHostId: myId,
           });
           fetch(`/api/rooms/${slug}/host`, {
@@ -904,7 +904,7 @@ export function useWatchSync({
               id: "role-change",
             });
             service.sendPlaybackEvent({
-              type: "room.host_changed",
+              type: "room_host_changed",
               newHostId: myId,
             });
 
@@ -925,23 +925,23 @@ export function useWatchSync({
       (event: RealtimePlaybackEvent) => {
         if (!isMounted) return;
 
-        if (event.type === "room.host_changed" && event.newHostId) {
+        if (event.type === "room_host_changed" && event.newHostId) {
           setHostId(event.newHostId);
           fetchRoles();
           return;
         }
 
-        if (event.type === "room.roles_changed") {
+        if (event.type === "room_roles_changed") {
           fetchRoles();
           return;
         }
 
-        if (event.type === "room.settings_changed") {
+        if (event.type === "room_settings_changed") {
           fetchRoles();
           return;
         }
 
-        if (event.type === "room.source_changed") {
+        if (event.type === "room_source_changed") {
           // Ask the page to refetch room metadata and remount the player.
           fetch(`/api/rooms/${slug}`)
             .then((r) => (r.ok ? r.json() : null))
@@ -957,13 +957,13 @@ export function useWatchSync({
           return;
         }
 
-        if (event.type === "room.control_requested") {
+        if (event.type === "room_control_requested") {
           // Refresh the queue immediately; only privileged users see it.
           fetchRoles();
           return;
         }
 
-        if (event.type === "room.kicked" && event.userId) {
+        if (event.type === "room_kicked" && event.userId) {
           if (event.userId === currentUserRef.current.id) {
             setKickedOut(true);
             toast.error("You were removed from this room by a moderator.");
@@ -982,7 +982,7 @@ export function useWatchSync({
         lastServerStateAtRef.current = Date.now();
         isSyncingFromEventRef.current = true;
 
-        if (event.type === "playback.buffering") {
+        if (event.type === "playback_buffering") {
           setIsHostBuffering(true);
           setSyncState("buffering");
           player.pause();
@@ -1003,26 +1003,26 @@ export function useWatchSync({
         // for large drift — see correctDrift).
         const transitLatencySec = (Date.now() - event.serverTimestamp) / 1000;
         const expectedPosition =
-          event.type === "playback.pause"
+          event.type === "playback_pause"
             ? event.position
             : event.position + transitLatencySec;
 
         correctDrift(
           expectedPosition,
-          event.type === "playback.play" ||
-            event.type === "playback.heartbeat" ||
-            event.type === "playback.seek"
+          event.type === "playback_play" ||
+            event.type === "playback_heartbeat" ||
+            event.type === "playback_seek"
         );
 
-        if (event.type === "playback.play") {
+        if (event.type === "playback_play") {
           if (player.isPaused()) {
             player.play();
           }
-        } else if (event.type === "playback.pause") {
+        } else if (event.type === "playback_pause") {
           if (!player.isPaused()) {
             player.pause();
           }
-        } else if (event.type === "playback.heartbeat") {
+        } else if (event.type === "playback_heartbeat") {
           if (player.isPaused()) {
             player.play();
           }
@@ -1162,7 +1162,7 @@ export function useWatchSync({
         const serverTimestamp = Date.now();
 
         serviceRef.current?.sendPlaybackEvent({
-          type: "playback.heartbeat",
+          type: "playback_heartbeat",
           position: currentTime,
           serverTimestamp,
         });
@@ -1193,28 +1193,28 @@ export function useWatchSync({
 
       if (event.type === "play") {
         serviceRef.current?.sendPlaybackEvent({
-          type: "playback.play",
+          type: "playback_play",
           position,
           serverTimestamp,
         });
         saveStateToRedis(position, true);
       } else if (event.type === "pause") {
         serviceRef.current?.sendPlaybackEvent({
-          type: "playback.pause",
+          type: "playback_pause",
           position,
           serverTimestamp,
         });
         saveStateToRedis(position, false);
       } else if (event.type === "seek") {
         serviceRef.current?.sendPlaybackEvent({
-          type: "playback.seek",
+          type: "playback_seek",
           position,
           serverTimestamp,
         });
         saveStateToRedis(position, !player?.isPaused());
       } else if (event.type === "buffering") {
         serviceRef.current?.sendPlaybackEvent({
-          type: "playback.buffering",
+          type: "playback_buffering",
           position,
           serverTimestamp,
         });

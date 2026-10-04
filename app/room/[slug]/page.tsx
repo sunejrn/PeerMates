@@ -61,6 +61,8 @@ export default function RoomPage({
   const [playBlocked, setPlayBlocked] = useState(false);
   // Mobile tab state for narrow viewports (< lg)
   const [mobileTab, setMobileTab] = useState<"video-info" | "chat">("video-info");
+  // Mobile navigation drawer (Claude/Codex-style slide-in)
+  const [navOpen, setNavOpen] = useState(false);
 
   // Fetch room metadata
   useEffect(() => {
@@ -418,7 +420,7 @@ export default function RoomPage({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast.success("You are now the room host! 👑", { id: "role-change" });
+        toast.success("You are now the room host!", { id: "role-change" });
       } else {
         toast.error(data?.error || data?.message || "Host claim rejected.");
       }
@@ -462,7 +464,7 @@ export default function RoomPage({
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
         <div className="flex flex-col items-center gap-3">
-          <Spinner className="size-8 text-violet-500" />
+          <Spinner className="size-8" />
           <p className="text-sm">Connecting to PeerMates...</p>
         </div>
       </div>
@@ -473,13 +475,13 @@ export default function RoomPage({
   if (!room) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center text-foreground">
-        <h1 className="text-3xl font-bold text-destructive">Room Not Found</h1>
+        <h1 className="text-3xl font-semibold text-foreground">Room Not Found</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           The PeerMates party for code{" "}
           <code className="font-mono text-foreground font-semibold">/{slug}</code>{" "}
           does not exist or has expired.
         </p>
-        <Button className="mt-6 bg-violet-600 hover:bg-violet-500 text-white">
+        <Button className="mt-6 rounded-lg">
           <Link href="/">Return to Lobby</Link>
         </Button>
       </div>
@@ -492,10 +494,10 @@ export default function RoomPage({
   if (!session?.user && !nickname) {
     return (
       <div className="flex min-h-screen min-h-dvh flex-col bg-background text-foreground">
-        <header className="flex h-16 items-center justify-between border-b border-border/80 px-4 sm:px-6 backdrop-blur-md">
+        <header className="flex h-14 items-center justify-between border-b border-border px-4 sm:px-6">
           <Link
             href="/"
-            className="flex min-h-11 items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground"
+            className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             ← Back to Lobby
           </Link>
@@ -521,13 +523,13 @@ export default function RoomPage({
   if (kickedOut) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center text-foreground">
-        <h1 className="text-3xl font-bold text-destructive">Removed from Room</h1>
+        <h1 className="text-3xl font-semibold text-foreground">Removed from Room</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           A moderator removed you from{" "}
           <strong className="text-foreground">&quot;{room.title}&quot;</strong>. You can
           no longer watch, chat, or control playback here.
         </p>
-        <Button className="mt-6 min-h-11 bg-violet-600 hover:bg-violet-500 text-white">
+        <Button className="mt-6 min-h-11 rounded-lg">
           <Link href="/">Return to Lobby</Link>
         </Button>
       </div>
@@ -537,52 +539,141 @@ export default function RoomPage({
   // ACTIVE WATCH PARTY ROOM
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground transition-colors duration-200">
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border/80 bg-background/85 px-3 sm:px-6 backdrop-blur-md">
-        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+      {/* Top Navigation Bar — responsive: compact on mobile, full on lg+ */}
+      <header className="sticky top-0 z-40 flex h-14 sm:h-16 items-center justify-between gap-2 border-b border-border bg-background px-3 sm:px-6">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          {/* Mobile menu button (Claude/Codex-style) */}
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            aria-label="Open navigation"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-muted lg:hidden"
+          >
+            <span aria-hidden className="flex flex-col gap-1">
+              <span className="block h-0.5 w-5 bg-current" />
+              <span className="block h-0.5 w-5 bg-current" />
+              <span className="block h-0.5 w-3.5 bg-current" />
+            </span>
+          </button>
           <Link
             href="/"
-            className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            aria-label="Back to Lobby"
+            title="Back to Lobby"
+            className="hidden lg:flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
-            <span className="text-violet-500">←</span>
-            <span className="hidden xs:inline">Lobby</span>
+            <span aria-hidden>←</span>
           </Link>
 
-          <div className="h-4 w-px bg-border shrink-0 hidden sm:block" />
-
-          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-            <h1 className="text-xs sm:text-base font-bold text-foreground truncate max-w-30 sm:max-w-xs">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1
+              title={room.title}
+              className="text-sm sm:text-base font-semibold text-foreground truncate max-w-36 sm:max-w-56 lg:max-w-xs"
+            >
               {room.title}
             </h1>
             <Badge
               variant="outline"
-              className="border-border bg-muted/60 font-mono text-[10px] sm:text-[11px] text-muted-foreground shrink-0"
+              title={`Room code ${slug}`}
+              className="border-border bg-muted font-mono text-[10px] sm:text-[11px] text-muted-foreground shrink-0 rounded-lg"
             >
               #{slug}
             </Badge>
           </div>
 
-          <SyncStatusIndicator
-            syncState={syncState}
-            driftSeconds={driftSeconds}
-            isHost={isHost}
-          />
+          <div className="hidden md:block shrink-0">
+            <SyncStatusIndicator
+              syncState={syncState}
+              driftSeconds={driftSeconds}
+              isHost={isHost}
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
-          <InviteSheet slug={slug} title={room.title} />
-          <AuthButton />
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="hidden sm:block">
+            <InviteSheet slug={slug} title={room.title} />
+          </div>
+          <div className="hidden lg:block">
+            <AuthButton />
+          </div>
+          {/* Mobile: compact invite stays visible, auth lives in drawer */}
+          <div className="sm:hidden">
+            <InviteSheet slug={slug} title={room.title} />
+          </div>
         </div>
       </header>
 
-      {/* Main Room Layout: Responsive 2-column on desktop (lg+), single column with switcher on mobile/tablet */}
-      <main className="flex flex-1 flex-col lg:flex-row p-3 sm:p-6 gap-4 sm:gap-6 max-w-[1600px] mx-auto w-full">
-        {/* Left Column: Video Player & Controls */}
+      {/* Mobile navigation drawer */}
+      {navOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-label="Room navigation">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setNavOpen(false)}
+          />
+          <nav className="absolute left-0 top-0 flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-background">
+            <div className="flex h-14 items-center justify-between border-b border-border px-4">
+              <span className="text-sm font-semibold truncate">{room.title}</span>
+              <button
+                type="button"
+                onClick={() => setNavOpen(false)}
+                aria-label="Close navigation"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex flex-col gap-1 p-3">
+              <Link
+                href="/"
+                onClick={() => setNavOpen(false)}
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium hover:bg-muted"
+              >
+                Back to Lobby
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setNavOpen(false);
+                  setMobileTab("video-info");
+                }}
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted text-left"
+              >
+                Watching and info ({members.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNavOpen(false);
+                  setMobileTab("chat");
+                }}
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted text-left"
+              >
+                Live chat ({messages.length})
+              </button>
+              <div className="mt-2 border-t border-border pt-3 px-3 flex flex-col gap-2">
+                <span className="font-mono text-xs text-muted-foreground">#{slug}</span>
+                <SyncStatusIndicator
+                  syncState={syncState}
+                  driftSeconds={driftSeconds}
+                  isHost={isHost}
+                />
+              </div>
+            </div>
+            <div className="mt-auto border-t border-border p-3">
+              <AuthButton />
+            </div>
+          </nav>
+        </div>
+      )}
+
+      {/* Main Room Layout: left scrolls, right chat stays fixed on desktop */}
+      <main className="room-layout flex flex-1 flex-col lg:flex-row lg:items-start p-3 sm:p-6 gap-4 sm:gap-6 max-w-[1600px] mx-auto w-full">
+        {/* Left Column: Video Player & Controls (scrolls with page) */}
         <div className="flex flex-1 flex-col gap-3 sm:gap-4 min-w-0">
           {/* Host Buffering Notice Banner */}
           {isHostBuffering && !isHost && (
-            <div className="flex items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300 animate-pulse">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
+            <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted p-3 text-xs text-foreground">
+              <span className="h-2 w-2 rounded-full bg-foreground/40 animate-pulse" />
               <span>Host is buffering. Playback paused for everyone until host resumes...</span>
             </div>
           )}
@@ -613,9 +704,8 @@ export default function RoomPage({
               <button
                 type="button"
                 onClick={handleTapToPlay}
-                className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/70 backdrop-blur-sm cursor-pointer rounded-2xl p-6 text-center min-h-44"
+                className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/70 cursor-pointer rounded-lg p-6 text-center min-h-44"
               >
-                <span className="text-4xl" aria-hidden>▶</span>
                 <span className="text-sm font-semibold text-white">
                   Tap to join synced playback
                 </span>
@@ -627,8 +717,7 @@ export default function RoomPage({
             )}
             {/* Audio-only mode: video hidden, audio keeps playing. */}
             {audioOnly && (room.videoType !== "localfile" || localFile) && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-zinc-950/95 rounded-2xl p-6 text-center">
-                <span className="text-4xl" aria-hidden>🎧</span>
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-zinc-950/95 rounded-lg p-6 text-center">
                 <p className="text-sm font-semibold text-white">Audio-only mode</p>
                 <p className="text-[11px] text-zinc-400 max-w-xs">
                   Video hidden to save screen &amp; battery — audio keeps playing in sync.
@@ -647,41 +736,41 @@ export default function RoomPage({
           {/* Reconnecting / offline banner */}
           {reconnecting && (
             <div
-              className="flex items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-700 dark:text-sky-300"
+              className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted p-3 text-xs text-foreground"
               role="status"
             >
-              <span className="h-2 w-2 rounded-full bg-sky-500 animate-pulse" />
+              <span className="h-2 w-2 rounded-full bg-foreground/40 animate-pulse" />
               <span>
                 {connection === "offline"
-                  ? "📡 You're offline — waiting for network, then catching up to the host…"
-                  : "🔄 Reconnecting… catching up to the host's latest state."}
+                  ? "You are offline — waiting for network, then catching up to the host…"
+                  : "Reconnecting… catching up to the host's latest state."}
               </span>
             </div>
           )}
 
           {/* Mobile Tab Switcher for Narrow Viewports (< lg) */}
-          <div className="flex lg:hidden items-center justify-center w-full p-1 bg-muted/60 rounded-xl border border-border mt-1">
+          <div className="flex lg:hidden items-center justify-center w-full p-1 bg-muted rounded-lg border border-border mt-1">
             <button
               type="button"
               onClick={() => setMobileTab("video-info")}
-              className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "video-info"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              👥 Watching &amp; Info ({members.length})
+              Watching and Info ({members.length})
             </button>
             <button
               type="button"
               onClick={() => setMobileTab("chat")}
-              className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "chat"
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              💬 Live Chat ({messages.length})
+              Live Chat ({messages.length})
             </button>
           </div>
 
@@ -692,7 +781,7 @@ export default function RoomPage({
             }`}
           >
             {/* Presence Bar */}
-            <Card className="border-border bg-card/60 px-3 sm:px-4 py-2 backdrop-blur-sm rounded-xl shadow-sm">
+            <Card className="border-border bg-card px-3 sm:px-4 py-2 rounded-lg">
               <PresenceBar
                 members={members}
                 currentUserId={effectiveId}
@@ -702,21 +791,21 @@ export default function RoomPage({
             </Card>
 
             {/* Host Controls & Sync Panel */}
-            <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-sm">
+            <Card className="border-border bg-card p-3 sm:p-4 rounded-lg">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="space-y-1">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2 flex-wrap">
+                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-2 flex-wrap">
                     <span>Host-Authoritative Sync</span>
                     {isHost ? (
-                      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px]">
-                        👑 You are the Host
+                      <Badge variant="outline" className="border-border text-[10px] rounded-lg">
+                        You are the Host
                       </Badge>
                     ) : isCohost ? (
-                      <Badge className="bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30 text-[10px]">
-                        🎬 You are a Co-host
+                      <Badge variant="outline" className="border-border text-[10px] rounded-lg">
+                        You are a Co-host
                       </Badge>
                     ) : (
-                      <Badge className="bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30 text-[10px]">
+                      <Badge variant="outline" className="border-border text-[10px] rounded-lg">
                         Follower Mode
                       </Badge>
                     )}
@@ -732,9 +821,9 @@ export default function RoomPage({
                   (myRequestPending ? (
                     <Badge
                       variant="outline"
-                      className="border-cyan-500/30 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 text-xs px-3 py-2"
+                      className="border-border text-xs px-3 py-2 rounded-lg"
                     >
-                      ✋ Request sent — waiting for host
+                      Request sent — waiting for host
                     </Badge>
                   ) : (
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -743,18 +832,18 @@ export default function RoomPage({
                         variant="outline"
                         onClick={handleRequestControl}
                         disabled={isRequestingControl}
-                        className="min-h-11 sm:min-h-9 border-cyan-500/40 bg-cyan-500/10 text-xs text-cyan-700 dark:text-cyan-300 hover:bg-cyan-500/20 cursor-pointer"
+                        className="min-h-11 sm:min-h-9 text-xs cursor-pointer rounded-lg"
                       >
-                        {isRequestingControl ? "Sending…" : "✋ Request control"}
+                        {isRequestingControl ? "Sending…" : "Request control"}
                       </Button>
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={handleClaimHost}
                         disabled={isClaimingHost}
-                        className="min-h-11 sm:min-h-9 border-border bg-card/80 text-xs text-amber-700 dark:text-amber-300 hover:bg-amber-500/10 cursor-pointer"
+                        className="min-h-11 sm:min-h-9 text-xs cursor-pointer rounded-lg"
                       >
-                        {isClaimingHost ? "Checking…" : "👑 Claim host if gone"}
+                        {isClaimingHost ? "Checking…" : "Claim host if gone"}
                       </Button>
                     </div>
                   ))}
@@ -859,9 +948,9 @@ export default function RoomPage({
           </div>
         </div>
 
-        {/* Right Column: Live Chat Panel (Always docked on desktop lg+, or in 'chat' tab on mobile) */}
+        {/* Right Column: Live Chat Panel — fixed on desktop, tabbed on mobile */}
         <div
-          className={`room-chat-dock w-full lg:w-85 xl:w-95 shrink-0 min-h-100 flex min-h-0 flex-col ${
+          className={`room-chat-dock w-full lg:w-[340px] xl:w-[380px] shrink-0 flex min-h-0 flex-col ${
             mobileTab === "chat" ? "flex" : "hidden lg:flex"
           }`}
         >

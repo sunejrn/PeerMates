@@ -276,7 +276,7 @@ export async function transferRoomHost(
       await mirrorMemberRole(slug, previousHostId, "cohost");
     }
     await broadcastRoomEvent(slug, {
-      type: "room.host_changed",
+      type: "room_host_changed",
       newHostId,
     });
   } catch {
@@ -337,7 +337,7 @@ export async function changeRoomSource(
   try {
     const { broadcastRoomEvent } = await import("@/lib/stream/server");
     await broadcastRoomEvent(slug, {
-      type: "room.source_changed",
+      type: "room_source_changed",
       videoSource,
       videoType,
     });

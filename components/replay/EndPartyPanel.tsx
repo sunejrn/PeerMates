@@ -10,15 +10,15 @@ import { WrappedCard, type WrappedMeta } from "./WrappedCard";
 type Visibility = "public" | "circle" | "private";
 
 const OPTIONS: { id: Visibility; title: string; desc: string }[] = [
-  { id: "public", title: "🌍 Public link", desc: "Anyone with the link can relive it." },
-  { id: "circle", title: "⭕ Circle only", desc: "Only people who were at the party." },
-  { id: "private", title: "🔒 Private", desc: "Only you (the host) can open it." },
+  { id: "public", title: "Public link", desc: "Anyone with the link can relive it." },
+  { id: "circle", title: "Circle only", desc: "Only people who were at the party." },
+  { id: "private", title: "Private", desc: "Only you (the host) can open it." },
 ];
 
 /**
  * Host-only end-of-party panel: choose replay visibility (or discard),
  * then save. Server re-validates host on every call. Renders nothing for
- * non-hosts.
+ * non-hosts. Vercel-style: neutral borders, text-only, rounded-lg.
  */
 export function EndPartyPanel({
   slug,
@@ -72,7 +72,7 @@ export function EndPartyPanel({
         topEmoji: row.topEmoji ?? null,
         endedAt: row.endedAt,
       });
-      toast.success("Party Wrapped is ready! 🎉");
+      toast.success("Party Wrapped is ready!");
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Couldn't save the replay.";
       setError(msg);
@@ -86,10 +86,10 @@ export function EndPartyPanel({
   if (saved) return <WrappedCard meta={saved} />;
 
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-sm space-y-3">
+    <Card className="border-border bg-card p-3 sm:p-4 rounded-lg space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          🏁 End party &amp; save replay
+        <h3 className="text-xs font-medium text-muted-foreground">
+          End party and save replay
         </h3>
         <span className="text-[11px] text-muted-foreground font-mono">
           {viewerCount} {viewerCount === 1 ? "viewer" : "viewers"} here
@@ -97,38 +97,51 @@ export function EndPartyPanel({
       </div>
 
       <div className="grid gap-1.5" role="radiogroup" aria-label="Replay visibility">
-        {OPTIONS.map((o) => (
-          <button
-            key={o.id}
-            type="button"
-            role="radio"
-            aria-checked={visibility === o.id}
-            onClick={() => setVisibility(o.id)}
-            className={`flex min-h-11 items-center gap-2.5 rounded-xl border px-3 py-2 text-left cursor-pointer ${
-              visibility === o.id
-                ? "border-violet-500 bg-violet-500/10"
-                : "border-border bg-background/50"
-            }`}
-          >
-            <span className="text-base" aria-hidden>
-              {visibility === o.id ? "🔘" : "⚪"}
-            </span>
-            <span className="min-w-0">
-              <span className="block text-xs font-bold text-foreground">{o.title}</span>
-              <span className="block text-[11px] text-muted-foreground">{o.desc}</span>
-            </span>
-          </button>
-        ))}
+        {OPTIONS.map((o) => {
+          const active = visibility === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => setVisibility(o.id)}
+              className={`flex min-h-11 items-center gap-2.5 rounded-lg border px-3 py-2 text-left cursor-pointer transition-colors ${
+                active
+                  ? "border-foreground bg-muted"
+                  : "border-border bg-background hover:bg-muted/50"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+                  active ? "border-foreground" : "border-muted-foreground/40"
+                }`}
+              >
+                {active && <span className="h-2 w-2 rounded-full bg-foreground" />}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-xs font-medium text-foreground">{o.title}</span>
+                <span className="block text-[11px] text-muted-foreground">{o.desc}</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      <p className="text-[11px] leading-relaxed text-muted-foreground">
-        ⚖️ Only timestamps, chat text, and reaction emoji are kept — never the
-        video file. Members can delete their own moments from the replay later.
-      </p>
+      <div className="rounded-lg border border-border bg-muted px-3 py-2">
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          What is kept
+        </p>
+        <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+          Only timestamps, chat text, and reaction emoji are kept — never the
+          video file. Members can delete their own moments from the replay later.
+        </p>
+      </div>
 
       {error && (
-        <p className="text-xs text-red-600 dark:text-red-400 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2" role="alert">
-          ❌ {error}
+        <p className="text-xs rounded-lg border border-border bg-muted px-3 py-2" role="alert">
+          {error}
         </p>
       )}
 
@@ -137,14 +150,14 @@ export function EndPartyPanel({
           type="button"
           onClick={() => void finalize(visibility)}
           disabled={saving || discarding}
-          className="h-12 min-h-11 flex-1 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+          className="h-11 min-h-11 flex-1 text-xs font-medium cursor-pointer disabled:opacity-50 rounded-lg"
         >
           {saving ? (
             <span className="flex items-center gap-2">
-              <Spinner className="text-white" /> Building Wrapped…
+              <Spinner /> Building Wrapped…
             </span>
           ) : (
-            "💾 Save replay"
+            "Save replay"
           )}
         </Button>
         <Button
@@ -152,9 +165,9 @@ export function EndPartyPanel({
           variant="outline"
           onClick={() => void finalize("discard")}
           disabled={saving || discarding}
-          className="h-12 min-h-11 px-4 text-xs text-red-500 border-red-500/30 cursor-pointer disabled:opacity-50"
+          className="h-11 min-h-11 px-4 text-xs cursor-pointer disabled:opacity-50 rounded-lg"
         >
-          {discarding ? <Spinner /> : "🗑 Discard"}
+          {discarding ? <Spinner /> : "Discard"}
         </Button>
       </div>
     </Card>

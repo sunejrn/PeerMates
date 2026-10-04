@@ -33,17 +33,19 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+    { media: "(prefers-color-scheme: light)", color: "#fafaf9" },
+    { media: "(prefers-color-scheme: dark)", color: "#333333" },
   ],
   colorScheme: "light dark",
   width: "device-width",
@@ -68,7 +70,7 @@ export default function RootLayout({
         "font-sans"
       )}
     >
-      <body className="min-h-full flex flex-col bg-background text-foreground antialiased selection:bg-violet-500 selection:text-white">
+      <body className="min-h-full flex flex-col bg-background text-foreground antialiased selection:bg-foreground selection:text-background">
         <ServiceWorkerRegister />
         <QueryProvider>
           <TooltipProvider>{children}</TooltipProvider>

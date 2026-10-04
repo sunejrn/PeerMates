@@ -39,20 +39,20 @@ const OVERSCAN = 5;
 function RoleBadge({ role }: { role: RoomRole }) {
   if (role === "host") {
     return (
-      <Badge className="bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 text-[10px] px-1.5">
-        👑 Host
+      <Badge variant="outline" className="text-[10px] px-1.5 rounded-lg">
+        Host
       </Badge>
     );
   }
   if (role === "cohost") {
     return (
-      <Badge className="bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-500/30 text-[10px] px-1.5">
-        🎬 Co-host
+      <Badge variant="outline" className="text-[10px] px-1.5 rounded-lg">
+        Co-host
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
+    <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground rounded-lg">
       Viewer
     </Badge>
   );
@@ -61,20 +61,20 @@ function RoleBadge({ role }: { role: RoomRole }) {
 function FileMatchBadge({ match }: { match: boolean | null | undefined }) {
   if (match === true) {
     return (
-      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-[10px] px-1.5">
-        ✅ Match
+      <Badge variant="outline" className="text-[10px] px-1.5 rounded-lg">
+        Match
       </Badge>
     );
   }
   if (match === false) {
     return (
-      <Badge className="bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30 text-[10px] px-1.5">
-        ⚠️ Different
+      <Badge variant="outline" className="text-[10px] px-1.5 rounded-lg">
+        Different file
       </Badge>
     );
   }
   return (
-    <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground">
+    <Badge variant="outline" className="text-[10px] px-1.5 text-muted-foreground rounded-lg">
       No file
     </Badge>
   );
@@ -93,7 +93,7 @@ function Avatar({ member, ring, noAvatars = false }: { member: PartyMember; ring
   }
   return (
     <div
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white ${ring} bg-violet-600`}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-semibold bg-muted text-foreground border ${ring}`}
     >
       {member.name.charAt(0).toUpperCase()}
     </div>
@@ -176,11 +176,11 @@ export function ViewerList({
   };
 
   return (
-    <Card className="border-border bg-card/60 rounded-xl backdrop-blur-sm shadow-sm overflow-hidden">
+    <Card className="border-border bg-card rounded-lg overflow-hidden">
       <div className="px-3 sm:px-4 pt-3 pb-2 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            👥 People
+          <h3 className="text-xs font-medium text-muted-foreground">
+            People
           </h3>
           <span className="text-[11px] font-mono text-muted-foreground">
             {members.length} watching
@@ -190,14 +190,14 @@ export function ViewerList({
 
         {/* Pending control requests (host sees approve/deny) */}
         {isPrivileged && controlRequests.length > 0 && (
-          <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/5 p-2 space-y-1.5">
-            <p className="text-[11px] font-semibold text-cyan-700 dark:text-cyan-300 px-1">
-              ✋ {controlRequests.length} control request{controlRequests.length === 1 ? "" : "s"}
+          <div className="rounded-lg border border-border bg-muted p-2 space-y-1.5">
+            <p className="text-[11px] font-medium px-1">
+              {controlRequests.length} control request{controlRequests.length === 1 ? "" : "s"}
             </p>
             {controlRequests.map((r) => (
               <div
                 key={r.userId}
-                className="flex items-center gap-2 rounded-md bg-background/60 px-2 py-1.5"
+                className="flex items-center gap-2 rounded-lg bg-background px-2 py-1.5"
               >
                 <span className="min-w-0 flex-1 truncate text-xs font-medium">
                   {r.name}
@@ -208,7 +208,7 @@ export function ViewerList({
                       size="sm"
                       disabled={pendingId === r.userId}
                       onClick={() => runAction(r.userId, onApproveRequest)}
-                      className="min-h-11 px-3 bg-cyan-600 hover:bg-cyan-500 text-white text-xs"
+                      className="min-h-11 px-3 text-xs rounded-lg"
                     >
                       {pendingId === r.userId ? "…" : "Approve"}
                     </Button>
@@ -287,13 +287,7 @@ export function ViewerList({
                     <Avatar
                       member={m}
                       noAvatars={noAvatars}
-                      ring={
-                        m.id === hostId
-                          ? "border-amber-500"
-                          : m.role === "cohost"
-                            ? "border-cyan-500"
-                            : "border-border"
-                      }
+                      ring="border-border"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
@@ -309,8 +303,8 @@ export function ViewerList({
                       <span className="mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <RoleBadge role={m.role} />
                         {mutedSet.has(m.id) && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 text-red-500 border-red-500/30">
-                            🔇 Muted
+                          <Badge variant="outline" className="text-[10px] px-1.5 rounded-lg">
+                            Muted
                           </Badge>
                         )}
                         {showFileMatch && <FileMatchBadge match={m.fileMatch} />}
@@ -333,7 +327,7 @@ export function ViewerList({
                           size="sm"
                           disabled={busy}
                           onClick={() => runAction(m.id, onPromote)}
-                          className="min-h-11 px-3 text-[11px] bg-cyan-600 hover:bg-cyan-500 text-white"
+                          className="min-h-11 px-3 text-[11px] rounded-lg"
                         >
                           {busy ? "…" : "Make co-host"}
                         </Button>
@@ -375,7 +369,7 @@ export function ViewerList({
                         variant="outline"
                         disabled={busy}
                         onClick={() => runAction(m.id, onKick)}
-                        className="min-h-11 px-3 text-[11px] text-red-500 border-red-500/30 hover:bg-red-500/10"
+                        className="min-h-11 px-3 text-[11px] rounded-lg"
                       >
                         {busy ? "…" : "Kick"}
                       </Button>

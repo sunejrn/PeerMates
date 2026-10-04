@@ -65,11 +65,11 @@ export function GlassControls({
   };
 
   return (
-    <div className="absolute inset-x-0 bottom-0 z-30 p-2 sm:p-4 bg-linear-to-t from-black/80 via-black/40 to-transparent transition-opacity duration-300 pointer-events-auto">
-      {/* Floating Glassmorphic Container */}
-      <div className="flex flex-col gap-2 rounded-xl sm:rounded-2xl border border-white/15 bg-background/80 dark:bg-zinc-950/75 p-2 sm:p-3 backdrop-blur-xl shadow-2xl shadow-black/50 text-foreground transition-all">
-        {/* Timeline Scrubber Bar */}
-        <div className="relative flex items-center w-full group/slider h-5 sm:h-6 cursor-pointer">
+    <div className="absolute inset-x-0 bottom-0 z-30 px-2 pb-1.5 pt-6 sm:pb-2 bg-linear-to-t from-black/80 via-black/30 to-transparent pointer-events-auto">
+      {/* Slim control bar — stays compact so it never covers the video */}
+      <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 px-2 py-1.5 text-zinc-200">
+        {/* Timeline Scrubber Bar — h-1, full width */}
+        <div className="relative flex items-center w-full group/slider h-4 cursor-pointer">
           <input
             type="range"
             min={0}
@@ -82,11 +82,12 @@ export function GlassControls({
             onMouseUp={handleSeekCommit}
             onTouchEnd={handleSeekCommit}
             disabled={!isHost}
-            className={`w-full h-1.5 sm:h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-violet-500 hover:accent-violet-400 transition-all ${
+            aria-label="Seek"
+            className={`w-full h-1 rounded-lg appearance-none cursor-pointer accent-white transition-all ${
               !isHost ? "cursor-not-allowed opacity-80" : ""
             }`}
             style={{
-              background: `linear-gradient(to right, rgb(139, 92, 246) ${progressPercent}%, rgba(120, 120, 120, 0.25) ${progressPercent}%)`,
+              background: `linear-gradient(to right, rgb(255,255,255) ${progressPercent}%, rgba(255,255,255,0.25) ${progressPercent}%)`,
             }}
           />
           {/* Pinned-moment markers from chat (host/co-host taps jump). */}
@@ -103,17 +104,17 @@ export function GlassControls({
                       onMarkerTap(m.seconds);
                     }}
                     aria-label={`Jump to pinned moment ${formatTime(m.seconds)}`}
-                    title={`📌 Pinned moment ${formatTime(m.seconds)}`}
-                    className="pointer-events-auto absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[8px] text-black shadow cursor-pointer"
+                    title={`Pinned moment ${formatTime(m.seconds)}`}
+                    className="pointer-events-auto absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-2 w-2 items-center justify-center rounded-full bg-white cursor-pointer"
                     style={{ left: `${pct}%` }}
                   >
-                    📌
+                    <span className="sr-only">Jump</span>
                   </button>
                 ) : (
                   <span
                     key={m.id}
-                    title={`📌 Pinned moment ${formatTime(m.seconds)} (host can jump)`}
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-amber-400/80 text-[7px] shadow"
+                    title={`Pinned moment ${formatTime(m.seconds)} (host can jump)`}
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-1.5 w-1.5 items-center justify-center rounded-full bg-white/80"
                     style={{ left: `${pct}%` }}
                   />
                 );
@@ -122,40 +123,38 @@ export function GlassControls({
           )}
         </div>
 
-        {/* Action Controls Row */}
+        {/* Action Controls Row — compact */}
         <div className="flex items-center justify-between gap-2">
-          {/* Left: Play/Pause, Seek Buttons & Timestamps */}
-          <div className="flex items-center gap-1.5 sm:gap-3">
-            {/* Play/Pause Button - min 44x44px hit target for touch accessibility */}
+          {/* Left: Play/Pause & Timestamps */}
+          <div className="flex items-center gap-1.5">
             {isHost ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon"
                 onClick={isPlaying ? onPause : onPlay}
-                className="h-10 w-10 sm:h-9 sm:w-9 rounded-full bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary transition-transform active:scale-95 cursor-pointer"
+                className="h-9 w-9 rounded-lg text-white hover:bg-white/10 hover:text-white active:scale-95 cursor-pointer"
                 aria-label={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
-                  <svg className="h-5 w-5 fill-current" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">
                     <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                   </svg>
                 ) : (
-                  <svg className="h-5 w-5 fill-current ml-0.5" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4 fill-current ml-0.5" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
                   </svg>
                 )}
               </Button>
             ) : (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-medium">
-                <span className="h-1.5 w-1.5 rounded-full bg-violet-400 animate-pulse" />
-                <span className="hidden xs:inline">Synced</span>
-              </div>
+              <span className="px-1.5 py-0.5 text-[11px] font-medium text-zinc-300">
+                Synced
+              </span>
             )}
 
             {/* Timestamps */}
-            <div className="text-[11px] sm:text-xs font-mono text-muted-foreground select-none">
-              <span className="text-foreground font-semibold">
+            <div className="text-[11px] font-mono text-zinc-400 select-none">
+              <span className="text-zinc-100 font-medium">
                 {formatTime(displayTime)}
               </span>
               <span className="mx-1">/</span>
@@ -164,13 +163,13 @@ export function GlassControls({
           </div>
 
           {/* Right: Role indicator & Fullscreen */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {isHost ? (
-              <span className="hidden sm:inline-flex text-[11px] font-medium text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
-                {controlLabel ?? "👑 Host Controlling"}
+              <span className="inline-flex h-6 items-center rounded-lg border border-white/15 bg-white/5 px-2 text-[10px] font-medium text-zinc-200">
+                {controlLabel ?? "Host controlling"}
               </span>
             ) : (
-              <span className="hidden sm:inline-flex text-[11px] font-medium text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-md border border-border/40">
+              <span className="inline-flex h-6 items-center rounded-lg border border-white/15 bg-white/5 px-2 text-[10px] font-medium text-zinc-300">
                 Follower
               </span>
             )}
@@ -182,7 +181,7 @@ export function GlassControls({
                 variant="ghost"
                 size="icon"
                 onClick={onToggleFullscreen}
-                className="h-10 w-10 sm:h-9 sm:w-9 text-muted-foreground hover:text-foreground cursor-pointer"
+                className="h-9 w-9 rounded-lg text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer"
                 aria-label="Toggle Fullscreen"
               >
                 <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">

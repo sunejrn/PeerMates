@@ -122,7 +122,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     await removeControlRequest(slug, target);
     await mirrorMemberRole(slug, target, nextRole);
     await broadcastRoomEvent(slug, {
-      type: "room.roles_changed",
+      type: "room_roles_changed",
       userId: target,
       role: nextRole,
     });

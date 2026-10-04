@@ -70,14 +70,24 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
       return () => clearInterval(interval);
     }, []);
 
-    // Auto-hide controls after inactivity during playback
+    // YouTube-style auto-hide: 2s after the cursor leaves / goes idle
+    // during playback the bar slides away; any cursor movement brings it back.
     const triggerUserActivity = () => {
       setShowControls(true);
       if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
       if (isPlaying) {
         hideTimeoutRef.current = setTimeout(() => {
           setShowControls(false);
-        }, 3500);
+        }, 2000);
+      }
+    };
+
+    const handlePointerLeave = () => {
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+      if (isPlaying) {
+        hideTimeoutRef.current = setTimeout(() => {
+          setShowControls(false);
+        }, 2000);
       }
     };
 
@@ -107,7 +117,10 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         ref={containerRef}
         onMouseMove={triggerUserActivity}
         onTouchStart={triggerUserActivity}
-        className="group relative aspect-video w-full overflow-hidden rounded-2xl border border-border/80 bg-black shadow-2xl select-none"
+        onMouseLeave={handlePointerLeave}
+        className={`group relative aspect-video w-full overflow-hidden rounded-lg border border-border bg-black select-none ${
+          showControls ? "" : "cursor-none"
+        }`}
       >
         {videoType === "youtube" ? (
           <YouTubePlayer ref={innerPlayerRef} {...props} />
@@ -115,50 +128,26 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           <NativeVideoPlayer ref={innerPlayerRef} {...props} />
         )}
 
-        {/* Top Badges (Engine & Role) */}
+        {/* Top-left: source format only — minimal, transparent, no shadow */}
         <div
-          className={`absolute top-3 sm:top-4 left-3 sm:left-4 z-20 flex items-center gap-2 pointer-events-none transition-opacity duration-300 ${
+          className={`absolute top-2 left-2 z-20 pointer-events-none transition-all duration-300 ${
             showControls ? "opacity-100" : "opacity-0"
           }`}
         >
           <Badge
             variant="outline"
-            className="border-white/20 bg-black/60 backdrop-blur-md text-[10px] sm:text-[11px] font-mono text-zinc-200 uppercase px-2 sm:px-2.5 py-0.5 shadow"
+            className="border-white/10 bg-black/30 text-[10px] font-mono text-zinc-300 uppercase px-1.5 py-0 rounded-lg"
           >
             {videoType === "localfile" ? "My File" : videoType}
           </Badge>
-
-          {badge === "host" ? (
-            <Badge
-              variant="outline"
-              className="border-amber-500/40 bg-amber-500/20 backdrop-blur-md text-[10px] sm:text-[11px] font-medium text-amber-300 px-2 sm:px-2.5 py-0.5 flex items-center gap-1.5 shadow"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
-              Host
-            </Badge>
-          ) : badge === "cohost" ? (
-            <Badge
-              variant="outline"
-              className="border-cyan-500/40 bg-cyan-500/20 backdrop-blur-md text-[10px] sm:text-[11px] font-medium text-cyan-300 px-2 sm:px-2.5 py-0.5 flex items-center gap-1.5 shadow"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
-              Co-host
-            </Badge>
-          ) : (
-            <Badge
-              variant="outline"
-              className="border-violet-500/40 bg-violet-500/20 backdrop-blur-md text-[10px] sm:text-[11px] font-medium text-violet-300 px-2 sm:px-2.5 py-0.5 flex items-center gap-1.5 shadow"
-            >
-              <span className="h-1.5 w-1.5 rounded-full bg-violet-400" />
-              Follower
-            </Badge>
-          )}
         </div>
 
-        {/* Floating Glassmorphic Controls Bar */}
+        {/* Bottom controls — slides down and hides like YouTube */}
         <div
-          className={`transition-opacity duration-300 ${
-            showControls ? "opacity-100" : "opacity-0 pointer-events-none"
+          className={`transition-all duration-300 ${
+            showControls
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 translate-y-2 pointer-events-none"
           }`}
         >
           <GlassControls
@@ -169,9 +158,9 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
             controlLabel={
               controlLabelProp ??
               (badge === "host"
-                ? "👑 Host Controlling"
+                ? "Host controlling"
                 : badge === "cohost"
-                  ? "🎬 Co-host Controlling"
+                  ? "Co-host controlling"
                   : undefined)
             }
             onPlay={() => innerPlayerRef.current?.play()}

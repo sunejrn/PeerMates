@@ -45,7 +45,7 @@ function Switch({
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={`relative h-11 w-16 shrink-0 rounded-full border transition-colors cursor-pointer ${
-          checked ? "bg-emerald-500/80 border-emerald-500" : "bg-muted border-border"
+          checked ? "bg-foreground border-foreground" : "bg-muted border-border"
         }`}
       >
         <span
@@ -85,13 +85,13 @@ export function DataPanel({
   );
 
   return (
-    <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-sm space-y-3">
+    <Card className="border-border bg-card p-3 sm:p-4 rounded-lg space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          📶 Low-Data Mode
+        <h3 className="text-xs font-medium text-muted-foreground">
+          Low-Data Mode
         </h3>
         {dataSaver ? (
-          <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+          <span className="rounded-lg border border-border bg-muted px-2 py-0.5 text-[10px] font-medium">
             Saving data
           </span>
         ) : (
