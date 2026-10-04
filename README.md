@@ -14,10 +14,19 @@ host-controlled playback for up to ~500 viewers per room.
 | --- | --- |
 | ![Lobby on mobile](public/screenshots/lobby-mobile.png) | ![Guest nickname join on mobile](public/screenshots/room-join-mobile.png) |
 
-> Screenshots are static captures of the lobby (`/`) and the guest nickname
-> gate (`/room/[code]`). To retake them, run the dev server, create a room via
-> `POST /api/rooms`, and screenshot `/` plus `/room/<slug>` at 1440×900 and
-> 390×844.
+| Invite sheet (mobile) | Party Replay (desktop) |
+| --- | --- |
+| ![Invite sheet with link, WhatsApp share, and QR code](public/screenshots/invite-sheet-mobile.png) | ![Party Replay with heatmap scrubber](public/screenshots/replay-desktop.png) |
+
+| Party Replay (mobile, full page) |
+| --- |
+| ![Party Replay on mobile with heatmap, highlights, and Wrapped card](public/screenshots/replay-mobile.png) |
+
+> Screenshots are static captures of the lobby (`/`), the guest nickname
+> gate (`/room/[code]`), the invite sheet, and a Party Replay (`/replay/[id]`).
+> To retake them, run the dev server, create a room via `POST /api/rooms`, and
+> screenshot `/`, `/room/<slug>` (plus the open invite sheet), and a saved
+> `/replay/<id>` at 1440×900 and 390×844.
 
 ## Features
 
@@ -60,6 +69,16 @@ host-controlled playback for up to ~500 viewers per room.
   mirroring; automatic host migration when the host disconnects
 - Upstash rate limits on state writes, chat, presence, reactions, room
   creation/joins, and all AI calls
+
+**Party Replay**
+- Every reaction, message, voice note, and pin is captured with its video
+  timestamp (buffered in Redis, flushed to Neon in batches — video never stored)
+- Host ends the party and saves public / circle / private (or discards);
+  reaction heatmap with labeled peaks plus auto-highlights (biggest laugh,
+  shock, funniest voice note, top chatter, first reactor)
+- Party Wrapped share card (OG + 9:16 story image) and a `/replay/[id]` page
+  where late friends watch with the crowd, react on top, and delete their own
+  moments
 
 **Mobile-first**
 - 360px-first layout, 44px tap targets, safe-area insets, `dvh` units, no
@@ -157,3 +176,12 @@ project Environment Variables (including `BETTER_AUTH_URL` with the production
 URL and the Google/GitHub OAuth credentials), then deploy. OAuth providers
 need the production redirect URIs registered (see Google setup above; same
 pattern for GitHub: `https://<your-app>.vercel.app/api/auth/callback/github`).
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code rules, and the PR
+checklist (server-side auth, rate limits, mobile-first, screenshots).
+
+## License
+
+MIT — see [LICENSE](LICENSE).
