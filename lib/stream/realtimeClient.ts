@@ -200,6 +200,8 @@ export type RealtimeEventType =
   | "room_source_changed"
   | "room_control_requested"
   | "room_subtitles_changed"
+  | "room_picker_changed"
+  | "room_class_changed"
   | "room_kicked";
 
 export function normalizeEventType(t: unknown): RealtimeEventType | null {
@@ -217,6 +219,8 @@ export function normalizeEventType(t: unknown): RealtimeEventType | null {
     case "room_source_changed":
     case "room_control_requested":
     case "room_subtitles_changed":
+    case "room_picker_changed":
+    case "room_class_changed":
     case "room_kicked":
       return fixed;
     default:

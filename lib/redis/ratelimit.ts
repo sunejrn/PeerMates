@@ -83,4 +83,12 @@ export const RATE_LIMITS = {
   replayEvent: { limit: 120, windowSeconds: 60 },
   /** Replay event capture global room budget (burst headroom). */
   replayGlobal: { limit: 2000, windowSeconds: 60 },
+  /** Movie Night Picker adds/votes (one vote pp enforced separately). */
+  picker: { limit: 30, windowSeconds: 60 },
+  /** Movie Buddy questions per user (AI guard). */
+  buddyPerUser: { limit: 10, windowSeconds: 3600 },
+  /** Movie Buddy global room budget. */
+  buddyGlobal: { limit: 60, windowSeconds: 3600 },
+  /** Class Mode writes (polls/questions/notes/attendance). */
+  classWrite: { limit: 60, windowSeconds: 60 },
 } as const;

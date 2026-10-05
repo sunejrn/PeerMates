@@ -33,6 +33,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { InviteSheet } from "@/components/room/InviteSheet";
 import { NicknameGate } from "@/components/room/NicknameGate";
 import { SubtitlesPanel } from "@/components/room/SubtitlesPanel";
+import { MoviePicker } from "@/components/room/MoviePicker";
+import { MovieBuddy } from "@/components/room/MovieBuddy";
+import { ClassMode } from "@/components/room/ClassMode";
 import { useGuestIdentity } from "@/hooks/useGuestIdentity";
 import { useRoomSubtitles } from "@/hooks/useRoomSubtitles";
 import { useReplayCapture } from "@/hooks/useReplayCapture";
@@ -1335,6 +1338,34 @@ export default function RoomPage({
             <SubtitlesPanel
               subs={subs}
               canUpload={canControl}
+              getCurrentTime={() => playerRef.current?.getCurrentTime() ?? 0}
+            />
+
+            {/* Movie Night Picker: vote for the next source (additive, never
+                touches playback until the host closes the vote) */}
+            <MoviePicker
+              slug={slug}
+              actorId={effectiveId}
+              actorName={effectiveName}
+              myImage={session?.user?.image || undefined}
+              canControl={canControl}
+              memberCount={members.length}
+            />
+
+            {/* Movie Buddy: private subtitle-grounded Q&A + share-to-chat */}
+            <MovieBuddy
+              slug={slug}
+              actorId={effectiveId}
+              getCurrentTime={() => playerRef.current?.getCurrentTime() ?? 0}
+              onShare={(text) => sendRichCaptured({ text })}
+            />
+
+            {/* Class Mode: polls/quizzes, Q&A queue, attendance, notes */}
+            <ClassMode
+              slug={slug}
+              actorId={effectiveId}
+              actorName={effectiveName}
+              canControl={canControl}
               getCurrentTime={() => playerRef.current?.getCurrentTime() ?? 0}
             />
 

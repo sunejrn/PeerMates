@@ -115,6 +115,17 @@ export async function POST(req: NextRequest) {
       await setRoomFingerprint(slug, fingerprint);
     }
 
+    // Optional room type: "class" seeds Class Mode (additive, default off).
+    try {
+      const roomMode = (body as { roomMode?: unknown })?.roomMode;
+      if (roomMode === "class" || roomMode === "classmode") {
+        const { setClassMode } = await import("@/lib/redis/classmode");
+        await setClassMode(slug, true);
+      }
+    } catch {
+      // best-effort only
+    }
+
     const response = NextResponse.json({
       success: true,
       slug: room.slug,

@@ -58,6 +58,7 @@ export function RoomLobby() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [sourceTab, setSourceTab] = useState<"link" | "myfiles">("link");
   const [rightsOk, setRightsOk] = useState(false);
+  const [classMode, setClassMode] = useState(false);
   const filePick = useLocalFilePick();
 
   const detection = detectVideoSource(videoUrl);
@@ -111,6 +112,7 @@ export function RoomLobby() {
         body: JSON.stringify({
           videoUrl: videoUrl.trim(),
           title: title.trim() || undefined,
+          roomMode: classMode ? "class" : undefined,
         }),
       });
 
@@ -156,6 +158,7 @@ export function RoomLobby() {
             filePick.file.name.replace(/\.[^.]+$/, "") ||
             "PeerMates Party",
           localFile: filePick.fp,
+          roomMode: classMode ? "class" : undefined,
         }),
       });
 
@@ -357,6 +360,19 @@ export function RoomLobby() {
                 </label>
               </div>
               )}
+
+              {/* Room type: Class Mode toggle (additive — default stays watch party) */}
+              <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-border bg-background/60 px-3 min-h-11">
+                <input
+                  type="checkbox"
+                  checked={classMode}
+                  onChange={(e) => setClassMode(e.target.checked)}
+                  className="h-5 w-5 shrink-0 accent-violet-600"
+                />
+                <span className="text-xs font-medium">
+                  🎓 Class Mode room <span className="text-muted-foreground">(polls, Q&A, attendance)</span>
+                </span>
+              </label>
 
               {/* Presets - touch friendly min 44px tap targets */}
               <div className="space-y-2 pt-1">
