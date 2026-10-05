@@ -21,10 +21,16 @@ const KINDS: SignalKind[] = [
   "p2p-leave",
   "p2p-full",
   "p2p-decline",
+  "file-offer",
+  "file-accept",
+  "file-reject",
+  "file-ice",
+  "file-done",
 ];
 
-/** SDP/ICE envelopes stay small — reject anything abusive. */
-const MAX_PAYLOAD_BYTES = 32 * 1024;
+/** SDP/ICE envelopes stay small — reject anything abusive. File-transfer SDP
+ *  offers carry a small meta header, so the cap is roomy but still bounded. */
+const MAX_PAYLOAD_BYTES = 64 * 1024;
 
 /**
  * GET /api/rooms/[slug]/signals?for=<userId>

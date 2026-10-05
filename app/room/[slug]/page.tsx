@@ -9,6 +9,8 @@ import { PresenceBar } from "@/components/room/PresenceBar";
 import { ViewerList } from "@/components/room/ViewerList";
 import { ModerationPanel } from "@/components/room/ModerationPanel";
 import { LocalFileGate } from "@/components/room/LocalFileGate";
+import { SendFilePanel } from "@/components/room/SendFilePanel";
+import { FileReceiveListener } from "@/components/room/FileReceiveListener";
 import { StreamFromHostPanel, HostStreamMain } from "@/components/room/StreamFromHost";
 import { DataPanel } from "@/components/room/DataPanel";
 import { useDataSaver } from "@/hooks/useDataSaver";
@@ -34,6 +36,7 @@ import { useGuestIdentity } from "@/hooks/useGuestIdentity";
 import { useRoomSubtitles } from "@/hooks/useRoomSubtitles";
 import { useReplayCapture } from "@/hooks/useReplayCapture";
 import { EndPartyPanel } from "@/components/replay/EndPartyPanel";
+import { useAppSettings } from "@/hooks/useAppSettings";
 import { toast } from "sonner";
 import Link from "next/link";
 
@@ -357,6 +360,26 @@ export default function RoomPage({
   const getHostVideo = () =>
     playerRef.current?.getVideoElement?.() ?? null;
 
+  // ---- "My Rooms" history (local device list for the All Rooms page) ----
+  // Stored per-device: slug, title, type, last visit. Auto-expiry (30d)
+  // and the settings toggle live in lib/rooms/history.ts.
+  useEffect(() => {
+    if (!room || !slug) return;
+    try {
+      void import("@/lib/rooms/history").then(({ recordRoomVisit }) => {
+        recordRoomVisit({
+          slug,
+          title: room.title,
+          videoType: room.videoType,
+          hostName: room.hostName,
+        });
+      });
+    } catch {
+      // history is best-effort
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, room?.slug]);
+
   // ---- Refresh persistence: device backup of the room position ----
   // Server Redis state is authoritative and survives host leaves; this
   // local backup covers the gap before the first poll after a refresh
@@ -456,6 +479,22 @@ export default function RoomPage({
     setEnabled: setDataSaver,
     setAudioOnly,
   } = useDataSaver();
+  const { settings: appSettings } = useAppSettings();
+  const liveChatEnabled = appSettings.liveChatEnabled;
+
+  // Settings default: start with Data Saver ON when the user chose it and
+  // never set an explicit per-device Data Saver choice.
+  useEffect(() => {
+    if (!appSettings.dataSaverDefault) return;
+    try {
+      if (window.localStorage.getItem("syncme:data-saver") === null) {
+        setDataSaver(true);
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appSettings.dataSaverDefault]);
   const meter = useDataMeter();
   const [detectedRegion, setDetectedRegion] = useState<string | null>(null);
 
@@ -727,6 +766,20 @@ export default function RoomPage({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Primary">
+            <Link
+              href="/rooms"
+              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground hover:text-foreground"
+            >
+              All Rooms
+            </Link>
+            <Link
+              href="/settings"
+              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground hover:text-foreground"
+            >
+              Settings
+            </Link>
+          </nav>
           <div className="hidden sm:block">
             <InviteSheet slug={slug} title={room.title} />
           </div>
@@ -766,6 +819,20 @@ export default function RoomPage({
                 className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium hover:bg-muted"
               >
                 Back to Lobby
+              </Link>
+              <Link
+                href="/rooms"
+                onClick={() => setNavOpen(false)}
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted"
+              >
+                All Rooms
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() => setNavOpen(false)}
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted"
+              >
+                Settings
               </Link>
               <button
                 type="button"
@@ -1085,6 +1152,29 @@ export default function RoomPage({
                 publishMatch={setFileMatch}
               />
             )}
+            {/* Host "Send file": push my movie to selected viewers P2P —
+                they toast, auto-load, and join sync. Viewers auto-receive. */}
+            {isLocalRoom && canControl && (
+              <SendFilePanel
+                slug={slug}
+                myId={effectiveId}
+                myName={effectiveName}
+                file={localFile?.file ?? null}
+                fileName={localFile?.file.name ?? hostFp?.name ?? null}
+                members={members}
+              />
+            )}
+            {!canControl && (
+              <FileReceiveListener
+                slug={slug}
+                myId={effectiveId}
+                myName={effectiveName}
+                hostFingerprint={hostFp}
+                enabled={isLocalRoom}
+                onFileReceived={handleFileJoin}
+                publishMatch={setFileMatch}
+              />
+            )}
             {isLocalRoom && (isHost || localMatch !== true) && (
               <StreamFromHostPanel
                 slug={slug}
@@ -1155,6 +1245,7 @@ export default function RoomPage({
               mobileTab === "chat" ? "flex" : "hidden"
             } ${deskTab === "chat" ? "lg:flex" : "lg:hidden"} lg:w-full lg:flex-1`}
           >
+          {liveChatEnabled ? (
           <ChatPanel
             messages={messages}
             currentUserId={effectiveId}
@@ -1180,6 +1271,17 @@ export default function RoomPage({
               }
             }}
           />
+          ) : (
+            <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 overflow-hidden rounded-lg border border-border bg-card p-6 text-center">
+              <p className="text-sm font-medium text-foreground">Live chat is off</p>
+              <p className="max-w-xs text-xs text-muted-foreground">
+                Host disabled live chat on this room. Turn it back on in Settings to keep chatting.
+              </p>
+              <Link href="/settings" className="mt-1 inline-flex min-h-11 items-center justify-center rounded-md border border-border px-3 text-xs font-medium">
+                Open Settings
+              </Link>
+            </div>
+          )}
           </div>
         </div>
       </main>

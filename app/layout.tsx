@@ -6,6 +6,7 @@ import { QueryProvider } from "@/components/providers/QueryProvider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
+import { ThemeApplier } from "@/components/settings/ThemeApplier";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -71,6 +72,7 @@ export default function RootLayout({
       )}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground antialiased selection:bg-foreground selection:text-background">
+        <ThemeApplier />
         <ServiceWorkerRegister />
         <QueryProvider>
           <TooltipProvider>{children}</TooltipProvider>

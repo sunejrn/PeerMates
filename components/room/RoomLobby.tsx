@@ -27,11 +27,11 @@ interface Preset {
 }
 
 const PRESETS: Preset[] = [
-  // {
-  //   label: "YouTube: Big Buck Bunny",
-  //   type: "youtube",
-  //   url: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
-  // },
+  {
+    label: "YouTube: Big Buck Bunny",
+    type: "youtube",
+    url: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+  },
   {
     label: "HLS: Tears of Steel (.m3u8)",
     type: "hls",
@@ -41,6 +41,11 @@ const PRESETS: Preset[] = [
     label: "Direct MP4: Sintel Movie",
     type: "mp4",
     url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4",
+  },
+  {
+    label: "Direct MP4: Big Buck Bunny",
+    type: "mp4",
+    url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
 ];
 

@@ -18,6 +18,8 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
     const videoRef = useRef<HTMLVideoElement>(null);
     const hlsRef = useRef<Hls | null>(null);
     const [isLoaded, setIsLoaded] = useState(false);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [retryNonce, setRetryNonce] = useState(0);
     // Stable ref: fragment handler is registered once per source, while the
     // meter callback may be re-created by the parent.
     const fragmentBytesRef = useRef(onFragmentBytes);
@@ -106,6 +108,22 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
       if (!video || !effectiveSrc) return;
 
       setIsLoaded(false);
+      setLoadError(null);
+
+      const markReady = () => {
+        setIsLoaded(true);
+        setLoadError(null);
+        onReady?.();
+      };
+      const markError = () => {
+        // Most common causes: expiring googlevideo signature, hotlink
+        // protection, or a wrong URL (HTML page instead of a video file).
+        setLoadError(
+          videoType === "mp4"
+            ? "This video file could not be loaded. It may have expired (YouTube-extracted MP4 links expire fast), block hotlinking, or need an exact .mp4 URL."
+            : "This stream could not be loaded. Check the URL and try again."
+        );
+      };
 
       if (videoType === "hls") {
         if (Hls.isSupported()) {
@@ -148,29 +166,58 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
                   hls.recoverMediaError();
                   break;
                 default:
+                  setLoadError(
+                    "This stream could not be loaded. Check the URL and try again."
+                  );
                   hls.destroy();
                   break;
               }
             }
           });
+          video.addEventListener("error", markError);
+          return () => {
+            video.removeEventListener("error", markError);
+            if (hlsRef.current) {
+              hlsRef.current.destroy();
+              hlsRef.current = null;
+            }
+          };
         } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
           // Native Safari HLS
           video.src = effectiveSrc;
-          video.addEventListener("loadedmetadata", () => {
-            setIsLoaded(true);
-            onReady?.();
-          });
+          try {
+            video.load();
+          } catch {
+            // older Safari — src assignment is enough
+          }
+          video.addEventListener("loadedmetadata", markReady);
+          video.addEventListener("loadeddata", markReady);
+          video.addEventListener("error", markError);
+          return () => {
+            video.removeEventListener("loadedmetadata", markReady);
+            video.removeEventListener("loadeddata", markReady);
+            video.removeEventListener("error", markError);
+          };
         }
       } else {
-        // Direct MP4 / WebM / local blob: URL
+        // Direct MP4 / WebM / local blob: URL. Assign + explicit load() so
+        // the element actually fetches (some browsers stall on src alone),
+        // and surface errors instead of a forever-black frame.
         video.src = effectiveSrc;
-        const handleLoaded = () => {
-          setIsLoaded(true);
-          onReady?.();
-        };
-        video.addEventListener("loadedmetadata", handleLoaded);
+        try {
+          video.load();
+        } catch {
+          // load() unsupported — src assignment still plays
+        }
+        video.addEventListener("loadedmetadata", markReady);
+        video.addEventListener("loadeddata", markReady);
+        video.addEventListener("canplay", markReady);
+        video.addEventListener("error", markError);
         return () => {
-          video.removeEventListener("loadedmetadata", handleLoaded);
+          video.removeEventListener("loadedmetadata", markReady);
+          video.removeEventListener("loadeddata", markReady);
+          video.removeEventListener("canplay", markReady);
+          video.removeEventListener("error", markError);
         };
       }
 
@@ -180,7 +227,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           hlsRef.current = null;
         }
       };
-    }, [effectiveSrc, videoType]);
+    }, [effectiveSrc, videoType, retryNonce]);
 
     // Data Saver: pin HLS to its lowest rendition instead of letting ABR
     // climb. Separate from the load effect so toggling never remounts the
@@ -282,8 +329,12 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           ref={videoRef}
           controls={controlsAllowed}
           playsInline
-          crossOrigin="anonymous"
           preload="auto"
+          // crossOrigin is ONLY safe when we attach a <track> (subtitles).
+          // Setting it unconditionally breaks plain MP4 hosts that don't
+          // send CORS headers — the video loads but never plays (black
+          // frame). Local blob: URLs never need it either.
+          {...(subtitleTrackUrl ? { crossOrigin: "anonymous" as const } : {})}
           className="h-full w-full object-contain syncme-subs"
         >
           {/* Keyed track: swapping languages remounts only the track node —
@@ -297,6 +348,31 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
             />
           )}
         </video>
+        {/* Loading spinner while the file/stream opens */}
+        {!isLoaded && !loadError && effectiveSrc && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 p-6 text-center">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" aria-hidden />
+            <p className="text-[11px] text-zinc-300">Loading video…</p>
+          </div>
+        )}
+        {/* Visible error + retry instead of a forever-black frame */}
+        {loadError && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/80 p-6 text-center">
+            <p className="max-w-sm text-xs font-medium text-zinc-100">
+              Video failed to load
+            </p>
+            <p className="max-w-sm text-[11px] leading-relaxed text-zinc-400">
+              {loadError}
+            </p>
+            <button
+              type="button"
+              onClick={() => setRetryNonce((n) => n + 1)}
+              className="mt-1 min-h-11 rounded-lg border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white"
+            >
+              Try again
+            </button>
+          </div>
+        )}
       </div>
     );
   }

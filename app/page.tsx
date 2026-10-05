@@ -2,6 +2,7 @@ import { AuthButton } from "@/components/auth/AuthButton";
 import { RoomLobby } from "@/components/room/RoomLobby";
 import { PwaInstallCard } from "@/components/pwa/PwaInstallCard";
 import { GravityField } from "@/components/gravity-field";
+import Link from "next/link";
 
 export default function Home() {
   return (
@@ -18,6 +19,20 @@ export default function Home() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-4">
+          <nav className="flex items-center gap-1 text-sm" aria-label="Primary">
+            <Link
+              href="/rooms"
+              className="rounded-lg px-3 min-h-11 hidden sm:flex items-center text-muted-foreground hover:text-foreground"
+            >
+              All Rooms
+            </Link>
+            <Link
+              href="/settings"
+              className="rounded-lg px-3 min-h-11 hidden sm:flex items-center text-muted-foreground hover:text-foreground"
+            >
+              Settings
+            </Link>
+          </nav>
           <AuthButton />
         </div>
       </header>

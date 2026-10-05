@@ -15,7 +15,12 @@ export type SignalKind =
   | "p2p-ice" // either -> peer: ICE candidate
   | "p2p-leave" // viewer -> host: "I'm done"
   | "p2p-full" // host/server -> viewer: "room full"
-  | "p2p-decline"; // host -> viewer: "not sharing right now"
+  | "p2p-decline" // host -> viewer: "not sharing right now"
+  | "file-offer" // host -> viewer: WebRTC file-transfer SDP + file meta
+  | "file-accept" // viewer -> host: SDP answer (auto-accept)
+  | "file-reject" // viewer -> host: declined (e.g. no space)
+  | "file-ice" // either -> peer: file-transfer ICE candidate
+  | "file-done"; // host -> viewer: transfer complete marker (resync cue)
 
 export interface SignalMessage {
   id: string;
