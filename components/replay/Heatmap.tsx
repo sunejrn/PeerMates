@@ -4,8 +4,9 @@ import { useMemo } from "react";
 import { fmtClock, HEATMAP_BUCKET_SEC } from "@/lib/replay/highlights";
 
 /**
- * Smooth glowing heatmap line (violet→pink) with labeled peaks. Pure SVG —
- * no chart lib, light on low-end Android phones and iPhones.
+ * Monochrome reaction heatmap line with labeled peaks. Pure SVG — no chart
+ * lib, light on low-end Android phones and iPhones. Uses currentColor so it
+ * follows the theme (Vercel-style, no glow).
  */
 export function Heatmap({
   buckets,
@@ -59,7 +60,7 @@ export function Heatmap({
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full text-foreground">
       <svg
         viewBox={`0 0 ${W} ${H}`}
         className="h-28 w-full"
@@ -77,40 +78,22 @@ export function Heatmap({
         }
         style={onSeek ? { cursor: "pointer" } : undefined}
       >
-        <defs>
-          <linearGradient id="pm-heat-line" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#8b5cf6" />
-            <stop offset="100%" stopColor="#ec4899" />
-          </linearGradient>
-          <linearGradient id="pm-heat-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.35" />
-            <stop offset="100%" stopColor="#ec4899" stopOpacity="0.02" />
-          </linearGradient>
-          <filter id="pm-glow" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation="3.5" result="b" />
-            <feMerge>
-              <feMergeNode in="b" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
-        <path d={area} fill="url(#pm-heat-fill)" />
+        <path d={area} fill="currentColor" opacity="0.12" />
         <path
           d={path}
           fill="none"
-          stroke="url(#pm-heat-line)"
-          strokeWidth="3"
+          stroke="currentColor"
+          strokeWidth="2.5"
           strokeLinejoin="round"
           strokeLinecap="round"
-          filter="url(#pm-glow)"
         />
         {peaks.map((p, i) => {
           const cx = px(p.t);
           const cy = H - 22 - ((p.count || 0) / max) * (H - 40);
           return (
             <g key={i}>
-              <circle cx={cx} cy={cy} r="5" fill="#ec4899" stroke="#fff" strokeWidth="1.5" />
-              <text x={cx} y={Math.max(12, cy - 10)} textAnchor="middle" fontSize="11" fill="#f9a8d4" fontWeight="700">
+              <circle cx={cx} cy={cy} r="4.5" fill="currentColor" />
+              <text x={cx} y={Math.max(12, cy - 10)} textAnchor="middle" fontSize="11" fill="currentColor" fontWeight="700">
                 {fmtClock(p.t)}
               </text>
             </g>
@@ -123,8 +106,8 @@ export function Heatmap({
         ))}
       </svg>
       {peaks.length > 0 && (
-        <p className="mt-1 text-center text-xs font-semibold text-pink-600 dark:text-pink-300" role="status">
-          🔥 {peaks[0].label}
+        <p className="mt-1 text-center text-xs font-semibold text-foreground" role="status">
+          Peak moment — {peaks[0].label}
         </p>
       )}
     </div>

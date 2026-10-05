@@ -230,7 +230,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background text-muted-foreground">
         <div className="flex flex-col items-center gap-3">
-          <Spinner className="size-8 text-violet-500" />
+          <Spinner className="size-8" />
           <p className="text-sm">Loading party replay…</p>
         </div>
       </div>
@@ -246,7 +246,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
         </p>
         <Link
           href="/"
-          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-md bg-violet-600 px-5 text-sm font-semibold text-white hover:bg-violet-500"
+          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg bg-foreground px-5 text-sm font-medium text-background hover:bg-foreground/90"
         >
           Back to PeerMates
         </Link>
@@ -261,20 +261,20 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
           href="/"
           className="flex min-h-11 items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground shrink-0"
         >
-          <span className="text-violet-500">←</span> PeerMates
+          <span aria-hidden>←</span> PeerMates
         </Link>
         <p className="min-w-0 flex-1 truncate px-3 text-center text-xs sm:text-sm font-bold">
-          🎬 {meta.title} <span className="text-muted-foreground font-medium">· replay</span>
+          {meta.title} <span className="text-muted-foreground font-medium">· replay</span>
         </p>
-        <span className="shrink-0 rounded-full border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-600 dark:text-violet-300">
-          📼 Replay
+        <span className="shrink-0 rounded-full border border-border bg-muted px-2.5 py-1 text-[11px] font-medium text-muted-foreground">
+          Replay
         </span>
       </header>
 
       <main className="flex flex-1 flex-col gap-3 sm:gap-4 p-3 sm:p-6 max-w-[1100px] mx-auto w-full">
         {/* Crowd banner */}
-        <div className="flex items-center justify-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-3 py-2.5 text-xs text-violet-700 dark:text-violet-300 text-center" role="status">
-          <span>🎉 Replaying the party from {partyDay} · {meta.viewerCount} {meta.viewerCount === 1 ? "person" : "people"}</span>
+        <div className="flex items-center justify-center gap-2 rounded-lg border border-border bg-muted px-3 py-2.5 text-xs text-foreground text-center" role="status">
+          <span>Replaying the party from {partyDay} · {meta.viewerCount} {meta.viewerCount === 1 ? "person" : "people"}</span>
         </div>
 
         {/* Player + overlay */}
@@ -313,13 +313,13 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
         </div>
 
         {needsFile && localUrl && fileMatch === false && (
-          <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status">
-            ⚠️ This file looks different from the party's copy — timestamps still line up, but scenes may differ.
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status">
+            This file looks different from the party&apos;s copy — timestamps still line up, but scenes may differ.
           </p>
         )}
 
         {/* Heatmap scrubber */}
-        <Card className="border-border bg-card/60 p-3 rounded-xl space-y-1">
+        <Card className="border-border bg-card p-3 rounded-lg space-y-1">
           <ReplayScrubber
             buckets={meta.buckets}
             peaks={meta.peaks}
@@ -342,7 +342,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
         </Card>
 
         {/* Mode toggle */}
-        <div className="grid grid-cols-3 gap-1 p-1 bg-muted/60 rounded-xl border border-border" role="group" aria-label="Replay overlay mode">
+        <div className="grid grid-cols-3 gap-1 p-1 bg-muted/60 rounded-lg border border-border" role="group" aria-label="Replay overlay mode">
           {MODES.map((m) => (
             <button
               key={m.id}
@@ -366,9 +366,9 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
         )}
 
         {/* Layered reactions */}
-        <Card className="border-border bg-card/60 p-3 rounded-xl space-y-2">
+        <Card className="border-border bg-card p-3 rounded-lg space-y-2">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            ➕ Add your reaction on top
+            Add your reaction on top
           </h3>
           <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="React to this moment">
             {ALLOWED_REACTIONS.map((emoji) => (
@@ -378,7 +378,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
                 onClick={() => void sendLayeredReaction(emoji)}
                 disabled={reacting}
                 aria-label={`React ${emoji} at ${fmtClock(currentTime)}`}
-                className="flex min-h-11 items-center justify-center rounded-xl border border-border text-xl cursor-pointer hover:bg-muted disabled:opacity-50"
+                className="flex min-h-11 items-center justify-center rounded-lg border border-border text-xl cursor-pointer hover:bg-muted disabled:opacity-50"
               >
                 {emoji}
               </button>
@@ -390,26 +390,26 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
         </Card>
 
         {/* Heatmap + highlights */}
-        <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl space-y-2">
+        <Card className="border-border bg-card p-3 sm:p-4 rounded-lg space-y-2">
           <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            🔥 Reaction heatmap
+            Reaction heatmap
           </h3>
           <Heatmap buckets={meta.buckets} peaks={meta.peaks} durationSec={totalDuration} onSeek={seek} />
           <ul className="space-y-1.5 text-xs text-muted-foreground">
             {h.laugh && h.laugh.count > 0 && (
-              <li>😂 Biggest laugh — <button type="button" onClick={() => seek(h.laugh!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.laugh.t)}</button> ({h.laugh.count} laughs)</li>
+              <li>Biggest laugh — <button type="button" onClick={() => seek(h.laugh!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.laugh.t)}</button> ({h.laugh.count} laughs)</li>
             )}
             {h.shock && h.shock.count > 0 && (
-              <li>😱 Biggest shock — <button type="button" onClick={() => seek(h.shock!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.shock.t)}</button></li>
+              <li>Biggest shock — <button type="button" onClick={() => seek(h.shock!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.shock.t)}</button></li>
             )}
             {h.topVoice && (
-              <li>🎙 Funniest voice note — {h.topVoice.userName} at <button type="button" onClick={() => seek(h.topVoice!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.topVoice.t)}</button></li>
+              <li>Top voice note — {h.topVoice.userName} at <button type="button" onClick={() => seek(h.topVoice!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.topVoice.t)}</button></li>
             )}
             {h.chatter && (
-              <li>💬 Most active chatter — <strong className="text-foreground">{h.chatter.name}</strong> ({h.chatter.count} messages)</li>
+              <li>Most active chatter — <strong className="text-foreground">{h.chatter.name}</strong> ({h.chatter.count} messages)</li>
             )}
             {h.firstReactor && (
-              <li>⚡ First to react — <strong className="text-foreground">{h.firstReactor.name}</strong> at {fmtClock(h.firstReactor.t)}</li>
+              <li>First to react — <strong className="text-foreground">{h.firstReactor.name}</strong> at {fmtClock(h.firstReactor.t)}</li>
             )}
           </ul>
         </Card>
@@ -419,9 +419,9 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
 
         {/* My moments */}
         {myMoments.length > 0 && (
-          <Card className="border-border bg-card/60 p-3 rounded-xl space-y-2">
+          <Card className="border-border bg-card p-3 rounded-lg space-y-2">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              🧹 Your moments in this replay
+              Your moments in this replay
             </h3>
             <ul className="space-y-1.5">
               {myMoments.map((e) => (
@@ -449,26 +449,26 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
         )}
 
         {/* Join CTA + rights */}
-        <Card className="border-violet-500/30 bg-violet-500/5 p-4 rounded-xl text-center space-y-3">
-          <p className="text-sm font-bold text-foreground">Want the live thing?</p>
+        <Card className="border-border bg-card p-4 rounded-lg text-center space-y-3">
+          <p className="text-sm font-semibold text-foreground">Want the live thing?</p>
           <div className="flex flex-col min-[420px]:flex-row gap-2">
             {liveRoom && (
               <Link
                 href={`/room/${liveRoom}`}
-                className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-md bg-violet-600 px-4 text-xs font-bold text-white hover:bg-violet-500"
+                className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-lg bg-foreground px-4 text-xs font-medium text-background hover:bg-foreground/90"
               >
-                🎬 Join the live room
+                Join the live room
               </Link>
             )}
             <Link
               href="/"
-              className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-md border border-border bg-background px-4 text-xs font-semibold hover:bg-muted"
+              className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-lg border border-border bg-background px-4 text-xs font-medium hover:bg-muted"
             >
-              ＋ Start your own party
+              Start your own party
             </Link>
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            ⚖️ Replays keep timestamps, chat text, and emoji only — never video
+            Replays keep timestamps, chat text, and emoji only — never video
             files. {eventsLoading ? "Loading moments…" : `${events.length} moments in this replay.`}
           </p>
         </Card>

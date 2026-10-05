@@ -22,6 +22,7 @@ import {
   type LocalFingerprint,
 } from "@/lib/video/localfile";
 import { ChatPanel } from "@/components/chat/ChatPanel";
+import { AnalyticsPanel } from "@/components/room/AnalyticsPanel";
 import { SyncStatusIndicator } from "@/components/room/SyncStatusIndicator";
 import { useWatchSync } from "@/hooks/useWatchSync";
 import { Button } from "@/components/ui/button";
@@ -93,9 +94,9 @@ export default function RoomPage({
   const [localMatch, setLocalMatch] = useState<boolean | null>(null);
   const [playBlocked, setPlayBlocked] = useState(false);
   // Mobile tab state for narrow viewports (< lg)
-  const [mobileTab, setMobileTab] = useState<"video-info" | "chat">("video-info");
+  const [mobileTab, setMobileTab] = useState<"video-info" | "chat" | "analytics">("video-info");
   // Large-screen sidebar tabs: chat stays hidden until the user opens it.
-  const [deskTab, setDeskTab] = useState<"info" | "chat">("info");
+  const [deskTab, setDeskTab] = useState<"info" | "chat" | "analytics">("info");
   // Mobile navigation drawer (Claude/Codex-style slide-in)
   const [navOpen, setNavOpen] = useState(false);
 
@@ -940,6 +941,16 @@ export default function RoomPage({
               >
                 Live chat ({visibleMessageCount})
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setNavOpen(false);
+                  setMobileTab("analytics");
+                }}
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted text-left"
+              >
+                Analytics
+              </button>
               <div className="mt-2 border-t border-border pt-3 px-3 flex flex-col gap-2">
                 <span className="font-mono text-xs text-muted-foreground">#{slug}</span>
                 <SyncStatusIndicator
@@ -1077,6 +1088,17 @@ export default function RoomPage({
             </button>
             <button
               type="button"
+              onClick={() => setMobileTab("analytics")}
+              className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                mobileTab === "analytics"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Analytics
+            </button>
+            <button
+              type="button"
               onClick={() => setMobileTab("chat")}
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "chat"
@@ -1089,10 +1111,10 @@ export default function RoomPage({
           </div>
         </div>
 
-        {/* Right Sidebar (lg+): tabbed Watching & Info / Chat with its own
-            fixed height — internal scroll only, page and video stay put.
-            On mobile this wrapper dissolves (display:contents) so both
-            panels keep flowing naturally under the mobile tab switcher. */}
+        {/* Right Sidebar (lg+): tabbed Watching & Info / Analytics / Chat
+            with its own fixed height — internal scroll only, page and video
+            stay put. On mobile this wrapper dissolves (display:contents) so
+            all panels keep flowing naturally under the mobile tab switcher. */}
         <div className="room-sidebar contents lg:flex lg:flex-col lg:w-[340px] xl:w-[380px] lg:shrink-0 lg:gap-3">
           {/* Desktop Tab Switcher (large screens only) */}
           <div className="hidden lg:flex items-center justify-center w-full p-1 bg-muted rounded-lg border border-border shrink-0">
@@ -1107,6 +1129,18 @@ export default function RoomPage({
               }`}
             >
               Watching &amp; Info ({members.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setDeskTab("analytics")}
+              aria-pressed={deskTab === "analytics"}
+              className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                deskTab === "analytics"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Analytics
             </button>
             <button
               type="button"
@@ -1320,6 +1354,20 @@ export default function RoomPage({
               detectedRegion={detectedRegion}
               onRegionChange={meter.setRegion}
               onResetMeter={meter.reset}
+            />
+          </div>
+
+          {/* Analytics Panel — modern bar charts of room interaction.
+              Follows the same mobile/desktop tab rules as chat. */}
+          <div
+            className={`room-chat-dock w-full shrink-0 min-h-0 flex-col ${
+              mobileTab === "analytics" ? "flex" : "hidden"
+            } ${deskTab === "analytics" ? "lg:flex" : "lg:hidden"} lg:w-full lg:flex-1`}
+          >
+            <AnalyticsPanel
+              messages={messages}
+              members={members}
+              hostId={hostId}
             />
           </div>
 

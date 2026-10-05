@@ -42,11 +42,11 @@ export function ReplayFileGate({
   };
 
   return (
-    <Card className="border-border bg-card/60 p-4 sm:p-5 rounded-2xl space-y-3 text-center">
-      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-600/15 border border-violet-500/30 text-2xl" aria-hidden>
+    <Card className="border-border bg-card p-4 sm:p-5 rounded-lg space-y-3 text-center">
+      <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-muted border border-border text-2xl" aria-hidden>
         📁
       </div>
-      <h3 className="text-base font-bold text-foreground">Bring your own copy</h3>
+      <h3 className="text-base font-semibold text-foreground">Bring your own copy</h3>
       <p className="text-xs text-muted-foreground leading-relaxed">
         {expected
           ? "This party used a local movie file (never uploaded). Pick the same file on this device — its fingerprint is checked automatically."
@@ -67,7 +67,7 @@ export function ReplayFileGate({
       />
       {(pick.phase === "preflight" || pick.phase === "fingerprint") && (
         <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground" role="status">
-          <Spinner className="text-violet-500" /> Checking your file…
+          <Spinner /> Checking your file…
         </p>
       )}
       {pick.phase === "error" && (
@@ -80,15 +80,15 @@ export function ReplayFileGate({
           onClick={() => inputRef.current?.click()}
           className="h-12 min-h-11 flex-1 text-xs cursor-pointer"
         >
-          📂 Choose movie file…
+          Choose movie file…
         </Button>
         <Button
           type="button"
           onClick={confirm}
           disabled={pick.phase !== "ready" || !pick.file}
-          className="h-12 min-h-11 flex-1 bg-violet-600 hover:bg-violet-500 text-white text-xs font-bold cursor-pointer disabled:opacity-50"
+          className="h-12 min-h-11 flex-1 text-xs cursor-pointer disabled:opacity-50"
         >
-          ▶ Start replay
+          Start replay
         </Button>
       </div>
       <p className="text-[11px] text-muted-foreground">{RIGHTS_NOTICE}</p>

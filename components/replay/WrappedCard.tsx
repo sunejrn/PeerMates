@@ -34,17 +34,11 @@ export function HeatSpark({ buckets, peaks }: { buckets: number[]; peaks: Wrappe
   });
   const peakSet = new Set(peaks.map((p) => Math.floor(p.t / 10)));
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-14 w-full" role="img" aria-label="Reaction heatmap">
-      <defs>
-        <linearGradient id="pm-heat" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#8b5cf6" />
-          <stop offset="100%" stopColor="#ec4899" />
-        </linearGradient>
-      </defs>
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-14 w-full text-foreground" role="img" aria-label="Reaction heatmap">
       <polyline
         points={pts.join(" ")}
         fill="none"
-        stroke="url(#pm-heat)"
+        stroke="currentColor"
         strokeWidth="2.5"
         strokeLinejoin="round"
         strokeLinecap="round"
@@ -56,7 +50,7 @@ export function HeatSpark({ buckets, peaks }: { buckets: number[]; peaks: Wrappe
             cx={buckets.length <= 1 ? W / 2 : (i / (buckets.length - 1)) * W}
             cy={H - 6 - (c / max) * (H - 14)}
             r="3.5"
-            fill="#ec4899"
+            fill="currentColor"
           />
         ) : null
       )}

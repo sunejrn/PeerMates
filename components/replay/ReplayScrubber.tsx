@@ -54,18 +54,18 @@ export function ReplayScrubber({
         onPointerMove={(e) => {
           if (e.buttons > 0) seekFromClientX(e.clientX);
         }}
-        className="relative flex h-12 w-full cursor-pointer touch-none items-end gap-[2px] rounded-xl border border-border/60 bg-muted/30 px-2 pb-2 pt-1"
+        className="relative flex h-12 w-full cursor-pointer touch-none items-end gap-[2px] rounded-lg border border-border/60 bg-muted/30 px-2 pb-2 pt-1"
       >
         {buckets.map((c, i) => (
           <span
             key={i}
-            className="min-w-0 flex-1 rounded-sm bg-gradient-to-t from-violet-600/70 to-pink-500/70"
-            style={{ height: `${Math.max(8, (c / max) * 100)}%`, opacity: 0.35 + 0.65 * (c / max) }}
+            className="min-w-0 flex-1 rounded-sm bg-foreground"
+            style={{ height: `${Math.max(8, (c / max) * 100)}%`, opacity: 0.2 + 0.8 * (c / max) }}
           />
         ))}
         {/* Progress + playhead */}
         <span
-          className="pointer-events-none absolute inset-y-0 left-0 rounded-xl bg-white/10"
+          className="pointer-events-none absolute inset-y-0 left-0 rounded-lg bg-foreground/10"
           style={{ width: `${Math.min(100, (currentTime / total) * 100)}%` }}
           aria-hidden
         />
@@ -73,7 +73,7 @@ export function ReplayScrubber({
           <span
             key={i}
             title={p.label}
-            className="absolute top-1 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-pink-500 ring-2 ring-white/70"
+            className="absolute top-1 h-2.5 w-2.5 -translate-x-1/2 rounded-full bg-foreground ring-2 ring-background"
             style={{ left: `${(p.t / total) * 100}%` }}
             aria-hidden
           />

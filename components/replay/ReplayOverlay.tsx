@@ -136,9 +136,9 @@ export function ReplayOverlay({ events, currentTime, mode, dataSaver = false, on
           {bubbles.map((b) => (
             <div
               key={b.id}
-              className="pointer-events-auto max-w-[85%] rounded-2xl rounded-bl-md border border-white/10 bg-black/70 px-3 py-1.5 text-xs text-white backdrop-blur-sm"
+              className="pointer-events-auto max-w-[85%] rounded-lg border border-white/10 bg-black/70 px-3 py-1.5 text-xs text-white backdrop-blur-sm"
             >
-              <span className="mr-1.5 font-bold text-violet-300">
+              <span className="mr-1.5 font-bold text-zinc-100">
                 {(b.userName || "Guest").slice(0, 16)}
               </span>
               {b.type === "pin" && <span aria-hidden>📌 </span>}
