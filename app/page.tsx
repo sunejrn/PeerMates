@@ -52,6 +52,9 @@ export default function Home() {
             </span>
           </h1>
 
+          {/* the frame */}
+
+{/* text */}
           <p className="mx-auto max-w-xl text-sm sm:text-base lg:text-lg leading-relaxed">
             Synchronized YouTube, MP4, and HLS streaming with live presence, chat,
             and automated host migration.
