@@ -267,6 +267,16 @@
   }
 }
 
+/* Accessibility: reduce motion kills animations/transitions globally. */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 /* WhatsApp-style typing dots */
 .typing-dot {
   width: 7px;

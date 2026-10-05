@@ -70,6 +70,8 @@ interface ChatPanelProps {
   canControl?: boolean;
   onCaptureMoment?: () => number;
   onPinJump?: (seconds: number) => void;
+  /** Chat message text size (Settings > Chat). Default medium. */
+  fontSize?: "s" | "m" | "l";
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
@@ -328,6 +330,7 @@ export function ChatPanel({
   canControl = false,
   onCaptureMoment,
   onPinJump,
+  fontSize = "m",
 }: ChatPanelProps) {
   const [inputText, setInputText] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -726,7 +729,9 @@ export function ChatPanel({
                         setMenuFor(msg.id);
                       }
                     }}
-                    className={`relative max-w-[85%] rounded-lg px-3.5 py-2 text-xs leading-relaxed select-none ${
+                    className={`relative max-w-[85%] rounded-lg px-3.5 py-2 leading-relaxed select-none ${
+                      fontSize === "s" ? "text-[11px]" : fontSize === "l" ? "text-sm" : "text-xs"
+                    } ${
                       flashId === msg.id ? "ring-1 ring-foreground" : ""
                     } ${
                       isMe

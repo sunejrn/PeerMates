@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 export type ThemeChoice = "system" | "light" | "dark";
+export type ChatFontSize = "s" | "m" | "l";
 
 export interface AppSettings {
   /** Auto-delete rooms from All Rooms after 30 days. Default ON. */
@@ -18,6 +19,22 @@ export interface AppSettings {
   dataSaverDefault: boolean;
   /** Autoplay attempt on join (still subject to browser policy). Default ON. */
   autoplayDefault: boolean;
+  /** Start rooms with audio-only mode on. Default OFF. */
+  audioOnlyDefault: boolean;
+  /** Show presence avatars in the Watching list. Default ON. */
+  showAvatars: boolean;
+  /** WhatsApp-style "X is typing…" bubbles in chat. Default ON. */
+  typingIndicators: boolean;
+  /** Soft chime when a new message arrives from someone else. Default OFF. */
+  messageSounds: boolean;
+  /** Ask for confirmation before leaving a room. Default OFF. */
+  confirmBeforeLeave: boolean;
+  /** Minimize animations and transitions. Default OFF. */
+  reduceMotion: boolean;
+  /** Chat message text size. Default medium. */
+  chatFontSize: ChatFontSize;
+  /** Data-cost estimate region ("" = auto-detect from locale). */
+  priceRegion: string;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -27,7 +44,17 @@ export const DEFAULT_SETTINGS: AppSettings = {
   liveChatEnabled: true,
   dataSaverDefault: false,
   autoplayDefault: true,
+  audioOnlyDefault: false,
+  showAvatars: true,
+  typingIndicators: true,
+  messageSounds: false,
+  confirmBeforeLeave: false,
+  reduceMotion: false,
+  chatFontSize: "m",
+  priceRegion: "",
 };
+
+export const SETTINGS_EVENT = "peermates:settings-changed";
 
 const KEY = "peermates:settings:v1";
 
@@ -47,6 +74,16 @@ function readSettings(): AppSettings {
       liveChatEnabled: parsed.liveChatEnabled !== false,
       dataSaverDefault: parsed.dataSaverDefault === true,
       autoplayDefault: parsed.autoplayDefault !== false,
+      audioOnlyDefault: parsed.audioOnlyDefault === true,
+      showAvatars: parsed.showAvatars !== false,
+      typingIndicators: parsed.typingIndicators !== false,
+      messageSounds: parsed.messageSounds === true,
+      confirmBeforeLeave: parsed.confirmBeforeLeave === true,
+      reduceMotion: parsed.reduceMotion === true,
+      chatFontSize:
+        parsed.chatFontSize === "s" || parsed.chatFontSize === "l" ? parsed.chatFontSize : "m",
+      priceRegion:
+        typeof parsed.priceRegion === "string" ? parsed.priceRegion.slice(0, 8) : "",
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -74,6 +111,15 @@ function applyTheme(theme: ThemeChoice): void {
   }
 }
 
+function applyReduceMotion(on: boolean): void {
+  if (typeof document === "undefined") return;
+  try {
+    document.documentElement.classList.toggle("reduce-motion", on);
+  } catch {
+    // ignore
+  }
+}
+
 export function useAppSettings() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
@@ -86,7 +132,8 @@ export function useAppSettings() {
   useEffect(() => {
     if (!loaded) return;
     applyTheme(settings.theme);
-  }, [settings.theme, loaded]);
+    applyReduceMotion(settings.reduceMotion);
+  }, [settings.theme, settings.reduceMotion, loaded]);
 
   // Follow OS changes while on "system".
   useEffect(() => {
@@ -105,6 +152,11 @@ export function useAppSettings() {
       } catch {
         // storage blocked — keep in-memory
       }
+      try {
+        window.dispatchEvent(new Event(SETTINGS_EVENT));
+      } catch {
+        // ignore
+      }
       return next;
     });
   }, []);
@@ -113,6 +165,11 @@ export function useAppSettings() {
     setSettings(DEFAULT_SETTINGS);
     try {
       window.localStorage.setItem(KEY, JSON.stringify(DEFAULT_SETTINGS));
+    } catch {
+      // ignore
+    }
+    try {
+      window.dispatchEvent(new Event(SETTINGS_EVENT));
     } catch {
       // ignore
     }

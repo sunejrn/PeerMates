@@ -40,6 +40,36 @@ import { useAppSettings } from "@/hooks/useAppSettings";
 import { toast } from "sonner";
 import Link from "next/link";
 
+/** Soft two-tone chime for incoming chat messages (Settings > Chat). */
+function playMessageChime(): void {
+  if (typeof window === "undefined") return;
+  const Ctor =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext })
+      .webkitAudioContext;
+  if (!Ctor) return;
+  const ctx = new Ctor();
+  const play = (freq: number, at: number) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    const t = ctx.currentTime + at;
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(0.12, t + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    osc.start(t);
+    osc.stop(t + 0.25);
+  };
+  play(660, 0);
+  play(880, 0.12);
+  window.setTimeout(() => {
+    ctx.close().catch(() => {});
+  }, 800);
+}
+
 export default function RoomPage({
   params,
 }: {
@@ -495,14 +525,70 @@ export default function RoomPage({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [appSettings.dataSaverDefault]);
+
+  // Settings default: start audio-only when chosen and never set explicitly.
+  useEffect(() => {
+    if (!appSettings.audioOnlyDefault) return;
+    try {
+      if (window.localStorage.getItem("syncme:audio-only") === null) {
+        setAudioOnly(true);
+      }
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appSettings.audioOnlyDefault]);
+
+  // Settings: confirm before leaving the room (extra safety for hosts).
+  useEffect(() => {
+    if (!appSettings.confirmBeforeLeave) return;
+    const onBefore = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBefore);
+    return () => window.removeEventListener("beforeunload", onBefore);
+  }, [appSettings.confirmBeforeLeave]);
+
+  // Settings: soft chime when a new message arrives from someone else.
+  // History loaded on join never chimes — only genuinely new messages.
+  const seenMsgRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const latest = messages[messages.length - 1];
+    if (seenMsgRef.current === null) {
+      seenMsgRef.current = latest.id;
+      return;
+    }
+    if (latest.id !== seenMsgRef.current) {
+      seenMsgRef.current = latest.id;
+      if (
+        appSettings.messageSounds &&
+        !latest.deleted &&
+        latest.user.id !== effectiveId
+      ) {
+        try {
+          playMessageChime();
+        } catch {
+          // audio blocked/unavailable — chat still works
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages, appSettings.messageSounds]);
   const meter = useDataMeter();
   const [detectedRegion, setDetectedRegion] = useState<string | null>(null);
 
   // Auto-detect billing region from locale once (manual override wins).
+  // A Settings > cost-region choice wins over locale detection.
   // Mount-time external read; matches the existing fetch-on-mount effects
   // in this file.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
+    if (appSettings.priceRegion) {
+      setDetectedRegion(null);
+      meter.setRegion(appSettings.priceRegion);
+      return;
+    }
     const code =
       typeof navigator !== "undefined"
         ? regionFromLocale(navigator.language)
@@ -510,7 +596,7 @@ export default function RoomPage({
     setDetectedRegion(code);
     if (code) meter.setRegion(code);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [appSettings.priceRegion]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleFragmentBytes = useCallback(
@@ -1051,7 +1137,7 @@ export default function RoomPage({
                 members={members}
                 currentUserId={effectiveId}
                 hostId={hostId}
-                noAvatars={dataSaver}
+                noAvatars={dataSaver || !appSettings.showAvatars}
               />
             </Card>
 
@@ -1125,7 +1211,7 @@ export default function RoomPage({
               mutedIds={mutedIds}
               controlRequests={controlRequests}
               showFileMatch={isLocalRoom}
-              noAvatars={dataSaver}
+              noAvatars={dataSaver || !appSettings.showAvatars}
               onPromote={promoteMember}
               onDemote={demoteMember}
               onKick={kickMember}
@@ -1256,8 +1342,9 @@ export default function RoomPage({
             userMuted={amMuted}
             isPrivileged={canControl}
             dataSaver={dataSaver}
-            typingUsers={typingUsers}
+            typingUsers={appSettings.typingIndicators ? typingUsers : []}
             onTyping={sendTyping}
+            fontSize={appSettings.chatFontSize}
             canDeleteAny={canControl}
             onReact={reactCaptured}
             onDelete={deleteCaptured}
