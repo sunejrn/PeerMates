@@ -52,7 +52,7 @@ export function SubtitlesPanel({
   };
 
   return (
-    <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-sm space-y-3">
+    <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-none space-y-3">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           💬 Subtitles &amp; AI

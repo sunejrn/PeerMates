@@ -37,6 +37,26 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Mobile nav (small screens): same destinations as the desktop navbar,
+          always reachable whether signed in or not. */}
+      <nav
+        className="flex sm:hidden items-center gap-1 border-b border-border/80 bg-background/80 px-4 py-1 text-sm backdrop-blur-md"
+        aria-label="Mobile"
+      >
+        <Link
+          href="/rooms"
+          className="flex min-h-11 flex-1 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
+        >
+          All Rooms
+        </Link>
+        <Link
+          href="/settings"
+          className="flex min-h-11 flex-1 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
+        >
+          Settings
+        </Link>
+      </nav>
+
       {/* Hero & Lobby Section */}
       <main className="flex flex-1 flex-col items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-16 text-center max-w-7xl mx-auto w-full relative overflow-hidden">
 

@@ -68,7 +68,7 @@ export function AuthButton() {
         onClick={() => handleSocialSignIn("google")}
         disabled={pendingProvider !== null}
         aria-label="Sign in with Google"
-        className="h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium text-xs sm:text-sm cursor-pointer shadow-sm px-3"
+        className="h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium text-xs sm:text-sm cursor-pointer shadow-none px-3"
       >
         <svg
           className="h-4 w-4 shrink-0"
@@ -102,7 +102,7 @@ export function AuthButton() {
         disabled={pendingProvider !== null}
         aria-label="Sign in with GitHub"
         title="Sign in with GitHub"
-        className="h-11 w-11 bg-foreground text-background hover:bg-foreground/90 cursor-pointer shadow-sm px-0"
+        className="h-11 w-11 bg-foreground text-background hover:bg-foreground/90 cursor-pointer shadow-none px-0"
       >
         <svg
           className="h-4 w-4 fill-current shrink-0"

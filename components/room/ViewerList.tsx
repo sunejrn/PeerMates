@@ -322,7 +322,7 @@ export function ViewerList({
                   </button>
 
                   {expanded && showActions && (
-                    <div className="absolute top-full left-0 right-0 z-20 flex items-center gap-1.5 border-y border-border bg-card px-3 sm:px-4 py-2 shadow-xl">
+                    <div className="absolute top-full left-0 right-0 z-20 flex items-center gap-1.5 border-y border-border bg-card px-3 sm:px-4 py-2 shadow-none">
                       {isHost && m.role === "viewer" && (
                         <Button
                           size="sm"

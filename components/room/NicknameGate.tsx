@@ -40,7 +40,7 @@ export function NicknameGate({
 
   return (
     <main className="flex flex-1 items-center justify-center p-4 sm:p-6">
-      <Card className="w-full max-w-md border-border bg-card/75 p-6 sm:p-8 text-center backdrop-blur-xl shadow-2xl rounded-2xl space-y-5">
+      <Card className="w-full max-w-md border-border bg-card/75 p-6 sm:p-8 text-center backdrop-blur-xl shadow-none rounded-2xl space-y-5">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-600/15 border border-emerald-500/30 text-2xl">
           <span aria-hidden>🍿</span>
         </div>

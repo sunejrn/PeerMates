@@ -123,7 +123,7 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
   };
 
   return (
-    <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-sm space-y-3">
+    <Card className="border-border bg-card/60 p-3 sm:p-4 rounded-xl backdrop-blur-sm shadow-none space-y-3">
       <div className="flex items-center justify-between gap-2">
         <h3 className="text-xs font-semibold tracking-wider text-muted-foreground">
           Send file to viewers

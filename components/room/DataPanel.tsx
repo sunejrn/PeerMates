@@ -49,7 +49,7 @@ function Switch({
         }`}
       >
         <span
-          className={`absolute top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-white shadow transition-all ${
+          className={`absolute top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-white shadow-none transition-all ${
             checked ? "left-[calc(100%-2.25rem)]" : "left-1"
           }`}
         />

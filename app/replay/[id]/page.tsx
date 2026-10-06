@@ -351,7 +351,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
               aria-pressed={mode === m.id}
               className={`min-h-11 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 mode === m.id
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-none"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >

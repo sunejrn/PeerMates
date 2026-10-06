@@ -80,6 +80,26 @@ host-controlled playback for up to ~500 viewers per room.
   where late friends watch with the crowd, react on top, and delete their own
   moments
 
+**Live analytics**
+- Room Analytics tab (mobile + desktop): message activity over the session,
+  top chatters, reaction breakdown, and media/moment counts — pure CSS/SVG
+  bars, no chart library
+
+**Settings & personalization (`/settings`)**
+- Appearance: follow system, or force light / dark (applied instantly,
+  persisted on-device)
+- Chat: typing indicators, message sounds, message text size, presence
+  avatars, global live-chat visibility
+- Playback defaults: autoplay, audio-only, Data Saver, data-cost region
+- Saved nickname (pre-fills the guest join gate), room history, data
+  export / clear, and in-app bug reporting
+
+**Flat Vercel-style UI**
+- No shadows anywhere — cards, popovers, dialogs, and buttons render with
+  neutral borders only
+- Monochrome notifications: a single theme-aware toast style (no per-type
+  colors)
+
 **Mobile-first**
 - 360px-first layout, 44px tap targets, safe-area insets, `dvh` units, no
   horizontal scroll; hidden-scroll chat with pinned input bar; PWA installable

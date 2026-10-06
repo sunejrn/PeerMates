@@ -234,6 +234,17 @@
   height: 0;
 }
 
+/* Flat Vercel-style surfaces: no elevation anywhere on the site.
+   Cards, popovers, toasts, tooltips, and buttons all render with borders
+   only. This guard also neutralizes library-default shadows (e.g. sonner
+   toasts, shadcn popovers) that carry their own box-shadow. */
+*, *::before, *::after {
+  box-shadow: none !important;
+}
+[class*="drop-shadow"] {
+  filter: none !important;
+}
+
 /* Sticky video: mobile + medium only. The movie stays pinned while
    info/chat scroll beneath it. Large screens use a fixed two-column
    room (video left, tabbed sidebar right), so no sticky is needed there. */

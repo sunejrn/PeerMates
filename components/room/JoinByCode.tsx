@@ -47,7 +47,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
   };
 
   return (
-    <Card className={`${compact ? "p-4 sm:p-5" : "p-5 sm:p-6"} w-full border-border bg-card/70 backdrop-blur-xl shadow-xl rounded-2xl`}>
+    <Card className={`${compact ? "p-4 sm:p-5" : "p-5 sm:p-6"} w-full border-border bg-card/70 backdrop-blur-xl shadow-none rounded-2xl`}>
       <form onSubmit={handleJoin} className="space-y-3 text-left">
         <div className="space-y-1">
           <h3 className="text-base sm:text-lg font-bold text-card-foreground flex items-center gap-2">

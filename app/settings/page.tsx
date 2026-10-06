@@ -50,7 +50,7 @@ function Toggle({
       } border border-border`}
     >
       <span
-        className={`absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow transition-all ${
+        className={`absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-none transition-all ${
           checked ? "left-[1.4rem]" : "left-1"
         }`}
       />
@@ -287,7 +287,7 @@ export default function SettingsPage() {
                           onClick={() => update({ theme: t })}
                           className={`min-h-9 rounded-lg px-3 text-xs font-medium capitalize cursor-pointer ${
                             settings.theme === t
-                              ? "bg-background text-foreground shadow-sm"
+                              ? "bg-background text-foreground shadow-none"
                               : "text-muted-foreground hover:text-foreground"
                           }`}
                         >

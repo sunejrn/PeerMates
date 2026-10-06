@@ -33,9 +33,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { InviteSheet } from "@/components/room/InviteSheet";
 import { NicknameGate } from "@/components/room/NicknameGate";
 import { SubtitlesPanel } from "@/components/room/SubtitlesPanel";
-import { MoviePicker } from "@/components/room/MoviePicker";
-import { MovieBuddy } from "@/components/room/MovieBuddy";
-import { ClassMode } from "@/components/room/ClassMode";
 import { useGuestIdentity } from "@/hooks/useGuestIdentity";
 import { useRoomSubtitles } from "@/hooks/useRoomSubtitles";
 import { useReplayCapture } from "@/hooks/useReplayCapture";
@@ -1083,7 +1080,7 @@ export default function RoomPage({
               onClick={() => setMobileTab("video-info")}
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "video-info"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-none"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -1094,7 +1091,7 @@ export default function RoomPage({
               onClick={() => setMobileTab("analytics")}
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "analytics"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-none"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -1105,7 +1102,7 @@ export default function RoomPage({
               onClick={() => setMobileTab("chat")}
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "chat"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-none"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -1127,7 +1124,7 @@ export default function RoomPage({
               aria-pressed={deskTab === "info"}
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 deskTab === "info"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-none"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -1139,7 +1136,7 @@ export default function RoomPage({
               aria-pressed={deskTab === "analytics"}
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 deskTab === "analytics"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-none"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -1151,7 +1148,7 @@ export default function RoomPage({
               aria-pressed={deskTab === "chat"}
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 deskTab === "chat"
-                  ? "bg-background text-foreground shadow-sm"
+                  ? "bg-background text-foreground shadow-none"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -1338,34 +1335,6 @@ export default function RoomPage({
             <SubtitlesPanel
               subs={subs}
               canUpload={canControl}
-              getCurrentTime={() => playerRef.current?.getCurrentTime() ?? 0}
-            />
-
-            {/* Movie Night Picker: vote for the next source (additive, never
-                touches playback until the host closes the vote) */}
-            <MoviePicker
-              slug={slug}
-              actorId={effectiveId}
-              actorName={effectiveName}
-              myImage={session?.user?.image || undefined}
-              canControl={canControl}
-              memberCount={members.length}
-            />
-
-            {/* Movie Buddy: private subtitle-grounded Q&A + share-to-chat */}
-            <MovieBuddy
-              slug={slug}
-              actorId={effectiveId}
-              getCurrentTime={() => playerRef.current?.getCurrentTime() ?? 0}
-              onShare={(text) => sendRichCaptured({ text })}
-            />
-
-            {/* Class Mode: polls/quizzes, Q&A queue, attendance, notes */}
-            <ClassMode
-              slug={slug}
-              actorId={effectiveId}
-              actorName={effectiveName}
-              canControl={canControl}
               getCurrentTime={() => playerRef.current?.getCurrentTime() ?? 0}
             />
 

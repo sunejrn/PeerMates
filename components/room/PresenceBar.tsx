@@ -75,7 +75,7 @@ export function PresenceBar({
               </TooltipTrigger>
               <TooltipContent
                 side="bottom"
-                className="border-border bg-popover text-popover-foreground text-xs shadow-md"
+                className="border-border bg-popover text-popover-foreground text-xs shadow-none"
               >
                 <div className="flex items-center gap-1.5 font-medium">
                   <span>{member.name}</span>

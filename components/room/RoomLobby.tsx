@@ -58,7 +58,6 @@ export function RoomLobby() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [sourceTab, setSourceTab] = useState<"link" | "myfiles">("link");
   const [rightsOk, setRightsOk] = useState(false);
-  const [classMode, setClassMode] = useState(false);
   const filePick = useLocalFilePick();
 
   const detection = detectVideoSource(videoUrl);
@@ -112,7 +111,6 @@ export function RoomLobby() {
         body: JSON.stringify({
           videoUrl: videoUrl.trim(),
           title: title.trim() || undefined,
-          roomMode: classMode ? "class" : undefined,
         }),
       });
 
@@ -158,7 +156,6 @@ export function RoomLobby() {
             filePick.file.name.replace(/\.[^.]+$/, "") ||
             "PeerMates Party",
           localFile: filePick.fp,
-          roomMode: classMode ? "class" : undefined,
         }),
       });
 
@@ -189,7 +186,7 @@ export function RoomLobby() {
       {/* Three cards on lg/xl with gaps; single column on mobile/medium */}
       <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-3 items-stretch justify-center gap-6 max-w-6xl mx-auto">
         {/* Form Card */}
-        <Card className="w-full border-border bg-card/70 p-5 sm:p-8 backdrop-blur-xl shadow-xl shadow-violet-950/5 dark:shadow-violet-950/20 rounded-2xl flex flex-col justify-between">
+        <Card className="w-full border-border bg-card/70 p-5 sm:p-8 backdrop-blur-xl shadow-none rounded-2xl flex flex-col justify-between">
           <div className="space-y-2 mb-6 text-left">
             <h2 className="text-xl sm:text-2xl font-bold text-card-foreground tracking-tight flex items-center gap-2">
               Start a PeerMates Party
@@ -222,7 +219,7 @@ export function RoomLobby() {
                     onClick={() => setSourceTab(t.id)}
                     className={`min-h-11 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       sourceTab === t.id
-                        ? "bg-background text-foreground shadow-sm"
+                        ? "bg-background text-foreground shadow-none"
                         : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
@@ -360,19 +357,6 @@ export function RoomLobby() {
                 </label>
               </div>
               )}
-
-              {/* Room type: Class Mode toggle (additive — default stays watch party) */}
-              <label className="flex items-center gap-2 cursor-pointer rounded-lg border border-border bg-background/60 px-3 min-h-11">
-                <input
-                  type="checkbox"
-                  checked={classMode}
-                  onChange={(e) => setClassMode(e.target.checked)}
-                  className="h-5 w-5 shrink-0 accent-violet-600"
-                />
-                <span className="text-xs font-medium">
-                  🎓 Class Mode room <span className="text-muted-foreground">(polls, Q&A, attendance)</span>
-                </span>
-              </label>
 
               {/* Presets - touch friendly min 44px tap targets */}
               <div className="space-y-2 pt-1">

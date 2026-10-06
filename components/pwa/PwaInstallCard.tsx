@@ -51,7 +51,7 @@ export function PwaInstallCard() {
   };
 
   return (
-    <Card className="w-full border-border bg-card/70 p-4 sm:p-5 backdrop-blur-xl shadow-lg rounded-2xl text-left">
+    <Card className="w-full border-border bg-card/70 p-4 sm:p-5 backdrop-blur-xl shadow-none rounded-2xl text-left">
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-bold text-foreground">

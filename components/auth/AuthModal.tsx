@@ -58,7 +58,7 @@ export function AuthModal({
           <Button
             onClick={() => handleSocialSignIn("google")}
             disabled={pendingProvider !== null}
-            className="w-full h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-md cursor-pointer"
+            className="w-full h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-none cursor-pointer"
           >
             <svg
               className="h-5 w-5 shrink-0"
@@ -89,7 +89,7 @@ export function AuthModal({
           <Button
             onClick={() => handleSocialSignIn("github")}
             disabled={pendingProvider !== null}
-            className="w-full h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-md cursor-pointer"
+            className="w-full h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-none cursor-pointer"
           >
             <svg
               className="h-5 w-5 fill-current"
