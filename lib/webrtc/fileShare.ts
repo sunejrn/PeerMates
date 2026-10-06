@@ -22,8 +22,10 @@ const ICE_SERVERS: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
 
-const SIGNAL_POLL_MS = 2000;
-export const FILE_CHUNK_BYTES = 64 * 1024;
+const SIGNAL_POLL_MS = 800;
+export const FILE_CHUNK_BYTES = 128 * 1024;
+/** Host progress callbacks are throttled to this cadence (UI stays smooth). */
+const PROGRESS_REPORT_MS = 250;
 const MAX_FILE_BYTES = 4 * 1024 * 1024 * 1024; // 4GB guard
 
 export interface FileMeta {
@@ -54,7 +56,7 @@ async function pollMailbox(slug: string, userId: string): Promise<SignalMessage[
   return Array.isArray(data.signals) ? data.signals : [];
 }
 
-function waitForBufferLow(channel: RTCDataChannel, threshold = 1024 * 1024): Promise<void> {
+function waitForBufferLow(channel: RTCDataChannel, threshold = 4 * 1024 * 1024): Promise<void> {
   if (channel.bufferedAmount <= threshold) return Promise.resolve();
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, 2000);
@@ -64,9 +66,6 @@ function waitForBufferLow(channel: RTCDataChannel, threshold = 1024 * 1024): Pro
     };
     try {
       channel.bufferedAmountLowThreshold = threshold;
-      channel.onbufferedamountlow = null;
-      const prev = channel.onbufferedamountlow;
-      void prev;
       channel.addEventListener("bufferedamountlow", onLow, { once: true });
     } catch {
       clearTimeout(timer);
@@ -173,7 +172,17 @@ export class P2PFileHostSession {
     });
 
     // Stream the file in slices — never hold the whole movie in RAM.
+    // Progress is throttled (time-based) so large files don't spam React
+    // re-renders once per chunk.
     let offset = 0;
+    let lastReport = 0;
+    const report = (force = false) => {
+      const now = Date.now();
+      if (force || now - lastReport >= PROGRESS_REPORT_MS) {
+        lastReport = now;
+        this.onProgress?.({ userId: viewerId, sentBytes: offset, size: file.size });
+      }
+    };
     channel.send(JSON.stringify({ t: "meta", ...meta }));
     while (offset < file.size) {
       if (this.stopped) throw new Error("Cancelled.");
@@ -186,8 +195,9 @@ export class P2PFileHostSession {
         throw new Error("Connection dropped mid-transfer.");
       }
       offset += buf.byteLength;
-      this.onProgress?.({ userId: viewerId, sentBytes: offset, size: file.size });
+      report();
     }
+    report(true);
     try {
       channel.send(JSON.stringify({ t: "done", size: file.size }));
     } catch {

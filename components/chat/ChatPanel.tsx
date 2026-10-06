@@ -732,7 +732,7 @@ export function ChatPanel({
                     className={`relative max-w-[85%] rounded-lg px-3.5 py-2 leading-relaxed select-none ${
                       fontSize === "s" ? "text-[11px]" : fontSize === "l" ? "text-sm" : "text-xs"
                     } ${
-                      flashId === msg.id ? "ring-1 ring-foreground" : ""
+                      flashId === msg.id ? "outline-2 outline-offset-2 outline-foreground" : ""
                     } ${
                       isMe
                         ? "bg-foreground text-background"

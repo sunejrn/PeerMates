@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { Card } from "@/components/ui/card";
 import type {
   ChatMessage,
@@ -14,12 +14,160 @@ function toMs(createdAt: string): number {
   return Number.isFinite(t) ? t : 0;
 }
 
+/** Catmull-Rom → cubic Bézier smoothing for the activity curve. */
+function smoothLinePath(pts: { x: number; y: number }[]): string {
+  if (pts.length === 0) return "";
+  if (pts.length === 1) return `M ${pts[0].x},${pts[0].y}`;
+  let d = `M ${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(0, i - 1)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(pts.length - 1, i + 2)];
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
 /**
- * Room analytics: modern monochrome bar charts of how the room is
- * interacting — message activity over time, top chatters, and reaction
- * breakdown. Pure CSS/SVG bars, no chart lib. Vercel-style: neutral
- * borders, text-only, rounded-lg.
+ * Room analytics — message activity as a smooth area curve (thin line,
+ * soft fill, peak badge), plus top chatters and reaction breakdown.
+ * Pure SVG, no chart lib. Vercel-style: neutral borders, text-only.
  */
+export function ActivityCurve({
+  activity,
+  bucketTimes,
+  peak,
+}: {
+  activity: number[];
+  bucketTimes: number[];
+  peak: number;
+}) {
+  const gradientId = useId();
+  const W = 600;
+  const H = 184;
+  const PAD_L = 8;
+  const PAD_R = 8;
+  const PAD_TOP = 28;
+  const PAD_BOTTOM = 24;
+  const plotW = W - PAD_L - PAD_R;
+  const plotH = H - PAD_TOP - PAD_BOTTOM;
+  const base = PAD_TOP + plotH;
+
+  const pts = activity.map((c, i) => ({
+    x: PAD_L + (i / Math.max(1, activity.length - 1)) * plotW,
+    y: base - (Math.max(0, c) / Math.max(1, peak)) * plotH,
+  }));
+  const line = smoothLinePath(pts);
+  const area = `${line} L ${pts[pts.length - 1].x.toFixed(1)},${base} L ${pts[0].x.toFixed(1)},${base} Z`;
+
+  const peakIndex = activity.indexOf(Math.max(...activity));
+  const peakPt = pts[Math.max(0, peakIndex)];
+  const badgeW = 38;
+  const badgeH = 18;
+  const badgeX = Math.min(
+    Math.max(peakPt.x - badgeW / 2, 2),
+    W - badgeW - 2
+  );
+  const badgeY = Math.max(2, peakPt.y - badgeH - 8);
+
+  const fmtTick = (ts: number) =>
+    new Date(ts).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  const tickIndexes = [0, 3, 6, 9, activity.length - 1];
+
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      className="mt-3 w-full"
+      role="img"
+      aria-label={`Message activity across the session, peak ${peak} per slice`}
+    >
+      <defs>
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" className="text-foreground" stopColor="currentColor" stopOpacity="0.14" />
+          <stop offset="100%" className="text-foreground" stopColor="currentColor" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+
+      {/* Dotted vertical gridlines at the labeled ticks */}
+      {tickIndexes.map((i) => {
+        const x = PAD_L + (i / Math.max(1, activity.length - 1)) * plotW;
+        return (
+          <line
+            key={i}
+            x1={x}
+            y1={PAD_TOP - 6}
+            x2={x}
+            y2={base}
+            className="stroke-border"
+            strokeWidth="1"
+            strokeDasharray="2 4"
+            opacity="0.9"
+          />
+        );
+      })}
+
+      {/* Soft area fill */}
+      <path d={area} fill={`url(#${gradientId})`} />
+
+      {/* Smooth curve */}
+      <path
+        d={line}
+        fill="none"
+        className="stroke-foreground"
+        strokeWidth="2"
+        strokeLinecap="round"
+        opacity="0.85"
+      />
+
+      {/* Peak value badge */}
+      <g>
+        <rect
+          x={badgeX}
+          y={badgeY}
+          width={badgeW}
+          height={badgeH}
+          rx="3"
+          className="fill-foreground"
+        />
+        <text
+          x={badgeX + badgeW / 2}
+          y={badgeY + 13}
+          textAnchor="middle"
+          fontSize="11"
+          fontWeight="600"
+          className="fill-background tabular-nums"
+        >
+          {peak}
+        </text>
+      </g>
+
+      {/* Time labels */}
+      {tickIndexes.map((i) => {
+        const x = PAD_L + (i / Math.max(1, activity.length - 1)) * plotW;
+        return (
+          <text
+            key={i}
+            x={x}
+            y={H - 8}
+            textAnchor="middle"
+            fontSize="10"
+            className="fill-muted-foreground"
+          >
+            {fmtTick(bucketTimes[i] ?? Date.now())}
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
 export function AnalyticsPanel({
   messages,
   members,
@@ -54,9 +202,11 @@ export function AnalyticsPanel({
       }
     }
 
-    // Activity over the session span (12 slices).
+    // Activity over the session span (12 slices) + per-slice timestamps
+    // for the curve's time labels.
     const times = visible.map((m) => toMs(m.createdAt)).filter((t) => t > 0);
     const activity: number[] = new Array(BUCKETS).fill(0);
+    let bucketTimes: number[] = new Array(BUCKETS).fill(0);
     let spanLabel: string | null = null;
     if (times.length > 0) {
       const min = Math.min(...times);
@@ -69,6 +219,7 @@ export function AnalyticsPanel({
         );
         activity[i] += 1;
       }
+      bucketTimes = activity.map((_, i) => min + ((i + 0.5) / BUCKETS) * span);
       const fmt = (ts: number) =>
         new Date(ts).toLocaleTimeString([], {
           hour: "2-digit",
@@ -93,6 +244,7 @@ export function AnalyticsPanel({
       media,
       members: members.length,
       activity,
+      bucketTimes,
       spanLabel,
       topChatters,
       topEmoji,
@@ -139,31 +291,15 @@ export function AnalyticsPanel({
         </div>
         {stats.totalMessages === 0 ? (
           <p className="py-6 text-center text-xs text-muted-foreground">
-            No activity yet — say hello and watch the bars light up.
+            No activity yet — say hello and watch the curve move.
           </p>
         ) : (
           <>
-            <div
-              className="mt-3 flex h-24 items-end gap-1"
-              role="img"
-              aria-label={`Message activity across the session, peak ${stats.peak} per slice`}
-            >
-              {stats.activity.map((c, i) => (
-                <div
-                  key={i}
-                  title={`${c} message${c === 1 ? "" : "s"}`}
-                  className="flex min-w-0 flex-1 items-end self-stretch"
-                >
-                  <div
-                    className="w-full rounded-sm bg-foreground"
-                    style={{
-                      height: `${Math.max(6, (c / stats.peak) * 100)}%`,
-                      opacity: c === 0 ? 0.12 : 0.35 + 0.65 * (c / stats.peak),
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
+            <ActivityCurve
+              activity={stats.activity}
+              bucketTimes={stats.bucketTimes}
+              peak={stats.peak}
+            />
             <div className="mt-2 border-t border-border pt-1.5 font-mono text-[10px] text-muted-foreground">
               peak {stats.peak}/slice
               {stats.moments > 0 ? ` · ${stats.moments} pinned moment${stats.moments === 1 ? "" : "s"}` : ""}

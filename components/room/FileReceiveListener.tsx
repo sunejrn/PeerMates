@@ -54,7 +54,12 @@ export function FileReceiveListener({
   useEffect(() => {
     if (!enabled || !myId) return;
     const receiver = new P2PFileReceiver(slug, myId, myName || "Viewer");
-    let progressToast: string | number | undefined;
+    // One stable toast id per transfer: sonner updates the SAME toast in
+    // place instead of dismissing + recreating it (which flashed). Progress
+    // only re-renders when the 25%-bucket changes, and the toast never
+    // auto-expires mid-transfer (dismissed explicitly on done/error/unmount).
+    let progressToastId: string | undefined;
+    let lastBucket = -1;
 
     receiver.onOfferToast = (meta: FileMeta, fromName?: string) => {
       toast.info(
@@ -64,15 +69,20 @@ export function FileReceiveListener({
     };
     receiver.onProgress = (meta, receivedBytes) => {
       const pct = Math.round((receivedBytes / Math.max(1, meta.size)) * 100);
-      // Throttle: update at 25% steps to avoid toast spam on fast links.
-      if (pct % 25 === 0 || receivedBytes >= meta.size) {
-        if (progressToast !== undefined) toast.dismiss(progressToast);
-        progressToast = toast.loading(`Receiving "${meta.name}"… ${pct}%`, { duration: 4000 });
-      }
+      const bucket = Math.min(3, Math.floor(pct / 25));
+      if (bucket === lastBucket && progressToastId !== undefined) return;
+      lastBucket = bucket;
+      progressToastId = `file-receive-${meta.name}-${meta.size}`;
+      toast.loading(`Receiving "${meta.name}"… ${bucket * 25}%`, {
+        id: progressToastId,
+        duration: Infinity,
+      });
     };
     receiver.onFile = async ({ file, meta }) => {
       try {
-        if (progressToast !== undefined) toast.dismiss(progressToast);
+        if (progressToastId !== undefined) toast.dismiss(progressToastId);
+        progressToastId = undefined;
+        lastBucket = -1;
         const url = createLocalObjectUrl(file);
         // Verify: fingerprint the received bytes against the host file.
         let match = true;
@@ -114,7 +124,7 @@ export function FileReceiveListener({
     receiver.start();
     return () => {
       receiver.stop();
-      if (progressToast !== undefined) toast.dismiss(progressToast);
+      if (progressToastId !== undefined) toast.dismiss(progressToastId);
     };
   }, [slug, myId, myName, enabled]);
 

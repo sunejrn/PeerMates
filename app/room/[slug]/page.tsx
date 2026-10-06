@@ -34,6 +34,7 @@ import { InviteSheet } from "@/components/room/InviteSheet";
 import { NicknameGate } from "@/components/room/NicknameGate";
 import { SubtitlesPanel } from "@/components/room/SubtitlesPanel";
 import { useGuestIdentity } from "@/hooks/useGuestIdentity";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { useRoomSubtitles } from "@/hooks/useRoomSubtitles";
 import { useReplayCapture } from "@/hooks/useReplayCapture";
 import { EndPartyPanel } from "@/components/replay/EndPartyPanel";
@@ -93,10 +94,21 @@ export default function RoomPage({
   const [localFile, setLocalFile] = useState<{ file: File; url: string } | null>(null);
   const [localMatch, setLocalMatch] = useState<boolean | null>(null);
   const [playBlocked, setPlayBlocked] = useState(false);
-  // Mobile tab state for narrow viewports (< lg)
-  const [mobileTab, setMobileTab] = useState<"video-info" | "chat" | "analytics">("video-info");
-  // Large-screen sidebar tabs: chat stays hidden until the user opens it.
-  const [deskTab, setDeskTab] = useState<"info" | "chat" | "analytics">("info");
+  // Mobile tab state for narrow viewports (< lg) — persisted per room, so a
+  // refresh (or coming back later) reopens exactly the tab you left.
+  const [mobileTab, setMobileTab] = usePersistentState<
+    "video-info" | "chat" | "analytics"
+  >(
+    `peermates:room:${slug}:tab:mobile`,
+    "video-info",
+    ["video-info", "chat", "analytics"] as const
+  );
+  // Large-screen sidebar tabs: persisted per room for the same reason.
+  const [deskTab, setDeskTab] = usePersistentState<"info" | "chat" | "analytics">(
+    `peermates:room:${slug}:tab:desk`,
+    "info",
+    ["info", "chat", "analytics"] as const
+  );
   // Mobile navigation drawer (Claude/Codex-style slide-in)
   const [navOpen, setNavOpen] = useState(false);
 
@@ -929,7 +941,7 @@ export default function RoomPage({
                 }}
                 className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted text-left"
               >
-                Watching and info ({members.length})
+                Watching ({members.length})
               </button>
               <button
                 type="button"
@@ -1084,7 +1096,7 @@ export default function RoomPage({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Watching and Info ({members.length})
+              Watching ({members.length})
             </button>
             <button
               type="button"
@@ -1111,7 +1123,7 @@ export default function RoomPage({
           </div>
         </div>
 
-        {/* Right Sidebar (lg+): tabbed Watching & Info / Analytics / Chat
+        {/* Right Sidebar (lg+): tabbed Watching / Analytics / Chat
             with its own fixed height — internal scroll only, page and video
             stay put. On mobile this wrapper dissolves (display:contents) so
             all panels keep flowing naturally under the mobile tab switcher. */}
@@ -1128,7 +1140,7 @@ export default function RoomPage({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Watching &amp; Info ({members.length})
+              Watching ({members.length})
             </button>
             <button
               type="button"

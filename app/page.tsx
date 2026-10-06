@@ -1,6 +1,6 @@
 import { AuthButton } from "@/components/auth/AuthButton";
 import { RoomLobby } from "@/components/room/RoomLobby";
-import { PwaInstallCard } from "@/components/pwa/PwaInstallCard";
+import { PwaInstallSpotlight } from "@/components/pwa/PwaInstallSpotlight";
 import { GravityField } from "@/components/gravity-field";
 import Link from "next/link";
 
@@ -84,7 +84,7 @@ export default function Home() {
         {/* Responsive Room Creation Lobby */}
         <div className="w-full max-w-6xl mx-auto space-y-4">
           <RoomLobby />
-          <PwaInstallCard />
+          <PwaInstallSpotlight />
         </div>
       </main>
     </div>

@@ -4,6 +4,7 @@ import { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
 import { useGuestIdentity } from "@/hooks/useGuestIdentity";
+import { usePersistentState } from "@/hooks/usePersistentState";
 import { useDataSaver } from "@/hooks/useDataSaver";
 import { VideoPlayer } from "@/components/player/VideoPlayer";
 import type { UnifiedPlayerRef } from "@/components/player/types";
@@ -73,7 +74,11 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
   const [fileMatch, setFileMatch] = useState<boolean | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [mode, setMode] = useState<OverlayMode>("both");
+  const [mode, setMode] = usePersistentState<OverlayMode>(
+    `peermates:replay:${id}:overlay`,
+    "both",
+    ["both", "reactions", "chat"] as const
+  );
   const [reacting, setReacting] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 

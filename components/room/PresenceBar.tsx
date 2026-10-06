@@ -31,7 +31,6 @@ export function PresenceBar({
   return (
     <div className="flex items-center gap-2 overflow-x-auto py-1 px-1 scrollbar-none">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mr-1 shrink-0">
-        <span className="flex h-2 w-2 rounded-full bg-foreground/40" />
         <span>Watching ({members.length}):</span>
       </div>
 
@@ -44,7 +43,7 @@ export function PresenceBar({
           return (
             <Tooltip key={member.id}>
               <TooltipTrigger>
-                <div className="relative cursor-pointer transition-transform hover:z-20 hover:scale-110">
+                <div className="relative cursor-pointer">
                   {member.image && !noAvatars ? (
                     <img
                       src={member.image}
@@ -78,8 +77,10 @@ export function PresenceBar({
                 className="border-border bg-popover text-popover-foreground text-xs shadow-none"
               >
                 <div className="flex items-center gap-1.5 font-medium">
-                  <span>{member.name}</span>
-                  {isMe && <span className="text-muted-foreground">(You)</span>}
+                  <span>
+                    {member.name}
+                    {isMe ? " (You)" : ""}
+                  </span>
                   {isHost && (
                     <Badge
                       variant="outline"

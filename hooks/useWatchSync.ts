@@ -44,10 +44,29 @@ function mergeMembers(...lists: PartyMember[][]): PartyMember[] {
     for (const m of list) {
       if (!m?.id) continue;
       const existing = map.get(m.id);
-      // Prefer the entry with the earliest joinedAt (stable host promotion)
-      if (!existing || (m.joinedAt || 0) < (existing.joinedAt || 0)) {
+      if (!existing) {
         map.set(m.id, m);
+        continue;
       }
+      // Keep the earliest joinedAt (stable host promotion), but fill in
+      // profile fields from whichever copy actually has them: server
+      // presence carries the signup photo while a realtime copy may only
+      // have a bare name, and vice versa. This keeps real avatars instead
+      // of falling back to initial letters.
+      const merged: PartyMember = {
+        ...existing,
+        ...m,
+        id: m.id,
+        name:
+          existing.name && existing.name !== "User"
+            ? existing.name
+            : m.name || existing.name,
+        image: existing.image || m.image,
+        role: existing.role,
+        fileMatch: existing.fileMatch ?? m.fileMatch,
+        joinedAt: Math.min(existing.joinedAt || 0, m.joinedAt || 0) || existing.joinedAt || m.joinedAt,
+      };
+      map.set(m.id, merged);
     }
   }
   return Array.from(map.values()).sort((a, b) => a.joinedAt - b.joinedAt);
