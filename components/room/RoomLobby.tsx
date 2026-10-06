@@ -449,10 +449,6 @@ export function RoomLobby() {
 
           <div className="pt-2 border-t border-border/60 text-[11px] text-muted-foreground flex items-center justify-between">
             <span>Powered by Next.js &amp; GetStream</span>
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Operational
-            </span>
           </div>
         </div>
 

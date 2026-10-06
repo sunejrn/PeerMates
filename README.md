@@ -1,5 +1,7 @@
 # PeerMates 🍿
 
+Built with ❤️ by [@sunejrn](https://x.com/sunejrn)
+
 Watch videos together in frame-accurate sync — YouTube, HLS, MP4, or your own
 movie files — with live chat, voice notes, AI-translated subtitles, and
 host-controlled playback for up to ~500 viewers per room.
@@ -205,3 +207,7 @@ checklist (server-side auth, rate limits, mobile-first, screenshots).
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+---
+
+Built with ❤️ by [@sunejrn](https://x.com/sunejrn)
