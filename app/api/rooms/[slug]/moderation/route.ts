@@ -173,7 +173,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       const detection = detectVideoSource(videoUrl);
       if (!detection.isValid || !detection.type) {
         return NextResponse.json(
-          { error: "Invalid video URL. Use YouTube, HLS (.m3u8), or MP4." },
+          { error: detection.detail || "Invalid video URL. Use YouTube, HLS (.m3u8), or MP4." },
           { status: 400 }
         );
       }

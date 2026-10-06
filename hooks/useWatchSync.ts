@@ -663,8 +663,32 @@ export function useWatchSync({
               ? applyReactions(data.messages, data.reactions)
               : data.messages;
           serverMessagesRef.current = withReactions;
+          // Server-authoritative Guard sync: the poll copy decides hidden /
+          // viewed state (sticky merges keep them through realtime events,
+          // this pass applies hides AND restores).
+          const serverFlags = new Map<string, ChatMessage>(
+            (withReactions as ChatMessage[]).map((m) => [m.id, m] as const)
+          );
           setMessages(
-            mergeMessages(realtimeMessagesRef.current, withReactions)
+            mergeMessages(realtimeMessagesRef.current, withReactions).map(
+              (m: ChatMessage) => {
+                const s = serverFlags.get(m.id);
+                if (!s) return m;
+                if (
+                  (s.hiddenByGuard ?? false) === (m.hiddenByGuard ?? false) &&
+                  (s.viewedOnce ?? false) === (m.viewedOnce ?? false) &&
+                  (s.guardReason ?? "") === (m.guardReason ?? "")
+                ) {
+                  return m;
+                }
+                return {
+                  ...m,
+                  hiddenByGuard: s.hiddenByGuard,
+                  guardReason: s.guardReason,
+                  viewedOnce: s.viewedOnce,
+                };
+              }
+            )
           );
         }
       } catch {

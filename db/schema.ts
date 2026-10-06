@@ -53,7 +53,7 @@ export const verification = pgTable("verification", {
 
 // PeerMates Core Tables
 
-export const videoTypeEnum = pgEnum("video_type", ["youtube", "hls", "mp4", "localfile"]);
+export const videoTypeEnum = pgEnum("video_type", ["youtube", "hls", "mp4", "localfile", "embed"]);
 export const participantRoleEnum = pgEnum("participant_role", ["host", "cohost", "viewer"]);
 export const playbackEventTypeEnum = pgEnum("playback_event_type", [
   "play",

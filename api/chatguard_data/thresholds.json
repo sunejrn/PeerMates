@@ -1,0 +1,6 @@
+{
+  "low": { "hide": 60, "block": 95 },
+  "medium": { "hide": 30, "block": 85 },
+  "high": { "hide": 20, "block": 70 },
+  "note": "Only a scam-link + scam-phrase combo can reach 'block'; everything else caps at 'hide'."
+}

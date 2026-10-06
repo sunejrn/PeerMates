@@ -178,7 +178,8 @@ export function AnalyticsPanel({
   hostId: string;
 }) {
   const stats = useMemo(() => {
-    const visible = messages.filter((m) => !m.deleted);
+    // System notices (slow-mode calm-downs) are not chat activity.
+    const visible = messages.filter((m) => !m.deleted && !m.system);
     let reactions = 0;
     const emojiCounts = new Map<string, number>();
     const chatterCounts = new Map<string, { name: string; count: number }>();

@@ -37,9 +37,31 @@ host-controlled playback for up to ~500 viewers per room.
   (gentle rate-nudge for small drift, one debounced seek for large drift)
 - YouTube embeds, HLS (`.m3u8`), direct MP4/WebM, and "My Files" rooms where
   everyone plays their own local copy (only timestamps sync — bytes never upload)
+- Many sources: paste Facebook, Vimeo, Dailymotion, Twitch VODs, TikTok,
+  Instagram Reels, Google Drive previews, Streamable, Loom, Internet Archive,
+  or Dropbox links — direct-playable ones (Archive files, Dropbox `dl=1`)
+  run full sync in the HTML5 player; the rest play in official iframe embeds
+  with **Guided sync** (host starts a shared 3-2-1 countdown, everyone taps
+  Play, a shared expected-position timer + "Re-sync me" keeps the room
+  together). No scraping, no downloads, no proxies — embeds only
 - 3s host heartbeat + Redis playback snapshots, so late joiners land in sync
 - Tap-to-play overlay for iPhone Safari autoplay blocks; fullscreen on iPhone
   (`webkitEnterFullscreen`) and Android/desktop (standard Fullscreen API)
+
+**Clarity Engine (client-only, free)**
+- Off / Light / Ultra switch in the Watching tab. Light is a subtle
+  contrast + saturation lift that works on every source, including YouTube.
+  Ultra redraws native MP4/HLS/My-Files frames through a WebGL edge-aware
+  sharpen shader (WebGL default; WebGPU only feature-detected for reporting).
+- Ultra needs real pixels: hidden for YouTube/embeds with a short note, and
+  it falls back to Light on CORS-tainted video or below ~24fps in its 3s
+  perf check. Respects Data Saver + audio-only (off), releases the GPU on
+  pause / tab-hide / PiP / leave, and reports live fps while running.
+- Manual QA checklist (run on iPhone Safari, Android Chrome, desktop):
+  `npm run test:parser` for link formats; then per source, host + viewer
+  join and note sync behavior + Ultra fps in the room (fps shows under the
+  Clarity switch). No Facebook app ID is needed — the official video plugin
+  page is embedded directly, so public videos just play.
 
 **Rooms & sharing**
 - Create a party from a link or your own file; join with a 6-letter code or
@@ -124,6 +146,7 @@ host-controlled playback for up to ~500 viewers per room.
 ```bash
 npm install
 npm run dev   # http://localhost:3000
+npm run test:parser  # provider URL parser unit tests (no runner needed)
 ```
 
 Copy `.env.example` to `.env.local` and fill in:
@@ -187,6 +210,15 @@ lib/
   redis/                   Upstash stores with in-memory dev fallback
   rooms/                   Roles, actor resolution, invite-code helpers
   subtitles/               SRT/VTT parse + serialize (shared client/server)
+  video/
+    detector.ts            Source detection (+ embed/guided classification)
+    parseUrl.ts            Provider URL parser (unit-tested, client-safe)
+    clarity.ts             Clarity Engine tiers + capability detection
+  redis/guided.ts          Guided-sync shared countdown clock
+components/
+  player/                  Unified player (YouTube / HLS / MP4 / local file),
+                           GuidedEmbedPlayer (official iframes + countdown),
+                           ClarityCanvas (Ultra WebGL overlay)
 db/                        Drizzle schema + client (Neon)
 public/screenshots/        README screenshots
 ```

@@ -13,6 +13,15 @@ import { SendFilePanel } from "@/components/room/SendFilePanel";
 import { FileReceiveListener } from "@/components/room/FileReceiveListener";
 import { StreamFromHostPanel, HostStreamMain } from "@/components/room/StreamFromHost";
 import { DataPanel } from "@/components/room/DataPanel";
+import { ClarityPanel } from "@/components/room/ClarityPanel";
+import { ClarityCanvas } from "@/components/player/ClarityCanvas";
+import {
+  LIGHT_FILTER,
+  clarityCapabilities,
+  ultraSupportedFor,
+  type ClarityTier,
+} from "@/lib/video/clarity";
+import { describeSource } from "@/lib/video/detector";
 import { useDataSaver } from "@/hooks/useDataSaver";
 import { useDataMeter } from "@/hooks/useDataMeter";
 import { regionFromLocale } from "@/lib/data/pricing";
@@ -111,6 +120,37 @@ export default function RoomPage({
   );
   // Mobile navigation drawer (Claude/Codex-style slide-in)
   const [navOpen, setNavOpen] = useState(false);
+  // Clarity Engine tier (persisted per room) + Ultra plumbing.
+  const [clarity, setClarity] = usePersistentState<ClarityTier>(
+    `peermates:room:${slug}:clarity`,
+    "off",
+    ["off", "light", "ultra"] as const
+  );
+  const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null);
+  const [ultraNote, setUltraNote] = useState<string | null>(null);
+  const [ultraFps, setUltraFps] = useState<number | null>(null);
+  const clarityCaps = useMemo(() => clarityCapabilities(), []);
+
+  const handleUltraFallback = useCallback((message: string, silent?: boolean) => {
+    setClarity("light");
+    setUltraNote(message);
+    if (!silent) toast.warning(message);
+  }, [setClarity]);
+
+  const handleClarityChange = useCallback(
+    (tier: ClarityTier) => {
+      setUltraNote(null);
+      setUltraFps(null);
+      setClarity(tier);
+    },
+    [setClarity]
+  );
+
+  // Grab the native <video> element for the Ultra canvas (once per source).
+  useEffect(() => {
+    setVideoEl(playerRef.current?.getVideoElement?.() ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.videoSource, room?.videoType]);
 
   // Fetch room metadata
   useEffect(() => {
@@ -725,11 +765,26 @@ export default function RoomPage({
   }, []);
 
   // Live-chat count tracks visible messages only — deleting a message
-  // drops the number on the tab/headers immediately.
+  // drops the number on the tab/headers immediately. System notices
+  // (slow-mode calm-downs) never count as chat.
   const visibleMessageCount = useMemo(
-    () => messages.filter((m) => !m.deleted).length,
+    () => messages.filter((m) => !m.deleted && !m.system).length,
     [messages]
   );
+  // Provider label + sync level for the room-info chips.
+  const sourceInfo = useMemo(
+    () =>
+      room ? describeSource(room.videoType, room.videoSource) : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [room?.videoType, room?.videoSource]
+  );
+  // Clarity resolution: Data Saver / audio-only always win (Clarity off).
+  const clarityDisabled = dataSaver || audioOnly;
+  const effectiveClarity = clarityDisabled ? "off" : clarity;
+  const ultraCapable =
+    !!room &&
+    clarityCaps.webgl &&
+    ultraSupportedFor(room.videoType);
   // File-less joiners in local-file rooms watch the host stream directly
   // in the main slot — no file they may not have is ever required.
   const needsHostStream = isLocalRoom && !localFile && !canControl;
@@ -1023,6 +1078,20 @@ export default function RoomPage({
                   onMarkerTap={canControl ? handleMarkerTap : undefined}
                   subtitleTrackUrl={subs.trackUrl}
                   subtitleSize={subs.size}
+                  slug={slug}
+                  actorId={effectiveId}
+                  clarityFilter={
+                    effectiveClarity === "light" ? LIGHT_FILTER : undefined
+                  }
+                  clarityOverlay={
+                    effectiveClarity === "ultra" && ultraCapable && videoEl ? (
+                      <ClarityCanvas
+                        video={videoEl}
+                        onFallback={handleUltraFallback}
+                        onStats={setUltraFps}
+                      />
+                    ) : null
+                  }
                 />
                 {/* File-less viewers get a one-tap path to the host stream
                     right under the waiting player. */}
@@ -1187,6 +1256,18 @@ export default function RoomPage({
               />
             </Card>
 
+            {/* Source provider + sync level chips */}
+            {sourceInfo && (
+              <div className="flex flex-wrap items-center gap-1.5 px-1">
+                <Badge variant="outline" className="border-border text-[10px] rounded-lg">
+                  {sourceInfo.label}
+                </Badge>
+                <Badge variant="outline" className="border-border text-[10px] rounded-lg">
+                  {sourceInfo.control === "full" ? "Full sync" : "Guided sync"}
+                </Badge>
+              </div>
+            )}
+
             {/* Host Controls & Sync Panel */}
             <Card className="border-border bg-card p-3 sm:p-4 rounded-lg">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -1324,6 +1405,8 @@ export default function RoomPage({
             {/* Moderation tools (host + co-hosts only) */}
             {canControl && (
               <ModerationPanel
+                slug={slug}
+                actorId={effectiveId}
                 slowModeSeconds={chatSettings.slowModeSeconds}
                 chatMuted={chatSettings.chatMuted}
                 memberCount={members.length}
@@ -1367,6 +1450,27 @@ export default function RoomPage({
               onRegionChange={meter.setRegion}
               onResetMeter={meter.reset}
             />
+
+            {/* Clarity Engine: Off / Light / Ultra enhancement */}
+            <ClarityPanel
+              clarity={clarity}
+              ultraAvailable={ultraCapable}
+              ultraNote={
+                ultraNote ??
+                (effectiveClarity === "ultra" && ultraFps !== null
+                  ? `Ultra running · ${ultraFps}fps`
+                  : null)
+              }
+              disabled={clarityDisabled}
+              disabledReason={
+                dataSaver
+                  ? "Clarity is off while Data Saver is on."
+                  : audioOnly
+                    ? "Clarity is off in audio-only mode."
+                    : undefined
+              }
+              onChange={handleClarityChange}
+            />
           </div>
 
           {/* Analytics Panel — modern bar charts of room interaction.
@@ -1393,6 +1497,7 @@ export default function RoomPage({
           >
           {liveChatEnabled ? (
           <ChatPanel
+            slug={slug}
             messages={messages}
             currentUserId={effectiveId}
             onSendMessage={sendRichCaptured}

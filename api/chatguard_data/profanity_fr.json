@@ -1,0 +1,8 @@
+{
+  "words": [
+    "merde", "putain", "salope", "salaud", "connard", "connasse",
+    "enculé", "encule", "bite", "couille", "nique", "batard",
+    "pute", "chienne", "fdp"
+  ],
+  "note": "Accents are stripped before matching, so 'enculé' also catches 'encule'."
+}

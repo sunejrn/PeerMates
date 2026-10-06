@@ -43,6 +43,8 @@ export interface MessageAttachment {
   duration?: number;
   /** Precomputed 0..1 peaks — renders the waveform with zero download. */
   waveform?: number[];
+  /** WhatsApp-style view-once media: burns after the first open. */
+  viewOnce?: boolean;
 }
 
 export interface ChatMessage {
@@ -63,6 +65,13 @@ export interface ChatMessage {
   moment?: number;
   /** Tombstone: author or moderator removed it. */
   deleted?: boolean;
+  /** Chat Guard: collapsed by the filter (tap to view), with a reason. */
+  hiddenByGuard?: boolean;
+  guardReason?: string;
+  /** View-once media already opened — attachment is burned. */
+  viewedOnce?: boolean;
+  /** Room system notice (slow-mode auto-calms). Rendered centered. */
+  system?: boolean;
 }
 
 /**
@@ -85,11 +94,25 @@ export function mergeChatPair(
       deleted: true,
     };
   }
+  // Guard-hide + view-once are sticky across realtime events (a Stream
+  // copy never carries them). The server poll pass re-syncs them
+  // authoritatively, so restores clear on poll. Content stays for tap-to-view.
+  const hiddenByGuard = b.hiddenByGuard || a.hiddenByGuard || undefined;
+  const guardReason = b.hiddenByGuard
+    ? b.guardReason
+    : a.hiddenByGuard
+      ? a.guardReason
+      : undefined;
+  const viewedOnce = b.viewedOnce || a.viewedOnce || undefined;
   return {
     ...(b.text || b.attachment || b.moment !== undefined ? b : a),
     id: a.id,
     reactions: b.reactions !== undefined ? b.reactions : a.reactions,
     deleted: a.deleted || b.deleted || undefined,
+    hiddenByGuard,
+    guardReason,
+    viewedOnce,
+    system: b.system ?? a.system,
   };
 }
 
@@ -147,13 +170,17 @@ export function toChatMessage(raw: unknown): ChatMessage | null {
             .filter((n): n is number => typeof n === "number")
             .slice(0, 96)
         : undefined,
+      viewOnce: attRaw.viewOnce === true ? true : undefined,
     };
   }
 
   const deleted = r.deleted === true;
+  const hiddenByGuard = r.hiddenByGuard === true;
+  const guardReason =
+    typeof r.guardReason === "string" ? r.guardReason.slice(0, 160) : undefined;
   return {
     id: r.id,
-    text: deleted ? "" : typeof r.text === "string" ? r.text.slice(0, 1000) : "",
+    text: deleted ? "" : typeof r.text === "string" ? r.text.slice(0, 4000) : "",
     user: {
       id: user.id,
       name: user.name.slice(0, 60),
@@ -179,6 +206,10 @@ export function toChatMessage(raw: unknown): ChatMessage | null {
         ? r.moment
         : undefined,
     deleted: deleted || undefined,
+    hiddenByGuard: hiddenByGuard || undefined,
+    guardReason,
+    viewedOnce: r.viewedOnce === true ? true : undefined,
+    system: r.system === true ? true : undefined,
   };
 }
 

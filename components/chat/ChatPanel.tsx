@@ -23,6 +23,8 @@ import {
   Music,
   Pin,
   X,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import {
   FILE_MAX_BYTES,
@@ -46,6 +48,7 @@ export interface SendOpts extends RichSendOpts {
 }
 
 interface ChatPanelProps {
+  slug: string;
   messages: ChatMessage[];
   currentUserId: string;
   onSendMessage: (opts: SendOpts) => Promise<boolean> | boolean | void;
@@ -310,9 +313,91 @@ function VideoBubble({
   );
 }
 
+// ---------- View-once preview (WhatsApp-style: blurred until tapped,
+// burns after the first open) ----------
+
+function ViewOncePreview({
+  msg,
+  burned,
+  onOpen,
+}: {
+  msg: ChatMessage;
+  burned: boolean;
+  onOpen: () => void;
+}) {
+  if (burned) {
+    return (
+      <div className="mb-1 flex min-h-11 min-w-44 items-center gap-2 rounded-lg border border-dashed border-border px-3 py-2 text-[11px] text-muted-foreground">
+        <EyeOff size={15} className="shrink-0" aria-hidden />
+        Opened
+      </div>
+    );
+  }
+  if (msg.attachment?.kind === "image" && msg.attachment.url) {
+    return (
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label="Open view-once photo"
+        className="relative mb-1 block max-w-full cursor-pointer overflow-hidden rounded-lg"
+      >
+        <img
+          src={msg.attachment.url}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          className="max-h-64 w-auto max-w-full object-cover blur-xl"
+        />
+        <span className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-background/40 text-foreground">
+          <Eye size={20} aria-hidden />
+          <span className="text-[11px] font-medium">Tap to view once</span>
+        </span>
+      </button>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Open view-once video"
+      className="mb-1 flex min-h-11 min-w-44 items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-foreground cursor-pointer"
+    >
+      <Eye size={16} className="shrink-0" aria-hidden />
+      Tap to view once video
+    </button>
+  );
+}
+
+// ---------- Long text (WhatsApp-style "Read more") ----------
+
+const READ_MORE_LIMIT = 280;
+
+function LongText({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  if (text.length <= READ_MORE_LIMIT) {
+    return <div className="whitespace-pre-wrap break-words">{text}</div>;
+  }
+  return (
+    <div className="break-words">
+      <div className="whitespace-pre-wrap">
+        {open ? text : `${text.slice(0, READ_MORE_LIMIT).trimEnd()}…`}
+      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="mt-0.5 min-h-9 text-xs font-medium text-sky-600 dark:text-sky-400 cursor-pointer"
+      >
+        {open ? "Show less" : "Read more"}
+      </button>
+    </div>
+  );
+}
+
 // ---------- Main panel ----------
 
 export function ChatPanel({
+  slug,
   messages,
   currentUserId,
   onSendMessage,
@@ -343,6 +428,12 @@ export function ChatPanel({
   const [pickerTab, setPickerTab] = useState<"emoji" | "gif" | "stickers">("emoji");
   const [lightbox, setLightbox] = useState<{ url: string; name: string } | null>(null);
   const [videoLightbox, setVideoLightbox] = useState<{ url: string; name: string } | null>(null);
+  /** WhatsApp-style view-once: armed for the next photo/video send. */
+  const [viewOnceArmed, setViewOnceArmed] = useState(false);
+  /** Guard-collapsed messages the user tapped open (per message id). */
+  const [expandedGuards, setExpandedGuards] = useState<Set<string>>(new Set());
+  /** View-once messages this device already opened (burned optimistically). */
+  const [burnedLocal, setBurnedLocal] = useState<Set<string>>(new Set());
   // Portals render into document.body — always above the sticky video
   // on every viewport. Lazily true on the client; portal content lives
   // outside the React root so there is no hydration mismatch.
@@ -424,6 +515,8 @@ export function ChatPanel({
       }
     } finally {
       setIsSending(false);
+      // Keep the cursor in the box so the next message flows (WhatsApp-style).
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   };
 
@@ -508,13 +601,39 @@ export function ChatPanel({
     // Media sends also dismiss the emoji/GIF/sticker panel.
     setEmojiOpen(false);
     setAttachOpen(false);
-    const ok = await onSendMessage({ text, ...buildOpts(), attachment });
+    // View-once applies to the next photo/video only, then disarms.
+    const armed = viewOnceArmed;
+    if (armed) setViewOnceArmed(false);
+    const withOnce =
+      armed && (attachment.kind === "image" || attachment.kind === "video")
+        ? { ...attachment, viewOnce: true as const }
+        : attachment;
+    const ok = await onSendMessage({ text, ...buildOpts(), attachment: withOnce });
     if (ok !== false) {
       setInputText("");
       clearDrafts();
       return true;
     }
     return false;
+  };
+
+  /** Burn a view-once message after opening (server persists, poll converges). */
+  const markViewed = async (id: string) => {
+    setBurnedLocal((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    try {
+      await fetch(`/api/rooms/${slug}/messages/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "viewed", actorId: currentUserId }),
+      });
+    } catch {
+      // poll converges it; local burn already applied
+    }
   };
 
   const handleVoiceSend = async (v: RecordedVoice) => {
@@ -631,10 +750,10 @@ export function ChatPanel({
     }
   };
 
-  const menuMsg = menuFor ? messages.find((m) => m.id === menuFor) ?? null : null;
   // Deleted messages stay as tombstones (so replies still resolve) — the
   // header count only tracks visible messages, so it drops on delete.
-  const visibleCount = messages.filter((m) => !m.deleted).length;
+  // System notices never count as chat.
+  const visibleCount = messages.filter((m) => !m.deleted && !m.system).length;
   const typingLabel =
     typingUsers.length === 0
       ? null
@@ -697,11 +816,77 @@ export function ChatPanel({
                   .map(([emoji]) => emoji)
               );
 
+              // Room system notices (auto slow-mode calm-downs).
+              if (msg.system) {
+                return (
+                  <div key={msg.id} className="flex justify-center px-6">
+                    <span className="rounded-full border border-border bg-muted px-3 py-1 text-center text-[11px] text-muted-foreground">
+                      {msg.text}
+                    </span>
+                  </div>
+                );
+              }
+
+              // Chat Guard collapse (tap to view). Deleted still wins.
+              const guardHidden = !!msg.hiddenByGuard && !msg.deleted;
+              const guardOpen = expandedGuards.has(msg.id);
+              if (guardHidden && !guardOpen) {
+                return (
+                  <div
+                    key={msg.id}
+                    id={`msg-${msg.id}`}
+                    className={`flex flex-col ${
+                      isMe ? "items-end" : "items-start"
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5 mb-1 px-1">
+                      <span className="text-[11px] font-medium text-muted-foreground">
+                        {isMe ? "You" : msg.user.name}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {new Date(msg.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedGuards((prev) => {
+                          const next = new Set(prev);
+                          next.add(msg.id);
+                          return next;
+                        })
+                      }
+                      aria-label="Hidden by Chat Guard, tap to view"
+                      className="flex min-h-11 max-w-[85%] items-center gap-2 rounded-lg border border-dashed border-border bg-muted/40 px-3 py-2 text-left text-xs text-muted-foreground cursor-pointer"
+                    >
+                      <EyeOff size={15} className="shrink-0" aria-hidden />
+                      <span className="min-w-0">
+                        <span className="block font-medium text-foreground">
+                          Hidden by Chat Guard, tap to view
+                          {isMe ? " (hidden from others)" : ""}
+                        </span>
+                        {msg.guardReason && (
+                          <span className="block truncate text-[11px]">
+                            {msg.guardReason}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </div>
+                );
+              }
+
+              // View-once burn state (server flag or local optimistic burn).
+              const burned = !!msg.viewedOnce || burnedLocal.has(msg.id);
+
               return (
                 <div
                   key={msg.id}
                   id={`msg-${msg.id}`}
-                  className={`flex flex-col ${
+                  className={`relative flex flex-col ${
                     isMe ? "items-end" : "items-start"
                   }`}
                 >
@@ -743,6 +928,14 @@ export function ChatPanel({
                       <span className="italic opacity-70">This message was deleted.</span>
                     ) : (
                       <>
+                        {/* Guard-hidden notice on expanded content */}
+                        {msg.hiddenByGuard && (
+                          <p className="mb-1.5 flex items-center gap-1 text-[10px] opacity-70">
+                            <EyeOff size={11} aria-hidden />
+                            Hidden by Chat Guard
+                            {msg.guardReason ? ` · ${msg.guardReason}` : ""}
+                          </p>
+                        )}
                         {/* Reply quote */}
                         {msg.replyTo && (
                           <button
@@ -778,43 +971,83 @@ export function ChatPanel({
                         )}
 
                         {/* Attachment */}
-                        {msg.attachment?.kind === "image" && (
-                          <div className="mb-1">
-                            <ImageBubble
-                              attachment={msg.attachment}
-                              mine={isMe}
-                              dataSaver={dataSaver}
-                              loaded={loadedImages.has(msg.id)}
-                              onLoad={() =>
-                                setLoadedImages((prev) => new Set(prev).add(msg.id))
-                              }
-                              onExpand={() =>
+                        {msg.attachment?.kind === "image" &&
+                          (msg.attachment.viewOnce && !isMe ? (
+                            <ViewOncePreview
+                              msg={msg}
+                              burned={burned}
+                              onOpen={() => {
+                                if (burned || !msg.attachment?.url) return;
                                 setLightbox({
-                                  url: msg.attachment!.url,
-                                  name: msg.attachment!.name || "Shared photo",
-                                })
-                              }
+                                  url: msg.attachment.url,
+                                  name: msg.attachment.name || "View-once photo",
+                                });
+                                void markViewed(msg.id);
+                              }}
                             />
-                          </div>
-                        )}
+                          ) : (
+                            <div className="mb-1">
+                              <ImageBubble
+                                attachment={msg.attachment}
+                                mine={isMe}
+                                dataSaver={dataSaver}
+                                loaded={loadedImages.has(msg.id)}
+                                onLoad={() =>
+                                  setLoadedImages((prev) => new Set(prev).add(msg.id))
+                                }
+                                onExpand={() =>
+                                  setLightbox({
+                                    url: msg.attachment!.url,
+                                    name: msg.attachment!.name || "Shared photo",
+                                  })
+                                }
+                              />
+                              {msg.attachment.viewOnce && (
+                                <p className="mt-1 flex items-center gap-1 font-mono text-[10px] opacity-70">
+                                  <Eye size={11} aria-hidden />
+                                  {burned ? "Opened" : "View once"}
+                                </p>
+                              )}
+                            </div>
+                          ))}
                         {msg.attachment?.kind === "voice" && (
                           <div className="mb-1">
                             <VoiceBubble attachment={msg.attachment} mine={isMe} />
                           </div>
                         )}
-                        {msg.attachment?.kind === "video" && (
-                          <div className="mb-1">
-                            <VideoBubble
-                              attachment={msg.attachment}
-                              onExpand={() =>
+                        {msg.attachment?.kind === "video" &&
+                          (msg.attachment.viewOnce && !isMe ? (
+                            <ViewOncePreview
+                              msg={msg}
+                              burned={burned}
+                              onOpen={() => {
+                                if (burned || !msg.attachment?.url) return;
                                 setVideoLightbox({
-                                  url: msg.attachment!.url,
-                                  name: msg.attachment!.name || "Shared video",
-                                })
-                              }
+                                  url: msg.attachment.url,
+                                  name: msg.attachment.name || "View-once video",
+                                });
+                                void markViewed(msg.id);
+                              }}
                             />
-                          </div>
-                        )}
+                          ) : (
+                            <div className="mb-1">
+                              <VideoBubble
+                                attachment={msg.attachment}
+                                onExpand={() =>
+                                  setVideoLightbox({
+                                    url: msg.attachment!.url,
+                                    name: msg.attachment!.name || "Shared video",
+                                  })
+                                }
+                              />
+                              {msg.attachment.viewOnce && (
+                                <p className="mt-1 flex items-center gap-1 font-mono text-[10px] opacity-70">
+                                  <Eye size={11} aria-hidden />
+                                  {burned ? "Opened" : "View once"}
+                                </p>
+                              )}
+                            </div>
+                          ))}
                         {msg.attachment?.kind === "file" && (
                           <div className="mb-1">
                             {(() => {
@@ -847,7 +1080,7 @@ export function ChatPanel({
                           </div>
                         )}
 
-                        {msg.text && <div className="whitespace-pre-wrap break-words">{msg.text}</div>}
+                        {msg.text && <LongText text={msg.text} />}
                       </>
                     )}
                   </div>
@@ -872,6 +1105,77 @@ export function ChatPanel({
                         </button>
                       ))}
                     </div>
+                  )}
+
+                  {/* Message actions — compact popover anchored to the bubble
+                      (same inline pattern as the emoji picker, never fullscreen) */}
+                  {!msg.deleted && menuFor === msg.id && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-20"
+                        onClick={() => setMenuFor(null)}
+                        aria-hidden
+                      />
+                      <div
+                        className={`absolute top-full z-30 mt-1 w-60 rounded-lg border border-border bg-popover p-1.5 text-popover-foreground ${
+                          isMe ? "right-0" : "left-0"
+                        }`}
+                        role="dialog"
+                        aria-label="Message actions"
+                      >
+                        <div className="grid grid-cols-4 gap-1" role="group" aria-label="Quick reactions">
+                          {ALLOWED_REACTIONS.map((emoji) => (
+                            <button
+                              key={emoji}
+                              type="button"
+                              onClick={() => {
+                                onReact?.(msg.id, emoji);
+                                setMenuFor(null);
+                              }}
+                              aria-label={`React ${emoji}`}
+                              className="flex min-h-11 items-center justify-center rounded-lg border border-border text-xl cursor-pointer hover:bg-muted"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => openCopy(msg)}
+                          className="mt-1 flex min-h-11 w-full items-center rounded-lg px-3 text-xs text-foreground cursor-pointer hover:bg-muted"
+                        >
+                          Copy
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReplyDraft({
+                              id: msg.id,
+                              text: (msg.text || "").slice(0, 140),
+                              userName:
+                                msg.user.id === currentUserId ? "You" : msg.user.name,
+                            });
+                            setMenuFor(null);
+                            requestAnimationFrame(() => inputRef.current?.focus());
+                          }}
+                          className="flex min-h-11 w-full items-center rounded-lg px-3 text-xs text-foreground cursor-pointer hover:bg-muted"
+                        >
+                          Reply
+                        </button>
+                        {(msg.user.id === currentUserId || canDeleteAny) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMenuFor(null);
+                              onDelete?.(msg.id);
+                            }}
+                            className="flex min-h-11 w-full items-center rounded-lg px-3 text-xs cursor-pointer hover:bg-muted"
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </>
                   )}
                 </div>
               );
@@ -961,6 +1265,92 @@ export function ChatPanel({
               void onSendMessage({ text: emoji });
             }}
           />
+        )}
+        {/* Attach popover — compact inline panel like the emoji picker
+            (same spot, same size language), never a fullscreen sheet. */}
+        {attachOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-20"
+              onClick={() => setAttachOpen(false)}
+              aria-hidden
+            />
+            <div
+              className="absolute inset-x-0 bottom-full z-30 mb-2 rounded-lg border border-border bg-popover text-popover-foreground"
+              role="dialog"
+              aria-label="Attach options"
+            >
+              <div className="flex items-center justify-between px-3 pt-2.5">
+                <p className="text-xs font-semibold">Share</p>
+                <button
+                  type="button"
+                  onClick={() => setAttachOpen(false)}
+                  aria-label="Close attach options"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  <X size={17} />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 p-2.5 pt-1">
+                {ATTACH_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => handleAttachOption(opt.id)}
+                    title={opt.id === "document" ? `Send a file (up to ${formatBytes(FILE_MAX_BYTES)})` : opt.desc}
+                    className="flex min-h-11 items-center gap-2.5 rounded-lg border border-border px-2.5 text-left cursor-pointer hover:bg-muted"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border">
+                      {opt.id === "document" ? (
+                        <FileText size={16} />
+                      ) : opt.id === "photos" ? (
+                        <ImageIcon size={16} />
+                      ) : opt.id === "camera" ? (
+                        <Camera size={16} />
+                      ) : opt.id === "audio" ? (
+                        <Music size={16} />
+                      ) : opt.id === "stickers" ? (
+                        <Sticker size={16} />
+                      ) : (
+                        <Pin size={16} />
+                      )}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium">
+                      {opt.title}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={viewOnceArmed}
+                aria-label="View once for the next photo or video"
+                onClick={() => setViewOnceArmed((v) => !v)}
+                className="mx-2.5 mb-2.5 flex min-h-11 w-[calc(100%-1.25rem)] items-center gap-2.5 rounded-lg border border-border px-3 text-left cursor-pointer hover:bg-muted"
+              >
+                <Eye size={16} className="shrink-0" aria-hidden />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-xs font-medium">View once</span>
+                  <span className="block truncate text-[11px] text-muted-foreground">
+                    Next photo/video burns after opening
+                  </span>
+                </span>
+                <span
+                  aria-hidden
+                  className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
+                    viewOnceArmed ? "border-foreground bg-foreground" : "border-border bg-muted"
+                  }`}
+                >
+                  <span
+                    className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white transition-all ${
+                      viewOnceArmed ? "left-[1.35rem]" : "left-1"
+                    }`}
+                  />
+                </span>
+              </button>
+            </div>
+          </>
         )}
         <form onSubmit={handleSubmit} className="flex items-center gap-1.5">
           <input
@@ -1058,12 +1448,20 @@ export function ChatPanel({
                   ref={inputRef}
                   value={inputText}
                   onChange={(e) => {
-                    setInputText(e.target.value);
-                    if (e.target.value.length > 0) onTyping?.();
+                    const v = e.target.value;
+                    // Auto-capitalize the first letter of every message.
+                    setInputText(
+                      inputText.length === 0 && /^[a-z]/.test(v)
+                        ? v.charAt(0).toUpperCase() + v.slice(1)
+                        : v
+                    );
+                    if (v.length > 0) onTyping?.();
                   }}
                   placeholder={disabledReason}
                   disabled={inputDisabled}
                   aria-label="Type a message"
+                  autoCapitalize="sentences"
+                  autoCorrect="on"
                   className="min-w-0 flex-1 bg-transparent px-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
                 />
               </>
@@ -1097,135 +1495,6 @@ export function ChatPanel({
           )}
         </form>
       </div>
-
-      {/* Attach sheet — Document / Photos & videos / Camera / Audio / Stickers.
-          Portaled to body so the sticky room video can never cover it. */}
-      {mounted &&
-        attachOpen &&
-        createPortal(
-          <div className="fixed inset-0 z-[60]" role="dialog" aria-label="Attach options">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setAttachOpen(false)}
-          />
-          <div className="absolute inset-x-0 bottom-0 rounded-lg border-t border-border bg-popover text-popover-foreground p-3 pb-[max(env(safe-area-inset-bottom),1rem)]">
-            <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted" aria-hidden />
-            {ATTACH_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => handleAttachOption(opt.id)}
-                className="flex min-h-14 w-full items-center gap-3 rounded-lg px-2 py-1.5 text-left cursor-pointer hover:bg-muted"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border">
-                  {opt.id === "document" ? (
-                    <FileText size={18} />
-                  ) : opt.id === "photos" ? (
-                    <ImageIcon size={18} />
-                  ) : opt.id === "camera" ? (
-                    <Camera size={18} />
-                  ) : opt.id === "audio" ? (
-                    <Music size={18} />
-                  ) : opt.id === "stickers" ? (
-                    <Sticker size={18} />
-                  ) : (
-                    <Pin size={18} />
-                  )}
-                </span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{opt.title}</span>
-                  <span className="block truncate text-xs text-muted-foreground">
-                    {opt.id === "document"
-                      ? `Send a file (up to ${formatBytes(FILE_MAX_BYTES)})`
-                      : opt.desc}
-                  </span>
-                </span>
-              </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setAttachOpen(false)}
-              aria-label="Close attach options"
-              className="mx-auto mt-1 flex h-10 w-10 items-center justify-center rounded-full text-muted-foreground hover:text-foreground cursor-pointer"
-            >
-              <X size={18} />
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Message action sheet (long-press menu) — portaled above video */}
-      {mounted &&
-        menuMsg &&
-        createPortal(
-          <div className="fixed inset-0 z-[60]" role="dialog" aria-label="Message actions">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setMenuFor(null)}
-          />
-          <div className="absolute inset-x-0 bottom-0 rounded-lg border-t border-border bg-card p-4 pb-[max(env(safe-area-inset-bottom),1rem)] space-y-2">
-            <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Quick reactions">
-              {ALLOWED_REACTIONS.map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => {
-                    onReact?.(menuMsg.id, emoji);
-                    setMenuFor(null);
-                  }}
-                  aria-label={`React ${emoji}`}
-                  className="flex min-h-11 items-center justify-center rounded-lg border border-border text-xl cursor-pointer hover:bg-muted"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => openCopy(menuMsg)}
-              className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border px-4 text-sm text-foreground cursor-pointer"
-            >
-              Copy
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setReplyDraft({
-                  id: menuMsg.id,
-                  text: (menuMsg.text || "").slice(0, 140),
-                  userName:
-                    menuMsg.user.id === currentUserId ? "You" : menuMsg.user.name,
-                });
-                setMenuFor(null);
-              }}
-              className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border px-4 text-sm text-foreground cursor-pointer"
-            >
-              Reply
-            </button>
-            {(menuMsg.user.id === currentUserId || canDeleteAny) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setMenuFor(null);
-                  onDelete?.(menuMsg.id);
-                }}
-                className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border px-4 text-sm cursor-pointer"
-              >
-                Delete
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setMenuFor(null)}
-              className="flex min-h-11 w-full items-center justify-center rounded-lg text-sm text-muted-foreground cursor-pointer"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* Image lightbox — portaled above video */}
       {mounted &&

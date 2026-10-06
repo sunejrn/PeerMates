@@ -1,0 +1,14 @@
+[
+  { "text": "You are a mumu, shut up ode", "lang": "pidgin", "expect": "hide" },
+  { "text": "This movie na correct, I love am", "lang": "pidgin", "expect": "allow" },
+  { "text": "Tu es vraiment un connard", "lang": "french", "expect": "hide" },
+  { "text": "Ce film est incroyable, j adore", "lang": "french", "expect": "allow" },
+  { "text": "You are an a$$hole, stop talking", "lang": "english", "expect": "hide" },
+  { "text": "That plot twist was insane!!", "lang": "english", "expect": "allow" },
+  { "text": "SEND MONEY NOW to double it, free giveaway click here bit.ly/xyz123", "lang": "english", "expect": "block" },
+  { "text": "FREE GIVEAWAY claim your prize at freemoney-claim-prize.com now", "lang": "english", "expect": "block" },
+  { "text": "Check the trailer https://www.youtube.com/watch?v=abc123", "lang": "english", "expect": "allow" },
+  { "text": "HELLO EVERYONE THIS IS THE BEST MOVIE EVER MADE IN HISTORY", "lang": "english", "expect": "hide" },
+  { "text": "hahahahahahahahahahahaha", "lang": "english", "expect": "hide" },
+  { "text": "Who else cried at that scene?", "lang": "english", "expect": "allow" }
+]

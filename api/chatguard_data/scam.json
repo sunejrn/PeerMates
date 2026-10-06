@@ -1,0 +1,16 @@
+{
+  "phrases": [
+    "send money", "send me money", "free giveaway", "click here",
+    "claim your prize", "double your money", "dm me for",
+    "whatsapp me", "send proof", "urgent help", "verify your account",
+    "free airtime", "win cash", "investment doubling"
+  ],
+  "suspicious_domains": [
+    "giveaway", "freemoney", "claim-prize", "crypto-double",
+    "verify-account", "login-secure", "prize-claim", "money-flip"
+  ],
+  "url_shorteners": [
+    "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly",
+    "is.gd", "buff.ly", "adf.ly", "shorturl.at", "cutt.ly"
+  ]
+}

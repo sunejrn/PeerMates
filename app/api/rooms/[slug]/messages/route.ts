@@ -4,7 +4,15 @@ import {
   getDeletedIds,
   getMessages,
   getReactions,
+  markDeleted,
 } from "@/lib/redis/chat";
+import {
+  expireAutoSlow,
+  getHiddenMap,
+  getViewedOnceIds,
+  runChatGuard,
+} from "@/lib/redis/guard";
+import { checkChatGuard } from "@/lib/guard/engine";
 import { getRoomBySlug } from "@/lib/rooms/store";
 import {
   getRole,
@@ -34,6 +42,7 @@ function sanitizeAttachment(raw: unknown):
       mime?: string;
       duration?: number;
       waveform?: number[];
+      viewOnce?: boolean;
     }
   | undefined {
   if (!raw || typeof raw !== "object") return undefined;
@@ -59,6 +68,11 @@ function sanitizeAttachment(raw: unknown):
     waveform: Array.isArray(a.waveform)
       ? a.waveform.filter((n): n is number => typeof n === "number").slice(0, 96)
       : undefined,
+    // WhatsApp-style view-once: images/videos only, burned on first open.
+    viewOnce:
+      a.viewOnce === true && (a.kind === "image" || a.kind === "video")
+        ? true
+        : undefined,
   };
 }
 
@@ -73,16 +87,29 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
     if (!room) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
-    const [messages, reactions, deleted] = await Promise.all([
+    const [messages, reactions, deleted, hidden, viewed] = await Promise.all([
       getMessages(slug, 50),
       getReactions(slug),
       getDeletedIds(slug),
+      getHiddenMap(slug),
+      getViewedOnceIds(slug),
     ]);
-    const withTombstones = messages.map((m) =>
-      deleted.has(m.id)
-        ? { ...m, text: "", attachment: undefined, moment: undefined, deleted: true as const }
-        : m
-    );
+    const withTombstones = messages.map((m) => {
+      if (deleted.has(m.id)) {
+        return { ...m, text: "", attachment: undefined, moment: undefined, deleted: true as const };
+      }
+      let out = m;
+      // Burned view-once media: URL stripped for everyone (sender included —
+      // they already saw it); the "Opened" shell remains.
+      if (viewed.has(m.id) && m.attachment?.viewOnce) {
+        out = { ...out, attachment: undefined, viewedOnce: true as const };
+      }
+      // Chat Guard collapse (content stays for tap-to-view).
+      if (hidden[m.id]) {
+        out = { ...out, hiddenByGuard: true as const, guardReason: hidden[m.id] };
+      }
+      return out;
+    });
     const since = req.nextUrl.searchParams.get("since");
     const filtered = since
       ? withTombstones.filter((m) => m.createdAt > since)
@@ -117,9 +144,9 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    if (rawText.length > 1000) {
+    if (rawText.length > 4000) {
       return NextResponse.json(
-        { error: "Message too long (max 1000 chars)." },
+        { error: "Message too long (max 4000 chars)." },
         { status: 400 }
       );
     }
@@ -152,6 +179,8 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
     const [role, settings] = await Promise.all([
       getRole(slug, senderId, room.hostId),
       getSettings(slug),
+      // Auto slow-mode from Chat Guard expires on its own (2 min).
+      expireAutoSlow(slug),
     ]);
     const privileged = role === "host" || role === "cohost";
     if (settings.chatMuted && !privileged) {
@@ -211,7 +240,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
         typeof id === "string" && id
           ? id.slice(0, 120)
           : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      text: clean.slice(0, 1000),
+      text: clean.slice(0, 4000),
       user: {
         id: senderId,
         name: String(user.name).slice(0, 60),
@@ -224,6 +253,39 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       ...(momentPin !== undefined ? { moment: momentPin } : {}),
     };
     await appendMessage(slug, msg);
+
+    // ---- Chat Guard (fail-open: never blocks the response path) ----
+    // Runs AFTER persist so chat never waits on Python. Hosts/co-hosts are
+    // allowlisted; system notices skip the guard entirely.
+    const guardVerdict = await runChatGuard({
+      slug,
+      msgId: msg.id,
+      senderId,
+      privileged,
+      rawText,
+      slowModeSeconds: settings.slowModeSeconds,
+    });
+    if (guardVerdict?.blocked) {
+      await markDeleted(slug, msg.id);
+      return NextResponse.json(
+        {
+          error: "GUARD_BLOCK",
+          message:
+            "That message looked like a scam and wasn't sent. If this was a mistake, rephrase it and try again.",
+        },
+        { status: 403 }
+      );
+    }
+    if (guardVerdict?.hidden) {
+      return NextResponse.json({
+        success: true,
+        message: {
+          ...msg,
+          hiddenByGuard: true,
+          guardReason: guardVerdict.reason,
+        },
+      });
+    }
     return NextResponse.json({ success: true, message: msg });
   } catch (error: unknown) {
     return NextResponse.json(

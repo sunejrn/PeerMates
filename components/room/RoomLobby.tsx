@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { detectVideoSource, VideoType } from "@/lib/video/detector";
+import { PROVIDER_LABELS } from "@/lib/video/parseUrl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -49,6 +50,30 @@ const PRESETS: Preset[] = [
   },
 ];
 
+interface ProviderShortcut {
+  name: string;
+  desc: string;
+  example: string;
+}
+
+/** Other sources: tap fills the URL field (editable) — parser detects each. */
+const PROVIDER_SHORTCUTS: ProviderShortcut[] = [
+  { name: "YouTube", desc: "Full sync · watch, shorts & live links", example: "https://www.youtube.com/watch?v=aqz-KE-bpKQ" },
+  { name: "Facebook", desc: "Guided sync · public videos", example: "https://www.facebook.com/watch/?v=1234567890123456" },
+  { name: "Vimeo", desc: "Guided sync · vimeo.com links", example: "https://vimeo.com/123456789" },
+  { name: "Dailymotion", desc: "Guided sync · videos", example: "https://www.dailymotion.com/video/x8abcdef" },
+  { name: "Twitch", desc: "Guided sync · past broadcasts (VODs)", example: "https://www.twitch.tv/videos/1234567890" },
+  { name: "TikTok", desc: "Guided sync · videos", example: "https://www.tiktok.com/@peermates/video/7234567890123456789" },
+  { name: "Instagram", desc: "Guided sync · Reels", example: "https://www.instagram.com/reel/C1234567890abcdef/" },
+  { name: "Google Drive", desc: "Guided sync · preview link", example: "https://drive.google.com/file/d/1ABCdefGhI1234567890/view" },
+  { name: "Streamable", desc: "Guided sync · clips", example: "https://streamable.com/abcdef" },
+  { name: "Loom", desc: "Guided sync · share links", example: "https://www.loom.com/share/1234567890abcdef1234567890abcdef" },
+  { name: "Internet Archive", desc: "Full sync · details or download links", example: "https://archive.org/details/big_buck_bunny" },
+  { name: "Dropbox", desc: "Full sync · shared file links", example: "https://www.dropbox.com/s/abc123def456/movie.mp4?dl=0" },
+  { name: "HLS stream", desc: "Full sync · any .m3u8 link", example: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
+  { name: "Direct MP4", desc: "Full sync · any video file link", example: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" },
+];
+
 export function RoomLobby() {
   const router = useRouter();
   const { data: session } = useSession();
@@ -58,13 +83,90 @@ export function RoomLobby() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [sourceTab, setSourceTab] = useState<"link" | "myfiles">("link");
   const [rightsOk, setRightsOk] = useState(false);
+  const [showSources, setShowSources] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
+  /** Step 2 of Other sources: provider picked, now title + own link. */
+  const [sourceDraft, setSourceDraft] = useState<ProviderShortcut | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftUrl, setDraftUrl] = useState("");
   const filePick = useLocalFilePick();
 
+  const closeSources = () => {
+    setShowSources(false);
+    setSourceDraft(null);
+  };
+
+  const pickProvider = (p: ProviderShortcut) => {
+    setSourceDraft(p);
+    setDraftTitle(title || `${p.name} watch party`);
+    setDraftUrl(p.example);
+  };
+
+  const draftDetection = detectVideoSource(draftUrl);
+
+  const useDraftLink = () => {
+    if (!sourceDraft || !draftUrl.trim() || !draftDetection.isValid) return;
+    setVideoUrl(draftUrl.trim());
+    if (!title) setTitle(draftTitle.trim() || `${sourceDraft.name} watch party`);
+    closeSources();
+  };
+
   const detection = detectVideoSource(videoUrl);
+
+  // Provider preview: best-effort official oEmbed title (YouTube/Vimeo),
+  // otherwise the provider chip + control level. Never blocks creation.
+  const [oembedTitle, setOembedTitle] = useState<string | null>(null);
+  useEffect(() => {
+    setOembedTitle(null);
+    if (sourceTab !== "link" || !detection.isValid || !detection.cleanUrl) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        let endpoint: string | null = null;
+        if (detection.provider === "youtube" && detection.videoId) {
+          endpoint = `https://www.youtube.com/oembed?url=${encodeURIComponent(detection.cleanUrl)}&format=json`;
+        } else if (detection.provider === "vimeo") {
+          endpoint = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(detection.cleanUrl)}`;
+        }
+        if (!endpoint) return;
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 6000);
+        const res = await fetch(endpoint, { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok || cancelled) return;
+        const data = await res.json().catch(() => null);
+        if (data?.title && !cancelled) setOembedTitle(String(data.title).slice(0, 80));
+      } catch {
+        // preview is best-effort only
+      }
+    };
+    const timer = setTimeout(run, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceTab, detection.isValid, detection.cleanUrl, detection.provider, detection.videoId]);
 
   const checkHasCreatedOnce = () => {
     if (typeof window === "undefined") return false;
     return localStorage.getItem("watchtogether_has_created_once") === "true";
+  };
+
+  /** Server error codes → human messages (never show raw codes in toasts). */
+  const friendlyCreateError = (data: {
+    error?: string;
+    message?: string;
+    retryAfter?: number;
+  }) => {
+    if (data.error === "RATE_LIMITED") {
+      const wait =
+        typeof data.retryAfter === "number" && data.retryAfter > 0
+          ? ` Try again in ${data.retryAfter}s.`
+          : "";
+      return `Too many rooms created.${wait}`;
+    }
+    return data.message || data.error || "Failed to create room";
   };
 
   const handleSelectPreset = (preset: Preset) => {
@@ -98,7 +200,8 @@ export function RoomLobby() {
 
     if (!detection.isValid) {
       toast.error(
-        "Please enter a valid YouTube, HLS (.m3u8), or MP4/WebM video URL."
+        detection.detail ||
+          "Please enter a valid YouTube, HLS (.m3u8), or MP4/WebM video URL."
       );
       return;
     }
@@ -120,7 +223,7 @@ export function RoomLobby() {
           setShowAuthModal(true);
           return;
         }
-        throw new Error(data.error || data.message || "Failed to create room");
+        throw new Error(friendlyCreateError(data));
       }
 
       if (!session?.user && typeof window !== "undefined") {
@@ -165,7 +268,7 @@ export function RoomLobby() {
           setShowAuthModal(true);
           return;
         }
-        throw new Error(data.error || data.message || "Failed to create room");
+        throw new Error(friendlyCreateError(data));
       }
 
       if (!session?.user && typeof window !== "undefined") {
@@ -269,10 +372,42 @@ export function RoomLobby() {
                 <Input
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=... or .m3u8"
+                  placeholder="YouTube link — or Other sources below for more"
                   className="h-11 sm:h-10 bg-background/80 border-input text-foreground focus-visible:ring-violet-500 font-mono text-xs sm:text-sm"
                   required={sourceTab === "link"}
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowSources(true)}
+                  className="min-h-11 w-full rounded-lg border border-border bg-background/60 px-3 text-xs font-semibold text-foreground cursor-pointer hover:bg-muted"
+                >
+                  Other sources — Facebook, Vimeo, TikTok & more
+                </button>
+                {/* Auto-detect preview: provider + control level before starting */}
+                {videoUrl.trim() && detection.isValid && detection.provider && (
+                  <div className="space-y-1 rounded-lg border border-border bg-background/60 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                      <span className="font-semibold">
+                        {PROVIDER_LABELS[detection.provider] ?? detection.provider}
+                      </span>
+                      <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                        {detection.control === "guided" ? "Guided sync" : "Full sync"}
+                      </span>
+                    </div>
+                    {oembedTitle ? (
+                      <p className="truncate text-xs text-muted-foreground">{oembedTitle}</p>
+                    ) : (
+                      <p className="truncate font-mono text-[10px] text-muted-foreground">
+                        {detection.providerId ?? detection.cleanUrl}
+                      </p>
+                    )}
+                    {detection.control === "guided" && (
+                      <p className="text-[11px] text-muted-foreground">
+                        Countdown sync — everyone taps Play on their own player at GO.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
               ) : (
               <div className="space-y-2">
@@ -358,23 +493,15 @@ export function RoomLobby() {
               </div>
               )}
 
-              {/* Presets - touch friendly min 44px tap targets */}
+              {/* Presets live behind a button now — modal with all four */}
               <div className="space-y-2 pt-1">
-                <span className="text-xs text-muted-foreground font-medium">
-                  Or pick a test preset:
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {PRESETS.map((p) => (
-                    <button
-                      key={p.label}
-                      type="button"
-                      onClick={() => handleSelectPreset(p)}
-                      className="min-h-9.5 sm:min-h-9.5 rounded-lg border border-border bg-muted/60 px-3 py-1.5 text-xs text-foreground hover:border-violet-500/50 hover:bg-violet-500/10 hover:text-violet-600 dark:hover:text-violet-300 transition-all cursor-pointer select-none"
-                    >
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPresets(true)}
+                  className="min-h-11 w-full rounded-lg border border-dashed border-border bg-background/60 px-3 text-xs font-semibold text-muted-foreground cursor-pointer hover:text-foreground"
+                >
+                  Test presets
+                </button>
               </div>
             </div>
 
@@ -464,6 +591,218 @@ export function RoomLobby() {
         title="Sign In Required"
         description="You have already used your 1 free party creation. Please sign in with Google or GitHub to create unlimited PeerMates parties and invite your friends."
       />
+
+      {/* Other sources — two steps. Step 1 lists providers; tapping one
+          keeps this open and docks a detail panel (title + your own link)
+          beside it on desktop with a connector, or full-screen-normal
+          on mobile. */}
+      {showSources && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Other video sources">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={closeSources}
+            aria-hidden
+          />
+          <div className="relative flex max-h-[80dvh] w-full max-w-md flex-col items-stretch md:max-w-4xl md:flex-row">
+            {/* Step 1: provider list (hidden on mobile once step 2 opens) */}
+            <div className={`${sourceDraft ? "hidden md:flex" : "flex"} max-h-[80dvh] w-full flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-none md:max-w-md`}>
+              <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+                <div>
+                  <h3 className="text-sm font-semibold">Other sources</h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    Pick a provider, then add your title + link.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeSources}
+                  aria-label="Close other sources"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="no-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">
+                {PROVIDER_SHORTCUTS.map((p) => {
+                  const selected = sourceDraft?.name === p.name;
+                  return (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => pickProvider(p)}
+                      aria-pressed={selected}
+                      className={`flex min-h-11 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left cursor-pointer hover:bg-muted ${
+                        selected ? "border-foreground bg-muted" : "border-border"
+                      }`}
+                    >
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-sm font-bold">
+                        {p.name.charAt(0)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-xs font-semibold">{p.name}</span>
+                        <span className="block truncate text-[11px] text-muted-foreground">
+                          {p.desc}
+                        </span>
+                        <span className="block truncate font-mono text-[10px] text-muted-foreground/70">
+                          {p.example}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Figma-style connector (desktop only) */}
+            {sourceDraft && (
+              <div className="hidden w-14 shrink-0 items-center justify-center md:flex" aria-hidden>
+                <svg viewBox="0 0 48 24" className="w-12 text-foreground" fill="none">
+                  <line x1="8" y1="12" x2="40" y2="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.5" />
+                  <circle cx="6" cy="12" r="3" fill="currentColor" />
+                  <circle cx="42" cy="12" r="3" fill="currentColor" />
+                </svg>
+              </div>
+            )}
+
+            {/* Step 2: title + own link (side panel on desktop, normal modal on mobile) */}
+            {sourceDraft && (
+              <div className="flex max-h-[80dvh] w-full flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-none md:max-w-md">
+                <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+                  <div className="min-w-0">
+                    <h3 className="truncate text-sm font-semibold">
+                      {sourceDraft.name} link
+                    </h3>
+                    <p className="text-[11px] text-muted-foreground">
+                      Add your title + paste your own {sourceDraft.name} URL.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSourceDraft(null)}
+                    aria-label="Back to providers"
+                    className="flex h-11 shrink-0 items-center rounded-lg px-3 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer md:hidden"
+                  >
+                    ← Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeSources}
+                    aria-label="Close"
+                    className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer md:flex"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="source-draft-title">
+                      Party title
+                    </label>
+                    <Input
+                      id="source-draft-title"
+                      value={draftTitle}
+                      onChange={(e) => setDraftTitle(e.target.value)}
+                      placeholder={`${sourceDraft.name} watch party`}
+                      className="h-11 bg-background/80 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="source-draft-url">
+                      {sourceDraft.name} video URL
+                    </label>
+                    <Input
+                      id="source-draft-url"
+                      value={draftUrl}
+                      onChange={(e) => setDraftUrl(e.target.value)}
+                      placeholder={sourceDraft.example}
+                      inputMode="url"
+                      className="h-11 bg-background/80 font-mono text-xs"
+                    />
+                  </div>
+                  {draftUrl.trim() && (
+                    draftDetection.isValid ? (
+                      <div className="space-y-1 rounded-lg border border-border bg-background/60 px-3 py-2">
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                          <span className="font-semibold">
+                            {(draftDetection.provider && PROVIDER_LABELS[draftDetection.provider]) ?? "Video"}
+                          </span>
+                          <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                            {draftDetection.control === "guided" ? "Guided sync" : "Full sync"}
+                          </span>
+                        </div>
+                        <p className="truncate font-mono text-[10px] text-muted-foreground">
+                          {draftDetection.providerId ?? draftDetection.cleanUrl}
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300" role="alert">
+                        {draftDetection.detail || "That link doesn't look usable yet — keep editing."}
+                      </p>
+                    )
+                  )}
+                  <Button
+                    type="button"
+                    onClick={useDraftLink}
+                    disabled={!draftUrl.trim() || !draftDetection.isValid}
+                    className="min-h-11 w-full bg-foreground text-background text-xs font-semibold disabled:opacity-50"
+                  >
+                    Use this link
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Test presets modal — the four sample videos, organized */}
+      {showPresets && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Test presets">
+          <div
+            className="absolute inset-0 bg-black/60"
+            onClick={() => setShowPresets(false)}
+            aria-hidden
+          />
+          <div className="relative w-full max-w-md overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-none">
+            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+              <div>
+                <h3 className="text-sm font-semibold">Test presets</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Sample videos to try PeerMates instantly.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPresets(false)}
+                aria-label="Close test presets"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-1 p-3">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => {
+                    handleSelectPreset(p);
+                    setShowPresets(false);
+                  }}
+                  className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border px-3 py-2 text-left cursor-pointer hover:bg-muted"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-xs font-semibold">{p.label}</span>
+                    <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                      {p.url}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

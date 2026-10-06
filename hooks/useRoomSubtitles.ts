@@ -275,7 +275,9 @@ export function useRoomSubtitles({ slug, actorId, videoType }: UseRoomSubtitlesO
     [slug, actorId]
   );
 
-  const youtubeBlocked = videoType === "youtube";
+  // Custom tracks can't attach to YouTube or provider iframes — native
+  // MP4/HLS/My Files only.
+  const youtubeBlocked = videoType === "youtube" || videoType === "embed";
 
   return {
     meta,

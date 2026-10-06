@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
     // "My Files" creation path: no URL — the host picked a file on their
     // device. Only the tiny fingerprint travels; bytes stay local.
     let videoSource: string;
-    let videoType: "youtube" | "hls" | "mp4" | "localfile";
+    let videoType: "youtube" | "hls" | "mp4" | "localfile" | "embed";
     let fingerprint: Parameters<typeof setRoomFingerprint>[1] | null = null;
 
     if (localFile && typeof localFile === "object") {
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json(
           {
             error:
+              detection.detail ||
               "Invalid video URL. Please provide a YouTube link, an HLS (.m3u8) stream, or a direct MP4 file URL.",
           },
           { status: 400 }

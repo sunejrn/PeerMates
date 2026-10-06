@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { useLocalFilePick } from "@/hooks/useLocalFilePick";
+import { GuardLogSheet } from "@/components/room/GuardLogSheet";
 import {
   formatBytes,
   formatDuration,
@@ -16,6 +17,8 @@ import {
 } from "@/lib/video/localfile";
 
 interface ModerationPanelProps {
+  slug: string;
+  actorId: string;
   slowModeSeconds: number;
   chatMuted: boolean;
   memberCount: number;
@@ -27,12 +30,22 @@ interface ModerationPanelProps {
 
 const SLOW_OPTIONS = [0, 5, 10, 30];
 
+const GUARD_LEVELS = [
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium" },
+  { id: "high", label: "High" },
+] as const;
+
+type GuardLevel = (typeof GUARD_LEVELS)[number]["id"];
+
 /**
  * Host / co-host room controls: chat slow-mode, viewer mute-all, and video
  * source changes. Every action is re-validated server-side; failures surface
  * as toasts with the server's reason. All controls are 44px+ tap targets.
  */
 export function ModerationPanel({
+  slug,
+  actorId,
   slowModeSeconds,
   chatMuted,
   memberCount,
@@ -44,7 +57,56 @@ export function ModerationPanel({
   const [pending, setPending] = useState<string | null>(null);
   const [sourceUrl, setSourceUrl] = useState("");
   const [showFileSwitch, setShowFileSwitch] = useState(false);
+  const [guardOn, setGuardOn] = useState(true);
+  const [guardLevel, setGuardLevel] = useState<GuardLevel>("medium");
+  const [guardLoaded, setGuardLoaded] = useState(false);
+  const [guardCount, setGuardCount] = useState(0);
+  const [showGuardLog, setShowGuardLog] = useState(false);
   const filePick = useLocalFilePick();
+
+  // Chat Guard settings live server-side; load once (failures keep defaults).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/rooms/${slug}/guard?actorId=${encodeURIComponent(actorId)}`
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || cancelled) return;
+        if (typeof data?.settings?.enabled === "boolean") {
+          setGuardOn(data.settings.enabled);
+        }
+        if (
+          data?.settings?.sensitivity === "low" ||
+          data?.settings?.sensitivity === "medium" ||
+          data?.settings?.sensitivity === "high"
+        ) {
+          setGuardLevel(data.settings.sensitivity);
+        }
+        if (Array.isArray(data?.log)) setGuardCount(data.log.length);
+      } catch {
+        // guard controls keep defaults; chat itself is unaffected
+      } finally {
+        if (!cancelled) setGuardLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, actorId]);
+
+  const saveGuard = async (patch: { enabled?: boolean; sensitivity?: GuardLevel }) => {
+    const res = await fetch(`/api/rooms/${slug}/guard`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "settings", actorId, ...patch }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data?.error || "Couldn't save Guard settings.");
+    if (typeof patch.enabled === "boolean") setGuardOn(patch.enabled);
+    if (patch.sensitivity) setGuardLevel(patch.sensitivity);
+  };
 
   const run = async (key: string, fn: () => Promise<void>, ok?: string) => {
     try {
@@ -127,6 +189,83 @@ export function ModerationPanel({
             }`}
           />
         </button>
+      </div>
+
+      {/* Chat Guard: auto filter + Guard log.
+          The log opens as a compact inline popover anchored here
+          (same pattern as the chat attach menu). */}
+      <div className="relative space-y-2">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-background px-3 py-2">
+          <div className="space-y-0.5">
+            <p className="text-xs font-medium text-foreground">Chat Guard</p>
+            <p className="text-[11px] text-muted-foreground">
+              {guardLoaded
+                ? guardOn
+                  ? `Filtering spam & scams (${guardLevel}).`
+                  : "Off — chat is unfiltered."
+                : "Loading Guard settings…"}
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={guardOn}
+            aria-label="Chat Guard"
+            disabled={pending !== null || !guardLoaded}
+            onClick={() => run("guard", () => saveGuard({ enabled: !guardOn }), guardOn ? "Chat Guard off." : "Chat Guard on.")}
+            className={`relative h-11 w-16 shrink-0 rounded-full border transition-colors cursor-pointer disabled:opacity-60 ${
+              guardOn ? "bg-foreground border-foreground" : "bg-muted border-border"
+            }`}
+          >
+            <span
+              className={`absolute top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-white shadow-none transition-all ${
+                guardOn ? "left-[calc(100%-2.25rem)]" : "left-1"
+              }`}
+            />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Guard sensitivity">
+          {GUARD_LEVELS.map((l) => {
+            const active = guardLevel === l.id;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                disabled={pending !== null || !guardLoaded}
+                onClick={() => run(`guard-${l.id}`, () => saveGuard({ sensitivity: l.id }), `Guard sensitivity: ${l.label}.`)}
+                aria-pressed={active}
+                className={`min-h-11 rounded-lg border text-xs font-medium cursor-pointer disabled:opacity-60 ${
+                  active
+                    ? "border-foreground bg-foreground text-background"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {pending === `guard-${l.id}` ? "…" : l.label}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowGuardLog(true)}
+          className="flex min-h-11 w-full items-center justify-between rounded-lg border border-border bg-background px-3 text-xs font-medium text-foreground cursor-pointer"
+        >
+          <span>View Guard log</span>
+          {guardCount > 0 && (
+            <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
+              {guardCount}
+            </span>
+          )}
+        </button>
+
+        <GuardLogSheet
+          slug={slug}
+          actorId={actorId}
+          open={showGuardLog}
+          onClose={() => setShowGuardLog(false)}
+        />
       </div>
 
       {/* Source change */}

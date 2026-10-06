@@ -10,8 +10,11 @@ import {
 import { UnifiedPlayerRef, VideoPlayerProps } from "./types";
 import { YouTubePlayer } from "./YouTubePlayer";
 import { NativeVideoPlayer } from "./NativeVideoPlayer";
+import { GuidedEmbedPlayer } from "./GuidedEmbedPlayer";
 import { GlassControls } from "./GlassControls";
 import { Badge } from "@/components/ui/badge";
+import { parseEmbedSource } from "@/lib/video/detector";
+import { PROVIDER_LABELS } from "@/lib/video/parseUrl";
 
 export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
   function VideoPlayer(props, ref) {
@@ -22,6 +25,10 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
       roleBadge,
       controlLabel: controlLabelProp,
       onPlayerEvent,
+      slug,
+      actorId,
+      clarityFilter,
+      clarityOverlay,
     } = props;
     const canControl = canControlProp ?? isHost;
     const badge: "host" | "cohost" | "viewer" =
@@ -112,6 +119,24 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
       containerRef.current?.requestFullscreen?.().catch(() => {});
     };
 
+    // Embedded providers (Facebook, Vimeo, TikTok, …): official iframe +
+    // guided countdown sync — the sync engine stays untouched because the
+    // guided clock lives in its own tiny API.
+    if (videoType === "embed") {
+      const embed = parseEmbedSource(props.src);
+      if (!embed) return null;
+      return (
+        <GuidedEmbedPlayer
+          provider={embed.provider}
+          providerId={embed.id}
+          label={PROVIDER_LABELS[embed.provider] ?? embed.provider}
+          slug={slug ?? ""}
+          actorId={actorId ?? ""}
+          canControl={canControl}
+        />
+      );
+    }
+
     return (
       <div
         ref={containerRef}
@@ -122,11 +147,18 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           showControls ? "" : "cursor-none"
         }`}
       >
-        {videoType === "youtube" ? (
-          <YouTubePlayer ref={innerPlayerRef} {...props} />
-        ) : (
-          <NativeVideoPlayer ref={innerPlayerRef} {...props} />
-        )}
+        <div
+          className="absolute inset-0"
+          style={clarityFilter ? { filter: clarityFilter } : undefined}
+        >
+          {videoType === "youtube" ? (
+            <YouTubePlayer ref={innerPlayerRef} {...props} />
+          ) : (
+            <NativeVideoPlayer ref={innerPlayerRef} {...props} />
+          )}
+        </div>
+        {/* Clarity Ultra: WebGL canvas drawn over the native frame */}
+        {clarityOverlay}
 
         {/* Top-left: source format only — minimal, transparent, no shadow */}
         <div

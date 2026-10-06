@@ -1,0 +1,9 @@
+{
+  "words": [
+    "fuck", "fucking", "fucker", "shit", "shitty", "bullshit",
+    "bitch", "bitches", "asshole", "dick", "dickhead", "pussy",
+    "cunt", "bastard", "whore", "slut", "fag", "faggot",
+    "nigga", "nigger", "retard", "retarded", "motherfucker"
+  ],
+  "note": "Matched whole-word after leetspeak + repeat-letter normalization."
+}

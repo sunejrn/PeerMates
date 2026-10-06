@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { VideoType } from "@/lib/video/detector";
 
 export interface UnifiedPlayerRef {
@@ -73,4 +74,12 @@ export interface VideoPlayerProps {
   onPlayerEvent?: (event: PlayerStateEvent) => void;
   onReady?: () => void;
   autoPlay?: boolean;
+  /** Room slug (embed/guided sources poll their shared clock with it). */
+  slug?: string;
+  /** Current user id (embed countdown actions + view tracking). */
+  actorId?: string;
+  /** Clarity Light tier: CSS filter applied to the video frame. */
+  clarityFilter?: string;
+  /** Clarity Ultra tier: canvas overlay drawn above the video. */
+  clarityOverlay?: ReactNode;
 }
