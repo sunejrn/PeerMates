@@ -10,8 +10,12 @@
  *   timestamps sync, zero media bandwidth). An SFU (e.g. LiveKit free tier)
  *   is the later option for host-streaming at scale.
  * - Signaling rides the existing Upstash-backed /signals endpoint (tiny
- *   SDP/ICE JSON, 2s poll during setup only). No websocket server, no TURN
- *   server (STUN only — symmetric-NAT pairs may fail with a clear message).
+ *   SDP/ICE JSON, sub-second polls during setup only). No websocket server.
+ * - NAT traversal: STUN first, then a free public TURN relay fallback
+ *   (OpenRelay project — still $0) so symmetric-NAT pairs (mobile data,
+ *   strict routers) can connect via relay instead of timing out. Relayed
+ *   media is end-to-end encrypted like any WebRTC call; if even the relay
+ *   is unreachable the viewer gets a clear message, not a silent hang.
  * - Automatic quality cap on the host sender so one tab can't saturate
  *   the host's uplink.
  */
@@ -19,10 +23,23 @@
 import type { SignalKind, SignalMessage } from "@/lib/redis/signals";
 
 const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    // Free public TURN relay (OpenRelay project credentials). Reached only
+    // when a direct peer path fails — e.g. symmetric NAT on either side.
+    {
+      urls: [
+        "turn:openrelay.metered.ca:80",
+        "turn:openrelay.metered.ca:443",
+        "turn:openrelay.metered.ca:443?transport=tcp",
+      ],
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+  ],
 };
 
-const SIGNAL_POLL_MS = 2000;
+const SIGNAL_POLL_MS = 800;
 
 export type P2PState =
   | "idle"
@@ -128,11 +145,14 @@ export class P2PHostSession {
     this.stopped = false;
     this.stream = captureVideoStream(video);
     this.pollTimer = setInterval(() => void this.drain(), SIGNAL_POLL_MS);
+    // Backgrounded tabs get throttled timers — drain immediately on return.
+    document.addEventListener("visibilitychange", this.onVis);
     await this.drain();
   }
 
   stop(): void {
     this.stopped = true;
+    document.removeEventListener("visibilitychange", this.onVis);
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
@@ -151,6 +171,10 @@ export class P2PHostSession {
   private emitCount(): void {
     this.events.onReceiversChange?.(this.pcs.size);
   }
+
+  private onVis = (): void => {
+    if (typeof document !== "undefined" && !document.hidden) void this.drain();
+  };
 
   private async drain(): Promise<void> {
     if (this.stopped) return;
@@ -208,6 +232,13 @@ export class P2PHostSession {
         pc.connectionState === "failed" ||
         pc.connectionState === "closed"
       ) {
+        // Tell the viewer fast so it shows "Try again" now instead of
+        // hanging until its 25s timeout fires.
+        void sendSignal(this.slug, {
+          to: viewerId,
+          kind: "p2p-decline",
+          payload: null,
+        }).catch(() => {});
         this.removeViewer(viewerId);
       }
     };
@@ -274,6 +305,9 @@ export class P2PViewerSession {
 
   /** Request the host stream. Rejects with ROOM_FULL / clear errors. */
   async join(hostId: string): Promise<void> {
+    // Retries must kill the previous attempt first — otherwise ghost
+    // connections pile up and the host juggles stale peer connections.
+    await this.leaveSilently();
     this.stopped = false;
     this.hostId = hostId;
     this.events.onState?.("requesting");
@@ -297,18 +331,26 @@ export class P2PViewerSession {
     if (this.connectTimer) clearTimeout(this.connectTimer);
     this.connectTimer = setTimeout(() => {
       if (!this.stopped && (!this.pc || this.pc.connectionState !== "connected")) {
+        void this.leaveSilently();
         this.events.onState?.(
           "failed",
-          "Still connecting after 25s — the host may be behind a strict NAT, or their tab closed. Try a matching local file instead."
+          "Still connecting after 25s — the host may be behind a strict NAT, their tab closed, or the relay is unreachable. Try again, or use a matching local file instead."
         );
       }
     }, 25000);
     this.pollTimer = setInterval(() => void this.drain(), SIGNAL_POLL_MS);
+    document.addEventListener("visibilitychange", this.onVis);
     await this.drain();
   }
 
-  async leave(): Promise<void> {
+  private onVis = (): void => {
+    if (typeof document !== "undefined" && !document.hidden) void this.drain();
+  };
+
+  /** Stop timers + connection without emitting "ended" (internal resets). */
+  private async leaveSilently(): Promise<void> {
     this.stopped = true;
+    document.removeEventListener("visibilitychange", this.onVis);
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
@@ -336,6 +378,10 @@ export class P2PViewerSession {
       }
       this.pc = null;
     }
+  }
+
+  async leave(): Promise<void> {
+    await this.leaveSilently();
     this.events.onState?.("ended");
   }
 
@@ -388,9 +434,11 @@ export class P2PViewerSession {
           }
           this.events.onState?.("connected");
         } else if (pc.connectionState === "failed") {
+          // Dead sessions stop polling — the user gets Try again, not a hang.
+          void this.leaveSilently();
           this.events.onState?.(
             "failed",
-            "Connection failed (likely NAT/firewall — no TURN server on the free tier). Try a matching local file instead."
+            "Connection failed (NAT/firewall blocked even the relay). Try again, or use a matching local file instead."
           );
         }
       };
@@ -409,9 +457,12 @@ export class P2PViewerSession {
         await this.pc.addIceCandidate(s.payload as RTCIceCandidateInit);
       }
     } else if (s.kind === "p2p-full") {
+      await this.leaveSilently();
       this.events.onState?.("full", "The host stream is full.");
     } else if (s.kind === "p2p-decline") {
-      this.events.onState?.("failed", "The host is not sharing right now.");
+      // Host side gave up (or stopped sharing) — fail fast with retry.
+      await this.leaveSilently();
+      this.events.onState?.("failed", "The host connection dropped. Try again.");
     }
   }
 }
