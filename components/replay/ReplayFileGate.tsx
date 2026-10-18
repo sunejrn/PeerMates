@@ -49,7 +49,7 @@ export function ReplayFileGate({
       <h3 className="text-base font-semibold text-foreground">Bring your own copy</h3>
       <p className="text-xs text-muted-foreground leading-relaxed">
         {expected
-          ? "This party used a local movie file (never uploaded). Pick the same file on this device — its fingerprint is checked automatically."
+          ? "This party used a local movie file (never uploaded). Pick the same file on this device. Its fingerprint is checked automatically."
           : "Pick the movie file on this device to start the replay."}{" "}
         {pick.fp ? `Detected: ${pick.file?.name} (${formatBytes(pick.fp.size)}).` : ""}
       </p>

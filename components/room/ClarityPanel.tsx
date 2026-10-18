@@ -58,7 +58,7 @@ export function ClarityPanel({
               className={`min-h-11 rounded-lg border text-xs font-medium cursor-pointer disabled:opacity-60 ${
                 active
                   ? "border-foreground bg-foreground text-background"
-                  : "border-border bg-background text-muted-foreground hover:text-foreground"
+                  : "border-border bg-background text-muted-foreground "
               }`}
             >
               {t.label}
@@ -73,7 +73,7 @@ export function ClarityPanel({
       )}
       {!ultraAvailable && (
         <p className="text-[11px] text-muted-foreground">
-          Clarity isn&apos;t available for this source — Ultra needs a direct video file.
+          Clarity is not available for this source. Ultra needs a direct video file.
         </p>
       )}
       {disabled && disabledReason && (

@@ -153,7 +153,7 @@ export function LocalFileGate({
             {formatBytes(hostFingerprint.size)} · {formatDuration(hostFingerprint.duration)}
           </p>
           <p className="text-[11px] text-muted-foreground">
-            Pick this exact file on your device — timestamps sync, bytes stay local.
+            Pick this exact file on your device. Timestamps sync, bytes stay local.
           </p>
         </div>
       )}
@@ -196,7 +196,7 @@ export function LocalFileGate({
             className="w-full min-h-11 text-xs border-dashed"
           >
             📂 Choose movie file on this device
-            {file ? ` — ${file.name}` : ""}
+            {file ? ` (${file.name})` : ""}
           </Button>
 
           {/* Preflight / fingerprint progress */}
@@ -303,7 +303,7 @@ export function LocalFileGate({
               <Button
                 onClick={handleJoin}
                 disabled={!rightsOk}
-                className="w-full min-h-11 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold disabled:opacity-50"
+                className="w-full min-h-11 bg-violet-600  text-[#f5f5f5] text-xs font-semibold disabled:opacity-50"
               >
                 ▶ Join synced playback
               </Button>

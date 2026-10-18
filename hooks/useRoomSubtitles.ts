@@ -230,7 +230,7 @@ export function useRoomSubtitles({ slug, actorId, videoType }: UseRoomSubtitlesO
         await fetchMeta();
         setLang(clean);
         toast.success(
-          data?.cached ? "Loaded cached translation." : "Translated — enjoy!"
+          data?.cached ? "Loaded cached translation." : "Translated. Enjoy!"
         );
       } catch (err) {
         const msg = err instanceof Error ? err.message : "Translation failed.";

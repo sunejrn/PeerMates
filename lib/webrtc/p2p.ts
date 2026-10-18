@@ -334,7 +334,7 @@ export class P2PViewerSession {
         void this.leaveSilently();
         this.events.onState?.(
           "failed",
-          "Still connecting after 25s — the host may be behind a strict NAT, their tab closed, or the relay is unreachable. Try again, or use a matching local file instead."
+          "Still connecting after 25s. The host may be behind a strict NAT, their tab closed, or the relay is unreachable. Try again, or use a matching local file instead."
         );
       }
     }, 25000);

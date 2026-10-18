@@ -63,6 +63,8 @@ export function GravityField({ className }: { className?: string }) {
     let dots: Dot[] = [];
     let width = 0;
     let height = 0;
+    let lastW = -1;
+    let lastH = -1;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const pointer = { x: -9999, y: -9999, active: false };
     let raf = 0;
@@ -70,14 +72,19 @@ export function GravityField({ className }: { className?: string }) {
     let docVisible = true;
     let t = 0;
 
-    const buildDots = () => {
+    const buildDots = (force = false) => {
+      // The canvas fills its positioned parent (absolute inset-0), so its
+      // CSS box always matches the full page height. We only touch the
+      // backing store here, never pin an inline px size.
       const rect = canvas.getBoundingClientRect();
       width = rect.width;
       height = rect.height;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
+      if (width < 1 || height < 1) return;
+      if (!force && width === lastW && height === lastH) return;
+      lastW = width;
+      lastH = height;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
       const cols = Math.max(1, Math.round(width / SPACING));
@@ -157,16 +164,33 @@ export function GravityField({ className }: { className?: string }) {
     const handlePointerLeave = () => {
       pointer.active = false;
     };
-    const handleResize = () => buildDots();
+    // Rebuild dots and (when motion is reduced) repaint the static field,
+    // since resizing the backing store clears the canvas.
+    const refresh = () => {
+      buildDots();
+      if (reduceMotion) draw();
+    };
+    const handleResize = () => refresh();
     const handleVisibility = () => {
       docVisible = document.visibilityState === "visible";
+      if (docVisible) refresh();
     };
 
-    buildDots();
+    buildDots(true);
+
+    // Rebuild whenever the page height changes (content/images/fonts load,
+    // sidebar expands, mobile browser chrome shows/hides). A window resize
+    // alone misses those, which left the field stuck at the top of the page.
+    const ro = new ResizeObserver(() => refresh());
+    ro.observe(canvas);
+    if (document.fonts?.ready) {
+      void document.fonts.ready.then(() => refresh());
+    }
 
     const io = new IntersectionObserver(
       ([entry]) => {
         onScreen = entry.isIntersecting;
+        if (entry.isIntersecting) refresh();
       },
       { threshold: 0 },
     );
@@ -194,6 +218,7 @@ export function GravityField({ className }: { className?: string }) {
     return () => {
       cancelAnimationFrame(raf);
       io.disconnect();
+      ro.disconnect();
       themeObserver.disconnect();
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("pointermove", handlePointerMove);
@@ -206,7 +231,10 @@ export function GravityField({ className }: { className?: string }) {
     <canvas
       ref={canvasRef}
       aria-hidden
-      className={cn("pointer-events-none absolute inset-0", className)}
+      className={cn(
+        "pointer-events-none absolute inset-0 h-full w-full",
+        className,
+      )}
     />
   );
 }

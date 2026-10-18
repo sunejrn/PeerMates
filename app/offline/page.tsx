@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Offline — PeerMates",
-  description: "You're offline. Reconnect to rejoin your party.",
+  title: "Offline | PeerMates",
+  description: "You are offline. Reconnect to rejoin your party.",
 };
 
 /**
@@ -19,12 +19,12 @@ export default function OfflinePage() {
         You&apos;re offline
       </h1>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground leading-relaxed">
-        PeerMates needs a connection for live parties. Check your network
-        and try again — the app will resync to the host automatically.
+        PeerMates needs a connection for live parties. Check your network and
+        try again. The app will resync to the host automatically.
       </p>
       <Link
         href="/"
-        className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-violet-600 px-5 text-sm font-semibold text-white hover:bg-violet-500"
+        className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-violet-600 px-5 text-sm font-semibold text-[#f5f5f5] "
       >
         Retry connection
       </Link>

@@ -112,7 +112,7 @@ export class P2PFileHostSession {
   async sendTo(file: File, viewerId: string): Promise<void> {
     if (file.size <= 0) throw new Error("That file looks empty.");
     if (file.size > MAX_FILE_BYTES) {
-      throw new Error("That file is over 4GB — too large to send peer-to-peer.");
+      throw new Error("That file is over 4GB, too large to send peer-to-peer.");
     }
     this.listen();
     this.closePeer(viewerId);

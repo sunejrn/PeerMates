@@ -58,7 +58,7 @@ export function EndPartyPanel({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Couldn't save the replay.");
       if (vis === "discard") {
-        toast.success("Replay discarded — nothing was kept.");
+        toast.success("Replay discarded. Nothing was kept.");
         return;
       }
       const row = data.row;
@@ -109,7 +109,7 @@ export function EndPartyPanel({
               className={`flex min-h-11 items-center gap-2.5 rounded-lg border px-3 py-2 text-left cursor-pointer transition-colors ${
                 active
                   ? "border-foreground bg-muted"
-                  : "border-border bg-background hover:bg-muted/50"
+                  : "border-border bg-background "
               }`}
             >
               <span
@@ -134,7 +134,7 @@ export function EndPartyPanel({
           What is kept
         </p>
         <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
-          Only timestamps, chat text, and reaction emoji are kept — never the
+          Only timestamps, chat text, and reaction emoji are kept, never the
           video file. Members can delete their own moments from the replay later.
         </p>
       </div>

@@ -235,7 +235,7 @@ export async function expireAutoSlow(slug: string): Promise<void> {
         type: "room_settings_changed",
         slowModeSeconds: gs.autoSlowPrev,
       });
-      await postSystemNotice(slug, "Slow mode is off — chat is calm again 🌤️");
+      await postSystemNotice(slug, "Slow mode is off. Chat is calm again 🌤️");
     }
   } catch (err) {
     console.warn("expireAutoSlow failed:", err);

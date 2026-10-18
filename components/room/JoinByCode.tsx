@@ -11,36 +11,34 @@ import { extractRoomCode, isValidRoomCode } from "@/lib/rooms/code";
 
 /**
  * Join with a room code (or pasted invite link). Mobile-first: 44px targets,
- * inline error state, loading state, no horizontal scroll.
+ * errors surfaced as top-right toasts, loading state, no horizontal scroll.
  */
 export function JoinByCode({ compact = false }: { compact?: boolean }) {
   const router = useRouter();
   const [code, setCode] = useState("");
   const [isJoining, setIsJoining] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const normalized = extractRoomCode(code);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     const slug = extractRoomCode(code);
     if (!slug || !isValidRoomCode(slug)) {
-      setError("Enter a valid party code (e.g. a1b2c3) or paste the invite link.");
+      toast.error("Enter a valid party code (e.g. a1b2c3) or paste the invite link.");
       return;
     }
     try {
       setIsJoining(true);
-      // Verify the room exists before navigating (friendly error, not a 404 page).
+      // Verify the room exists before navigating (friendly toast, not a 404 page).
       const res = await fetch(`/api/rooms/${slug}`);
       if (!res.ok) {
-        setError("No party found for that code — check it and try again.");
+        toast.error("No party found for that code. Check it and try again.");
         return;
       }
-      toast.success("Joining PeerMates party…");
+      toast.success("Joining party.");
       router.push(`/room/${slug}`);
     } catch {
-      setError("Couldn't reach the party. Check your connection and retry.");
+      toast.error("Couldn't reach the party. Check your connection and retry.");
     } finally {
       setIsJoining(false);
     }
@@ -60,10 +58,7 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
         <div className="flex flex-col min-[420px]:flex-row gap-2">
           <Input
             value={code}
-            onChange={(e) => {
-              setCode(e.target.value);
-              if (error) setError(null);
-            }}
+            onChange={(e) => setCode(e.target.value)}
             placeholder="e.g. a1b2c3 or paste link"
             aria-label="Party code or invite link"
             autoCapitalize="off"
@@ -75,11 +70,11 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
           <Button
             type="submit"
             disabled={isJoining || (code.trim() !== "" && !normalized)}
-            className="h-12 min-h-11 min-w-11 px-5 bg-[#333] dark:bg-white dark:text-black border text-white font-semibold cursor-pointer shrink-0 disabled:opacity-50"
+            className="h-12 min-h-11 min-w-11 px-5 bg-[#333] dark:bg-[#f5f5f5] dark:text-[#333333] border text-[#f5f5f5] font-semibold cursor-pointer shrink-0 disabled:opacity-50"
           >
             {isJoining ? (
               <span className="flex items-center gap-2">
-                <Spinner className="text-white" />
+                <Spinner className="text-[#f5f5f5]" />
                 Joining…
               </span>
             ) : (
@@ -90,11 +85,6 @@ export function JoinByCode({ compact = false }: { compact?: boolean }) {
         {code.trim() !== "" && normalized && (
           <p className="text-[11px] text-muted-foreground font-mono">
             Code detected: <span className="font-bold text-foreground">{normalized}</span>
-          </p>
-        )}
-        {error && (
-          <p className="text-xs text-red-600 dark:text-red-400 rounded-lg border border-red-500/30 bg-red-500/5 px-3 py-2" role="alert">
-            ❌ {error}
           </p>
         )}
       </form>

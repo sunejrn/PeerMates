@@ -42,7 +42,7 @@ export function AuthButton() {
             className="h-8 w-8 rounded-full border border-border object-cover"
           />
         ) : (
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 font-semibold text-white text-xs">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-violet-600 font-semibold text-[#f5f5f5] text-xs">
             {session.user.name?.charAt(0) || "U"}
           </div>
         )}
@@ -53,7 +53,7 @@ export function AuthButton() {
           variant="outline"
           size="sm"
           onClick={() => signOut()}
-          className="h-8 text-xs border-border bg-card/80 text-foreground hover:bg-muted"
+          className="h-8 text-xs border-border bg-card/80 text-foreground"
         >
           Sign Out
         </Button>
@@ -64,11 +64,12 @@ export function AuthButton() {
   return (
     <div className="flex items-center gap-2">
       <Button
+        variant="outline"
         size="sm"
         onClick={() => handleSocialSignIn("google")}
         disabled={pendingProvider !== null}
         aria-label="Sign in with Google"
-        className="h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-medium text-xs sm:text-sm cursor-pointer shadow-none px-3"
+        className="h-11 gap-2 font-medium text-xs sm:text-sm cursor-pointer px-3"
       >
         <svg
           className="h-4 w-4 shrink-0"
@@ -97,12 +98,13 @@ export function AuthButton() {
         </span>
       </Button>
       <Button
+        variant="outline"
         size="sm"
         onClick={() => handleSocialSignIn("github")}
         disabled={pendingProvider !== null}
         aria-label="Sign in with GitHub"
         title="Sign in with GitHub"
-        className="h-11 w-11 bg-foreground text-background hover:bg-foreground/90 cursor-pointer shadow-none px-0"
+        className="h-11 w-11 cursor-pointer px-0"
       >
         <svg
           className="h-4 w-4 fill-current shrink-0"

@@ -109,7 +109,7 @@ export function SubtitlesPanel({
       {!subs.metaLoading && !subs.meta && (
         <p className="text-xs text-muted-foreground" role="status">
           {canUpload
-            ? "No subtitles yet — upload a file to get started."
+            ? "No subtitles yet. Upload a file to get started."
             : "The host hasn't added subtitles yet."}
         </p>
       )}
@@ -166,7 +166,7 @@ export function SubtitlesPanel({
                     onClick={() => void subs.translate(p.code)}
                     disabled={subs.translating}
                     title={`Translate to ${p.label}`}
-                    className="min-h-11 px-2.5 rounded-lg border border-dashed border-border text-[11px] text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-50"
+                    className="min-h-11 px-2.5 rounded-lg border border-dashed border-border text-[11px] text-muted-foreground  cursor-pointer disabled:opacity-50"
                   >
                     + {p.label}
                   </button>
@@ -206,7 +206,7 @@ export function SubtitlesPanel({
             )}
             {subs.translateAvailable && !subs.translating && (
               <p className="text-[11px] text-muted-foreground">
-                No {subs.lang.toUpperCase()} version yet — tap a + language above
+                No {subs.lang.toUpperCase()} version yet. Tap a + language above
                 to translate (originals keep playing meanwhile).
               </p>
             )}

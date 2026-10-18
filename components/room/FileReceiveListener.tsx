@@ -63,7 +63,7 @@ export function FileReceiveListener({
 
     receiver.onOfferToast = (meta: FileMeta, fromName?: string) => {
       toast.info(
-        `${fromName || "Host"} is sending you the movie "${meta.name}" — loading it automatically…`,
+        `${fromName || "Host"} is sending you the movie ${meta.name}. Loading it now.`,
         { duration: 6000 }
       );
     };
@@ -73,7 +73,7 @@ export function FileReceiveListener({
       if (bucket === lastBucket && progressToastId !== undefined) return;
       lastBucket = bucket;
       progressToastId = `file-receive-${meta.name}-${meta.size}`;
-      toast.loading(`Receiving "${meta.name}"… ${bucket * 25}%`, {
+      toast.loading(`Receiving ${meta.name} ${bucket * 25}%`, {
         id: progressToastId,
         duration: Infinity,
       });
@@ -113,7 +113,7 @@ export function FileReceiveListener({
           },
           match
         );
-        toast.success(`"${meta.name}" received — now playing in sync with the host.`);
+        toast.success(`${meta.name} received. Playing in sync with the host.`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not load the received file.");
       }

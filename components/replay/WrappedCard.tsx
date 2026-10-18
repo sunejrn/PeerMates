@@ -66,7 +66,7 @@ export function HeatSpark({ buckets, peaks }: { buckets: number[]; peaks: Wrappe
 export function WrappedCard({ meta }: { meta: WrappedMeta }) {
   const [downloading, setDownloading] = useState(false);
   const url = replayUrl(meta.id);
-  const text = `I just watched "${meta.title}" with ${meta.viewerCount} people on PeerMates — peak moment ${fmtClock(meta.peaks[0]?.t ?? 0)}! Relive it:`;
+  const text = `I just watched ${meta.title} with ${meta.viewerCount} people on PeerMates. Peak moment ${fmtClock(meta.peaks[0]?.t ?? 0)}! Relive it:`;
 
   const copyLink = async () => {
     try {
@@ -102,7 +102,7 @@ export function WrappedCard({ meta }: { meta: WrappedMeta }) {
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(obj), 5000);
-      toast.success("Story image saved — post it to Instagram Stories!");
+      toast.success("Story image saved. Share it to Instagram Stories.");
     } catch {
       toast.error("Couldn't render the story image. Try again.");
     } finally {
@@ -112,7 +112,7 @@ export function WrappedCard({ meta }: { meta: WrappedMeta }) {
 
   const shareInstagram = () => {
     // No web intent exists for Instagram — download first, then post.
-    toast.info("Saving the 9:16 story image — then share it to your Story in Instagram.");
+    toast.info("Saving the story image. Share it to your Instagram Story.");
     void downloadStory();
   };
 

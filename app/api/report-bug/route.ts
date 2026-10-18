@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const subject = `[PeerMates bug] ${title} — reported by ${name}`;
-    const text = `Reporter: ${name}\nTitle: ${title}\n\n${description}\n\n— sent from PeerMates Settings > Report a bug`;
+    const subject = `[PeerMates bug] ${title} (reported by ${name})`;
+    const text = `Reporter: ${name}\nTitle: ${title}\n\n${description}\n\nSent from PeerMates Settings > Report a bug`;
 
     // 1) Resend (if configured)
     const resendKey = process.env.RESEND_API_KEY;
@@ -70,7 +70,7 @@ export async function POST(req: NextRequest) {
       fallback: mailto,
       message: resendKey
         ? "Report received."
-        : "Report received — email delivery is not configured on this server yet, so it was logged for the owner.",
+        : "Report received. Email delivery is not configured on this server yet, so it was logged for the owner.",
     });
   } catch (error: unknown) {
     return NextResponse.json(

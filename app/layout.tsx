@@ -23,9 +23,9 @@ const geistMono = Geist_Mono({
 
 /* metadata */
 export const metadata: Metadata = {
-  title: "PeerMates - Real-Time Synchronized Watch Parties",
+  title: "PeerMates | Watch parties in sync",
   description:
-    "Watch videos together in real-time with frame-accurate sync, live chat, and presence.",
+    "Watch videos together in sync with live chat and presence. No downloads.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -77,7 +77,7 @@ export default function RootLayout({
         <QueryProvider>
           <TooltipProvider>{children}</TooltipProvider>
         </QueryProvider>
-        <Toaster position="bottom-right" />
+        <Toaster position="top-right" />
       </body>
     </html>
   );

@@ -51,7 +51,7 @@ function Waveform({
           <span
             key={i}
             className={`w-[3px] shrink-0 rounded-full ${
-              played ? "bg-white" : live ? "bg-red-400" : "bg-white/40"
+              played ? "bg-[#f5f5f5]" : live ? "bg-red-400" : "bg-[#f5f5f5]/40"
             }`}
             style={{ height: `${Math.max(12, p * 100)}%` }}
           />
@@ -264,7 +264,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
         err instanceof DOMException &&
         (err.name === "NotAllowedError" || err.name === "SecurityError")
       ) {
-        fail("Microphone blocked — allow mic access in your browser settings.");
+        fail("Microphone blocked. Allow mic access in your browser settings.");
       } else {
         fail("Couldn't start recording. Try again.");
       }
@@ -306,7 +306,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
       return;
     }
     if (duration < VOICE_MIN_SECONDS || blob.size === 0) {
-      fail("Too short — tap mic, record at least a second, then tap Stop.");
+      fail("Too short. Tap the mic, record at least a second, then tap Stop.");
       setSeconds(0);
       return;
     }
@@ -394,7 +394,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
           onClick={() => stopRecording(true)}
           aria-label="Cancel recording"
           title="Cancel"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm text-muted-foreground hover:text-foreground cursor-pointer"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm text-muted-foreground  cursor-pointer"
         >
           ✕
         </button>
@@ -451,7 +451,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
           onClick={discardPreview}
           aria-label="Discard recording"
           title="Discard"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground  cursor-pointer"
         >
           ✕
         </button>
@@ -575,7 +575,7 @@ export function VoiceRecorder({ onSend, onError, ptt = false, disabled = false, 
       onContextMenu={(e) => e.preventDefault()}
       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full cursor-pointer touch-manipulation select-none disabled:opacity-50 ${
         transparentIdle
-          ? "text-muted-foreground hover:text-foreground active:text-foreground"
+          ? "text-muted-foreground  active:text-foreground"
           : "border border-border bg-background text-xs font-medium active:bg-muted"
       }`}
     >

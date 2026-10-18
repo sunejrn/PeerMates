@@ -168,7 +168,7 @@ export const VideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         >
           <Badge
             variant="outline"
-            className="border-white/10 bg-black/30 text-[10px] font-mono text-zinc-300 uppercase px-1.5 py-0 rounded-lg"
+            className="border-[#f5f5f5]/10 bg-black/30 text-[10px] font-mono text-zinc-300 uppercase px-1.5 py-0 rounded-lg"
           >
             {videoType === "localfile" ? "My File" : videoType}
           </Badge>

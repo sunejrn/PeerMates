@@ -20,10 +20,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const base = siteUrl();
   const replay = await getReplayRow(id).catch(() => null);
   if (!replay) {
-    return { title: "Replay not found — PeerMates" };
+    return { title: "Replay not found | PeerMates" };
   }
-  const title = `${replay.title} — Party Replay | PeerMates`;
-  const description = `Relive "${replay.title}": ${replay.viewerCount} viewers, peak moment and highlights. Made with PeerMates.`;
+  const title = `${replay.title} | Party Replay on PeerMates`;
+  const description = `Relive ${replay.title} with ${replay.viewerCount} viewers. Peak moments and highlights, made with PeerMates.`;
   return {
     title,
     description,

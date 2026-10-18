@@ -55,7 +55,7 @@ function Toggle({
       } border border-border`}
     >
       <span
-        className={`absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-white shadow-none transition-all ${
+        className={`absolute top-1/2 h-5 w-5 -translate-y-1/2 rounded-full bg-[#f5f5f5] shadow-none transition-all ${
           checked ? "left-[1.4rem]" : "left-1"
         }`}
       />
@@ -136,7 +136,7 @@ export default function SettingsPage() {
   const handleSaveNickname = () => {
     const clean = nickname.trim().slice(0, 24);
     if (!clean) {
-      toast.error("Enter a nickname first.");
+      toast.error("Enter a nickname.");
       return;
     }
     try {
@@ -146,7 +146,7 @@ export default function SettingsPage() {
       return;
     }
     setNicknameSaved(clean);
-    toast.success(`Nickname saved — you'll join rooms as “${clean}”.`);
+    toast.success(`Nickname saved. You will join rooms as ${clean}.`);
   };
 
   const handleExportData = () => {
@@ -192,7 +192,7 @@ export default function SettingsPage() {
       // continue to defaults reset
     }
     reset();
-    toast.success("All local PeerMates data cleared — reloading with defaults.");
+    toast.success("All local PeerMates data cleared. Reloading with defaults.");
     setTimeout(() => window.location.reload(), 800);
   };
 
@@ -208,7 +208,7 @@ export default function SettingsPage() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Could not send the report.");
-      toast.success("Bug report sent — thank you!");
+      toast.success("Bug report sent. Thank you!");
       setBugName("");
       setBugTitle("");
       setBugDesc("");
@@ -230,7 +230,7 @@ export default function SettingsPage() {
           <nav className="flex items-center gap-1 text-sm" aria-label="Primary">
             <Link
               href="/rooms"
-              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground hover:text-foreground"
+              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground "
             >
               All Rooms
             </Link>
@@ -252,7 +252,7 @@ export default function SettingsPage() {
         <div className="mb-6 space-y-1">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Settings</h1>
           <p className="text-sm text-muted-foreground">
-            Saved on this device instantly. Defaults are ON unless noted.
+            Saved on this device. Defaults are on unless noted.
           </p>
         </div>
 
@@ -270,7 +270,7 @@ export default function SettingsPage() {
               <div className="divide-y divide-border">
                 <SettingRow
                   title="Notifications"
-                  desc="Toast alerts for file transfers, promotions, and room events."
+                  desc="Alerts for file transfers, promotions, and room events."
                   control={
                     <Toggle
                       checked={settings.notifications}
@@ -281,7 +281,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Appearance"
-                  desc="Follow your system, or force light / dark."
+                  desc="Follow your system or pick light or dark."
                   control={
                     <div className="flex rounded-lg border border-border bg-muted p-1" role="radiogroup" aria-label="Appearance">
                       {(["system", "light", "dark"] as ThemeChoice[]).map((t) => (
@@ -294,7 +294,7 @@ export default function SettingsPage() {
                           className={`min-h-9 rounded-lg px-3 text-xs font-medium capitalize cursor-pointer ${
                             settings.theme === t
                               ? "bg-background text-foreground shadow-none"
-                              : "text-muted-foreground hover:text-foreground"
+                              : "text-muted-foreground "
                           }`}
                         >
                           {t}
@@ -305,7 +305,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Delete my rooms automatically"
-                  desc="When ON, rooms vanish from All Rooms 30 days after your last visit. When OFF, they stay until you delete them."
+                  desc="Rooms leave All Rooms 30 days after your last visit. Turn this off to keep them until you delete them."
                   control={
                     <Toggle
                       checked={settings.autoDeleteRooms}
@@ -316,7 +316,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Reduce motion"
-                  desc="Minimize animations and transitions across the app. Off by default."
+                  desc="Minimize animations and transitions. Off by default."
                   control={
                     <Toggle
                       checked={settings.reduceMotion}
@@ -334,10 +334,10 @@ export default function SettingsPage() {
                 Profile
               </h2>
               <p className="py-2 text-xs leading-relaxed text-muted-foreground">
-                The name guests see. Saved on this device and pre-filled at
-                every room join — no signup needed.
+                The name guests see. Saved on this device and filled in when you
+                join a room.
                 {nicknameSaved ? (
-                  <> Currently joining as <strong className="text-foreground">“{nicknameSaved}”</strong>.</>
+                  <> Currently joining as <strong className="text-foreground">{nicknameSaved}</strong>.</>
                 ) : null}
               </p>
               <div className="flex gap-2">
@@ -363,7 +363,7 @@ export default function SettingsPage() {
               <div className="divide-y divide-border">
                 <SettingRow
                   title="Live chat"
-                  desc="When OFF, the Live Chat tab shows “Host disabled live chat on this room.” instead of messages."
+                  desc="When off the Live Chat tab shows that the host disabled chat for this room."
                   control={
                     <Toggle
                       checked={settings.liveChatEnabled}
@@ -374,7 +374,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Autoplay on join"
-                  desc="Try to start playback automatically when you join (browsers may still require one tap)."
+                  desc="Try to start playback when you join. Browsers may still ask for one tap."
                   control={
                     <Toggle
                       checked={settings.autoplayDefault}
@@ -385,7 +385,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Low-Data Mode default"
-                  desc="Start new rooms with Data Saver already on (lowest HLS quality, hidden avatars)."
+                  desc="Start new rooms with Data Saver on. Lowest HLS quality and hidden avatars."
                   control={
                     <Toggle
                       checked={settings.dataSaverDefault}
@@ -396,7 +396,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Audio-only default"
-                  desc="Start rooms with video hidden and audio playing (saves screen and battery). Off by default."
+                  desc="Start rooms with video hidden and audio playing to save screen and battery. Off by default."
                   control={
                     <Toggle
                       checked={settings.audioOnlyDefault}
@@ -407,7 +407,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Presence avatars"
-                  desc="Show profile pictures in the Watching list. Turn off for a text-only list."
+                  desc="Show profile pictures in the Watching list. Turn off for a text only list."
                   control={
                     <Toggle
                       checked={settings.showAvatars}
@@ -418,7 +418,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Data cost region"
-                  desc="Which country's mobile-data prices estimate your session cost. Auto uses your locale."
+                  desc="Country used to estimate your mobile data cost. Auto uses your locale."
                   control={
                     <SelectControl
                       value={settings.priceRegion}
@@ -439,7 +439,7 @@ export default function SettingsPage() {
               <div className="divide-y divide-border">
                 <SettingRow
                   title="Typing indicators"
-                  desc="Show “X is typing…” bubbles while others type."
+                  desc="Show typing bubbles while others type."
                   control={
                     <Toggle
                       checked={settings.typingIndicators}
@@ -450,7 +450,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Message sounds"
-                  desc="Play a soft chime when a new message arrives from someone else. Off by default."
+                  desc="Play a soft chime for new messages from others. Off by default."
                   control={
                     <Toggle
                       checked={settings.messageSounds}
@@ -461,7 +461,7 @@ export default function SettingsPage() {
                 />
                 <SettingRow
                   title="Message text size"
-                  desc="How large chat messages render on every device you use."
+                  desc="How large chat messages look in every room."
                   control={
                     <SelectControl
                       value={settings.chatFontSize}
@@ -486,7 +486,7 @@ export default function SettingsPage() {
               <div className="divide-y divide-border">
                 <SettingRow
                   title="Confirm before leaving"
-                  desc="Ask “are you sure?” before you leave a room, so hosts never exit by accident. Off by default."
+                  desc="Ask before you leave a room so hosts do not exit by accident. Off by default."
                   control={
                     <Toggle
                       checked={settings.confirmBeforeLeave}
@@ -508,9 +508,8 @@ export default function SettingsPage() {
                 </Button>
               </div>
               <p className="pb-4 text-[11px] leading-relaxed text-muted-foreground">
-                Rooms, settings, nickname, and playback positions live only in
-                this browser — nothing to download an account for, nothing sent
-                to a server.
+                Rooms, settings, your nickname, and playback positions stay in
+                this browser. Nothing is sent to a server.
               </p>
             </Card>
 
@@ -520,8 +519,8 @@ export default function SettingsPage() {
                 Report a bug
               </h2>
               <p className="py-2 text-xs leading-relaxed text-muted-foreground">
-                Found something broken? Tell the owner — your report is emailed
-                directly to the team.
+                Found something broken? Your report is emailed straight to the
+                team.
               </p>
               {!showBugForm ? (
                 <Button onClick={() => setShowBugForm(true)} variant="outline" className="min-h-11">
@@ -563,7 +562,7 @@ export default function SettingsPage() {
                       id="bug-desc"
                       value={bugDesc}
                       onChange={(e) => setBugDesc(e.target.value)}
-                      placeholder="What happened, what did you expect, steps to reproduce…"
+                      placeholder="What happened, what you expected, and the steps to reproduce."
                       rows={4}
                       required
                       className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-violet-500"

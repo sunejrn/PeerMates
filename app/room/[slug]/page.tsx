@@ -271,7 +271,7 @@ export default function RoomPage({
       setLocalMatch(null);
       setFileMatch(null);
       setPlayBlocked(false);
-      toast.success("The video source was changed — re-syncing…");
+      toast.success("Video source changed. Re-syncing.");
     },
   });
 
@@ -730,12 +730,12 @@ export default function RoomPage({
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        toast.success("You are now the room host!", { id: "role-change" });
+        toast.success("You are now the host.", { id: "role-change" });
       } else {
         toast.error(data?.error || data?.message || "Host claim rejected.");
       }
     } catch {
-      toast.error("Failed to request host role");
+      toast.error("Could not request host role.");
     } finally {
       setIsClaimingHost(false);
     }
@@ -832,7 +832,7 @@ export default function RoomPage({
         <header className="flex h-14 items-center justify-between border-b border-border px-4 sm:px-6">
           <Link
             href="/"
-            className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+            className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground "
           >
             ← Back to Lobby
           </Link>
@@ -882,7 +882,7 @@ export default function RoomPage({
             type="button"
             onClick={() => setNavOpen(true)}
             aria-label="Open navigation"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-foreground hover:bg-muted lg:hidden"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-foreground  lg:hidden"
           >
             <span aria-hidden className="flex flex-col gap-1">
               <span className="block h-0.5 w-5 bg-current" />
@@ -894,7 +894,7 @@ export default function RoomPage({
             href="/"
             aria-label="Back to Lobby"
             title="Back to Lobby"
-            className="hidden lg:flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="hidden lg:flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-lg text-muted-foreground   transition-colors"
           >
             <span aria-hidden>←</span>
           </Link>
@@ -928,13 +928,13 @@ export default function RoomPage({
           <nav className="hidden md:flex items-center gap-1 text-sm" aria-label="Primary">
             <Link
               href="/rooms"
-              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground hover:text-foreground"
+              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground "
             >
               All Rooms
             </Link>
             <Link
               href="/settings"
-              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground hover:text-foreground"
+              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground "
             >
               Settings
             </Link>
@@ -966,7 +966,7 @@ export default function RoomPage({
                 type="button"
                 onClick={() => setNavOpen(false)}
                 aria-label="Close navigation"
-                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
+                className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground "
               >
                 ✕
               </button>
@@ -975,21 +975,21 @@ export default function RoomPage({
               <Link
                 href="/"
                 onClick={() => setNavOpen(false)}
-                className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium hover:bg-muted"
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm font-medium "
               >
                 Back to Lobby
               </Link>
               <Link
                 href="/rooms"
                 onClick={() => setNavOpen(false)}
-                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted"
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm "
               >
                 All Rooms
               </Link>
               <Link
                 href="/settings"
                 onClick={() => setNavOpen(false)}
-                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted"
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm "
               >
                 Settings
               </Link>
@@ -999,7 +999,7 @@ export default function RoomPage({
                   setNavOpen(false);
                   setMobileTab("video-info");
                 }}
-                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted text-left"
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm  text-left"
               >
                 Watching ({members.length})
               </button>
@@ -1009,7 +1009,7 @@ export default function RoomPage({
                   setNavOpen(false);
                   setMobileTab("chat");
                 }}
-                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted text-left"
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm  text-left"
               >
                 Live chat ({visibleMessageCount})
               </button>
@@ -1019,7 +1019,7 @@ export default function RoomPage({
                   setNavOpen(false);
                   setMobileTab("analytics");
                 }}
-                className="flex min-h-11 items-center rounded-lg px-3 text-sm hover:bg-muted text-left"
+                className="flex min-h-11 items-center rounded-lg px-3 text-sm  text-left"
               >
                 Analytics
               </button>
@@ -1102,9 +1102,8 @@ export default function RoomPage({
                     right under the waiting player. */}
                 {isLocalRoom && !localFile && (
                   <p className="mt-2 rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 text-[11px] text-muted-foreground">
-                    No file needed — you&apos;ll watch the host&apos;s playback
-                    automatically below. Have the same movie? Pick it in
-                    “My Files” for frame-accurate sync.
+                    No file needed. You will watch the host playback below. Have
+                    the same movie? Pick it in My Files for frame accurate sync.
                   </p>
                 )}
               </>
@@ -1117,26 +1116,27 @@ export default function RoomPage({
                 onClick={handleTapToPlay}
                 className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/70 cursor-pointer rounded-lg p-6 text-center min-h-44"
               >
-                <span className="text-sm font-semibold text-white">
+                <span className="text-sm font-semibold text-[#f5f5f5]">
                   Tap to join synced playback
                 </span>
                 <span className="text-[11px] text-zinc-300 max-w-xs">
-                  Your browser blocked autoplay with sound — one tap starts you in sync
-                  with everyone.
+                  Your browser blocked autoplay with sound. One tap starts you in
+                  sync with everyone.
                 </span>
               </button>
             )}
             {/* Audio-only mode: video hidden, audio keeps playing. */}
             {audioOnly && (room.videoType !== "localfile" || localFile) && (
               <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-2 bg-zinc-950/95 rounded-lg p-6 text-center">
-                <p className="text-sm font-semibold text-white">Audio-only mode</p>
+                <p className="text-sm font-semibold text-[#f5f5f5]">Audio-only mode</p>
                 <p className="text-[11px] text-zinc-400 max-w-xs">
-                  Video hidden to save screen &amp; battery — audio keeps playing in sync.
+                  Video hidden to save screen and battery. Audio keeps playing in
+                  sync.
                 </p>
                 <button
                   type="button"
                   onClick={() => setAudioOnly(false)}
-                  className="mt-1 min-h-11 rounded-lg border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white cursor-pointer"
+                  className="mt-1 min-h-11 rounded-lg border border-[#f5f5f5]/20 bg-[#f5f5f5]/10 px-4 text-xs font-semibold text-[#f5f5f5] cursor-pointer"
                 >
                   Show video
                 </button>
@@ -1153,8 +1153,8 @@ export default function RoomPage({
               <span className="h-2 w-2 rounded-full bg-foreground/40 animate-pulse" />
               <span>
                 {connection === "offline"
-                  ? "You are offline — waiting for network, then catching up to the host…"
-                  : "Reconnecting… catching up to the host's latest state."}
+                  ? "You are offline. Waiting for the network to catch up to the host."
+                  : "Reconnecting to the host state."}
               </span>
             </div>
           )}
@@ -1167,7 +1167,7 @@ export default function RoomPage({
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "video-info"
                   ? "bg-background text-foreground shadow-none"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground "
               }`}
             >
               Watching ({members.length})
@@ -1178,7 +1178,7 @@ export default function RoomPage({
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "analytics"
                   ? "bg-background text-foreground shadow-none"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground "
               }`}
             >
               Analytics
@@ -1189,7 +1189,7 @@ export default function RoomPage({
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 mobileTab === "chat"
                   ? "bg-background text-foreground shadow-none"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground "
               }`}
             >
               Live Chat ({visibleMessageCount})
@@ -1211,7 +1211,7 @@ export default function RoomPage({
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 deskTab === "info"
                   ? "bg-background text-foreground shadow-none"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground "
               }`}
             >
               Watching ({members.length})
@@ -1223,7 +1223,7 @@ export default function RoomPage({
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 deskTab === "analytics"
                   ? "bg-background text-foreground shadow-none"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground "
               }`}
             >
               Analytics
@@ -1235,7 +1235,7 @@ export default function RoomPage({
               className={`flex-1 min-h-11 flex items-center justify-center rounded-lg text-xs font-medium transition-all cursor-pointer ${
                 deskTab === "chat"
                   ? "bg-background text-foreground shadow-none"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground "
               }`}
             >
               Chat ({visibleMessageCount})
@@ -1306,7 +1306,7 @@ export default function RoomPage({
                       variant="outline"
                       className="border-border text-xs px-3 py-2 rounded-lg"
                     >
-                      Request sent — waiting for host
+                      Request sent. Waiting for host
                     </Badge>
                   ) : (
                     <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">

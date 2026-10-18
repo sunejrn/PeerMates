@@ -57,7 +57,7 @@ export default function AllRoomsPage() {
             </Link>
             <Link
               href="/settings"
-              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground hover:text-foreground"
+              className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground "
             >
               Settings
             </Link>
@@ -72,8 +72,8 @@ export default function AllRoomsPage() {
         <div className="mb-6 space-y-1">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">All Rooms</h1>
           <p className="text-sm text-muted-foreground">
-            Every party you created or joined on your account. Rooms disappear
-            automatically 30 days after your last visit (toggle in Settings).
+            Parties you created or joined. Rooms are removed 30 days after your
+            last visit unless you turn that off in Settings.
           </p>
         </div>
 
@@ -90,7 +90,7 @@ export default function AllRoomsPage() {
           <Card className="p-8 text-center space-y-3">
             <p className="text-sm font-medium">No rooms yet</p>
             <p className="text-xs text-muted-foreground">
-              Create a party or join one with a code — it will show up here.
+              Create a party or join one with a code. It will show up here.
             </p>
             <Button onClick={() => (window.location.href = "/")} className="min-h-11">
               Back to Lobby
@@ -109,7 +109,7 @@ export default function AllRoomsPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <Link
                       href={`/room/${r.slug}`}
-                      className="truncate text-sm font-semibold hover:underline"
+                      className="truncate text-sm font-semibold "
                       title={r.title}
                     >
                       {r.title}

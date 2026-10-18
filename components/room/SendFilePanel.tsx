@@ -81,7 +81,7 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
 
   const handleSend = async () => {
     if (!file) {
-      toast.error("Load your movie file first (My Files above), then send it.");
+      toast.error("Load your movie file first, then send it.");
       return;
     }
     if (selectedIds.length === 0) {
@@ -106,7 +106,7 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
         const member = targets.find((m) => m.id === userId);
         toast.error(`${member?.name || "Viewer"}: ${message}`);
       };
-      toast.success(`Sending "${file.name}" to ${selectedIds.length} viewer${selectedIds.length === 1 ? "" : "s"}… keep this tab open.`);
+      toast.success(`Sending ${file.name} to ${selectedIds.length} viewer${selectedIds.length === 1 ? "" : "s"}. Keep this tab open.`);
       // Sequential sends keep host uplink stable (parallel N×bitrate stalls).
       for (const viewerId of selectedIds) {
         try {
@@ -116,7 +116,7 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
           toast.error(err instanceof Error ? `${member?.name || "Viewer"}: ${err.message}` : "Send failed.");
         }
       }
-      toast.success("File send finished — viewers auto-loaded it into sync.");
+      toast.success("File sent. Viewers loaded it in sync.");
     } finally {
       setSending(false);
     }
@@ -134,8 +134,8 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
       </div>
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         {file
-          ? <>Sending <strong className="text-foreground">{fileName || file.name}</strong> ({formatBytes(file.size)}) peer-to-peer. Recipients get a toast, the file auto-loads on their device, and playback stays in sync — only you (and co-hosts you promote) keep control.</>
-          : "Load your movie in “My Files” above first — that file is what gets sent."}
+          ? <>Sending <strong className="text-foreground">{fileName || file.name}</strong> ({formatBytes(file.size)}) peer-to-peer. Recipients get a toast, the file auto-loads on their device, and playback stays in sync. Only you (and co-hosts you promote) keep control.</>
+          : "Load your movie in My Files above first. That file is what gets sent."}
       </p>
 
       {targets.length === 0 ? (
@@ -159,7 +159,7 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
               return (
                 <label
                   key={m.id}
-                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs hover:bg-muted"
+                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs "
                 >
                   <input
                     type="checkbox"
@@ -194,7 +194,7 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
       <Button
         onClick={handleSend}
         disabled={sending || !file || selectedIds.length === 0}
-        className="w-full min-h-11 bg-[#333] dark:bg-white dark:text-black border text-white text-xs font-semibold disabled:opacity-50"
+        className="w-full min-h-11 bg-[#333] dark:bg-[#f5f5f5] dark:text-[#333333] border text-[#f5f5f5] text-xs font-semibold disabled:opacity-50"
       >
         {sending ? "Sending… keep this tab open" : `Send file${selectedIds.length > 0 ? ` to ${selectedIds.length} viewer${selectedIds.length === 1 ? "" : "s"}` : ""}`}
       </Button>

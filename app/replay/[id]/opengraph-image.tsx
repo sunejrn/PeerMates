@@ -27,7 +27,7 @@ export default async function Image({
         <div
           style={{
             width: 1200, height: 630, display: "flex", alignItems: "center",
-            justifyContent: "center", background: "#0b0614", color: "#fff",
+            justifyContent: "center", background: "#0b0614", color: "#f5f5f5",
             fontSize: 48, fontFamily: "system-ui,sans-serif",
           }}
         >

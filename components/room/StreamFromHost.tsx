@@ -150,7 +150,7 @@ export function StreamFromHostPanel({
     setShareError(null);
     const video = getHostVideo();
     if (!video) {
-      setShareError("No video element yet — pick your file and let it load first.");
+      setShareError("No video element yet. Pick your file and let it load first.");
       return;
     }
     try {
@@ -309,7 +309,7 @@ export function StreamFromHostPanel({
         No matching file? The host can stream their playback directly to{" "}
         <strong className="text-foreground">up to {avail.max} viewers</strong>{" "}
         with automatic quality caps. For big rooms use YouTube, links, or
-        matching local files instead — P2P can&apos;t serve hundreds (an SFU
+         matching local files instead. P2P can&apos;t serve hundreds (an SFU
         like LiveKit&apos;s free tier is the future option).
       </p>
 
@@ -319,7 +319,7 @@ export function StreamFromHostPanel({
             <Button
               onClick={startSharing}
               disabled={shareBusy}
-              className="w-full min-h-11 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold disabled:opacity-60"
+              className="w-full min-h-11 bg-cyan-600  text-[#f5f5f5] text-xs font-semibold disabled:opacity-60"
             >
               {shareBusy ? "Starting…" : "📡 Share my playback (P2P)"}
             </Button>
@@ -328,7 +328,7 @@ export function StreamFromHostPanel({
               <div className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 text-xs" role="status">
                 <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
                 <span className="text-cyan-700 dark:text-cyan-300">
-                  Sharing to {receiverCount} viewer{receiverCount === 1 ? "" : "s"} — keep this
+                  Sharing to {receiverCount} viewer{receiverCount === 1 ? "" : "s"}. Keep this
                   tab open and playing.
                 </span>
               </div>
@@ -354,19 +354,19 @@ export function StreamFromHostPanel({
               <Button
                 onClick={startWatching}
                 disabled={!avail.sharing || full}
-                className="w-full min-h-11 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold disabled:opacity-50"
+                className="w-full min-h-11 bg-cyan-600  text-[#f5f5f5] text-xs font-semibold disabled:opacity-50"
               >
                 📡 Watch host stream
               </Button>
               {!avail.sharing && (
                 <p className="text-[11px] text-muted-foreground">
-                  The host isn&apos;t sharing right now — pick the matching local file above.
+                  The host isn&apos;t sharing right now. Pick the matching local file above.
                 </p>
               )}
               {avail.sharing && full && (
                 <p className="text-[11px] text-amber-700 dark:text-amber-300" role="alert">
                   ⚠️ The host stream is full ({avail.receivers}/{avail.max}). Use a matching
-                  local file — link sources also work for big rooms.
+                  local file. Link sources also work for big rooms.
                 </p>
               )}
             </>
@@ -407,7 +407,7 @@ export function StreamFromHostPanel({
               </div>
               <p className="text-[11px] text-muted-foreground">
                 Live from host (~1–2s behind). Pausing only pauses your view.
-                You didn&apos;t need the file — you&apos;re watching the host&apos;s playback.
+                You did not need the file. You are watching the host playback.
               </p>
               <div className="flex gap-1.5">
                 <Button onClick={backToLive} variant="outline" className="flex-1 min-h-11 text-xs">
@@ -564,8 +564,8 @@ export function HostStreamMain({
           </p>
           <p className="max-w-xs text-[11px] text-zinc-400 sm:text-xs">
             {sharing
-              ? "You don't need the file — you're watching the host's playback directly."
-              : "The host's movie is starting. You'll join automatically — no file needed."}
+              ? "You do not need the file. You are watching the host playback directly."
+              : "The host movie is starting. You will join automatically, no file needed."}
           </p>
           {failed && (
             <div className="space-y-2">
@@ -579,7 +579,7 @@ export function HostStreamMain({
                   setState("idle");
                   void join();
                 }}
-                className="min-h-11 rounded-lg border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white"
+                className="min-h-11 rounded-lg border border-[#f5f5f5]/20 bg-[#f5f5f5]/10 px-4 text-xs font-semibold text-[#f5f5f5]"
               >
                 Try again
               </button>
@@ -596,7 +596,7 @@ export function HostStreamMain({
       {/* Keep the video node mounted for auto-attach even before live */}
       {!live && <video ref={videoRef} playsInline controls className="hidden" />}
       <div className="pointer-events-none absolute left-2 top-2 z-20">
-        <span className="rounded-lg border border-white/10 bg-black/30 px-1.5 py-0 font-mono text-[10px] uppercase text-zinc-300">
+        <span className="rounded-lg border border-[#f5f5f5]/10 bg-black/30 px-1.5 py-0 font-mono text-[10px] uppercase text-zinc-300">
           host stream · {receivers}/{max}
         </span>
       </div>

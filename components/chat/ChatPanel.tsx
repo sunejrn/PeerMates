@@ -182,10 +182,10 @@ function VoiceBubble({
             className={`w-[3px] shrink-0 rounded-full ${
               i / peaks.length < progress
                 ? mine
-                  ? "bg-white"
+                  ? "bg-[#f5f5f5]"
                   : "bg-violet-500"
                 : mine
-                  ? "bg-white/40"
+                  ? "bg-[#f5f5f5]/40"
                   : "bg-muted-foreground/40"
             }`}
             style={{ height: `${Math.max(12, Math.min(1, p) * 100)}%` }}
@@ -201,14 +201,14 @@ function VoiceBubble({
         }}
         aria-label="Voice playback speed"
         className={`h-11 min-w-11 shrink-0 rounded-lg px-1.5 font-mono text-[11px] font-bold cursor-pointer ${
-          mine ? "text-white/90" : "text-foreground"
+          mine ? "text-[#f5f5f5]/90" : "text-foreground"
         }`}
       >
         {speed}x
       </button>
       <span
         className={`font-mono text-[10px] tabular-nums shrink-0 ${
-          mine ? "text-white/80" : "text-muted-foreground"
+          mine ? "text-[#f5f5f5]/80" : "text-muted-foreground"
         }`}
       >
         {formatClock(attachment.duration ?? 0)}
@@ -298,7 +298,7 @@ function VideoBubble({
         onClick={onExpand}
         aria-label="Expand video"
         title="Expand video"
-        className="absolute right-1.5 top-1.5 flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-sm text-white cursor-pointer hover:bg-black/80"
+        className="absolute right-1.5 top-1.5 flex h-11 w-11 items-center justify-center rounded-lg bg-black/60 text-sm text-[#f5f5f5] cursor-pointer "
       >
         ⤢
       </button>
@@ -963,7 +963,7 @@ export function ChatPanel({
                           ) : (
                             <span
                               className="mb-1.5 inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] opacity-80"
-                              title="Pinned moment — the host can jump the video here"
+                              title="Pinned moment. The host can jump the video here."
                             >
                               {formatClock(msg.moment)}
                             </span>
@@ -1133,7 +1133,7 @@ export function ChatPanel({
                                 setMenuFor(null);
                               }}
                               aria-label={`React ${emoji}`}
-                              className="flex min-h-11 items-center justify-center rounded-lg border border-border text-xl cursor-pointer hover:bg-muted"
+                              className="flex min-h-11 items-center justify-center rounded-lg border border-border text-xl cursor-pointer "
                             >
                               {emoji}
                             </button>
@@ -1142,7 +1142,7 @@ export function ChatPanel({
                         <button
                           type="button"
                           onClick={() => openCopy(msg)}
-                          className="mt-1 flex min-h-11 w-full items-center rounded-lg px-3 text-xs text-foreground cursor-pointer hover:bg-muted"
+                          className="mt-1 flex min-h-11 w-full items-center rounded-lg px-3 text-xs text-foreground cursor-pointer "
                         >
                           Copy
                         </button>
@@ -1158,7 +1158,7 @@ export function ChatPanel({
                             setMenuFor(null);
                             requestAnimationFrame(() => inputRef.current?.focus());
                           }}
-                          className="flex min-h-11 w-full items-center rounded-lg px-3 text-xs text-foreground cursor-pointer hover:bg-muted"
+                          className="flex min-h-11 w-full items-center rounded-lg px-3 text-xs text-foreground cursor-pointer "
                         >
                           Reply
                         </button>
@@ -1169,7 +1169,7 @@ export function ChatPanel({
                               setMenuFor(null);
                               onDelete?.(msg.id);
                             }}
-                            className="flex min-h-11 w-full items-center rounded-lg px-3 text-xs cursor-pointer hover:bg-muted"
+                            className="flex min-h-11 w-full items-center rounded-lg px-3 text-xs cursor-pointer "
                           >
                             Delete
                           </button>
@@ -1217,7 +1217,7 @@ export function ChatPanel({
             type="button"
             onClick={() => setReplyDraft(null)}
             aria-label="Cancel reply"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground  cursor-pointer"
           >
             ✕
           </button>
@@ -1236,7 +1236,7 @@ export function ChatPanel({
           pinned at the bottom and never shifts. */}
       {pinDraft !== null && (
         <div className="flex items-center gap-2 border-t border-border bg-muted px-3 py-1.5 text-[11px] shrink-0">
-          <span className="min-w-0 flex-1 truncate">Pinned to {formatClock(pinDraft)} — host taps jump the video</span>
+          <span className="min-w-0 flex-1 truncate">Pinned to {formatClock(pinDraft)}. Host taps jump the video.</span>
           <button
             type="button"
             onClick={() => setPinDraft(null)}
@@ -1286,7 +1286,7 @@ export function ChatPanel({
                   type="button"
                   onClick={() => setAttachOpen(false)}
                   aria-label="Close attach options"
-                  className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground  cursor-pointer"
                 >
                   <X size={17} />
                 </button>
@@ -1298,7 +1298,7 @@ export function ChatPanel({
                     type="button"
                     onClick={() => handleAttachOption(opt.id)}
                     title={opt.id === "document" ? `Send a file (up to ${formatBytes(FILE_MAX_BYTES)})` : opt.desc}
-                    className="flex min-h-11 items-center gap-2.5 rounded-lg border border-border px-2.5 text-left cursor-pointer hover:bg-muted"
+                    className="flex min-h-11 items-center gap-2.5 rounded-lg border border-border px-2.5 text-left cursor-pointer "
                   >
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border">
                       {opt.id === "document" ? (
@@ -1327,7 +1327,7 @@ export function ChatPanel({
                 aria-checked={viewOnceArmed}
                 aria-label="View once for the next photo or video"
                 onClick={() => setViewOnceArmed((v) => !v)}
-                className="mx-2.5 mb-2.5 flex min-h-11 w-[calc(100%-1.25rem)] items-center gap-2.5 rounded-lg border border-border px-3 text-left cursor-pointer hover:bg-muted"
+                className="mx-2.5 mb-2.5 flex min-h-11 w-[calc(100%-1.25rem)] items-center gap-2.5 rounded-lg border border-border px-3 text-left cursor-pointer "
               >
                 <Eye size={16} className="shrink-0" aria-hidden />
                 <span className="min-w-0 flex-1">
@@ -1343,7 +1343,7 @@ export function ChatPanel({
                   }`}
                 >
                   <span
-                    className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white transition-all ${
+                    className={`absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-[#f5f5f5] transition-all ${
                       viewOnceArmed ? "left-[1.35rem]" : "left-1"
                     }`}
                   />
@@ -1423,7 +1423,7 @@ export function ChatPanel({
                   disabled={inputDisabled}
                   aria-label="Attach"
                   title="Attach"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:text-foreground cursor-pointer disabled:opacity-50"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted-foreground  cursor-pointer disabled:opacity-50"
                 >
                   <Paperclip size={20} />
                 </button>
@@ -1439,7 +1439,7 @@ export function ChatPanel({
                   title="Emoji, GIF and stickers"
                   aria-pressed={emojiOpen}
                   className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full cursor-pointer disabled:opacity-50 ${
-                    emojiOpen ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                    emojiOpen ? "text-foreground" : "text-muted-foreground "
                   }`}
                 >
                   <Sticker size={20} />
@@ -1514,7 +1514,7 @@ export function ChatPanel({
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Download image"
-                className="flex h-11 px-3 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-xs text-white"
+                className="flex h-11 px-3 items-center justify-center rounded-lg border border-[#f5f5f5]/20 bg-[#f5f5f5]/10 text-xs text-[#f5f5f5]"
               >
                 Download
               </a>
@@ -1522,7 +1522,7 @@ export function ChatPanel({
                 type="button"
                 onClick={() => setLightbox(null)}
                 aria-label="Close image"
-                className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white cursor-pointer"
+                className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#f5f5f5]/20 bg-[#f5f5f5]/10 text-[#f5f5f5] cursor-pointer"
               >
                 ✕
               </button>
@@ -1557,7 +1557,7 @@ export function ChatPanel({
                   target="_blank"
                   rel="noopener noreferrer"
                   aria-label="Download video"
-                  className="flex h-11 px-3 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-xs text-white"
+                  className="flex h-11 px-3 items-center justify-center rounded-lg border border-[#f5f5f5]/20 bg-[#f5f5f5]/10 text-xs text-[#f5f5f5]"
                 >
                   Download
                 </a>
@@ -1565,7 +1565,7 @@ export function ChatPanel({
                   type="button"
                   onClick={() => setVideoLightbox(null)}
                   aria-label="Close video"
-                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-white/20 bg-white/10 text-white cursor-pointer"
+                  className="flex h-11 w-11 items-center justify-center rounded-lg border border-[#f5f5f5]/20 bg-[#f5f5f5]/10 text-[#f5f5f5] cursor-pointer"
                 >
                   ✕
                 </button>

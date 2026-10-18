@@ -52,11 +52,11 @@ export function PwaInstallSpotlight() {
       // storage blocked — toast still shows this once per mount
     }
     setPhase("toast");
-    toast("Install PeerMates for the full experience", {
+    toast("Install PeerMates", {
       id: "pwa-install",
       description: canPrompt
-        ? "Fullscreen playback, faster loads, and home-screen access to your watch parties."
-        : "Tap Share → Add to Home Screen for fullscreen playback, faster loads, and home-screen access.",
+        ? "Fullscreen playback and faster loads with home screen access."
+        : "Tap Share then Add to Home Screen for fullscreen playback and faster loads.",
       duration: FIVE_MINUTES_MS,
       closeButton: true,
       dismissible: true,

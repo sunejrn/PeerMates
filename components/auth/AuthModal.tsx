@@ -21,8 +21,8 @@ interface AuthModalProps {
 export function AuthModal({
   open,
   onOpenChange,
-  title = "Sign in to Continue",
-  description = "You have used your 1 free PeerMates party creation. Please sign in with Google or GitHub to create unlimited parties and join live rooms.",
+  title = "Sign in to continue",
+  description = "You have used your free party. Sign in with Google or GitHub to create more parties and join live rooms.",
 }: AuthModalProps) {
   const [pendingProvider, setPendingProvider] = useState<
     "google" | "github" | null
@@ -58,7 +58,7 @@ export function AuthModal({
           <Button
             onClick={() => handleSocialSignIn("google")}
             disabled={pendingProvider !== null}
-            className="w-full h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-none cursor-pointer"
+            className="w-full h-11 gap-2 bg-foreground text-background  font-semibold shadow-none cursor-pointer"
           >
             <svg
               className="h-5 w-5 shrink-0"
@@ -89,7 +89,7 @@ export function AuthModal({
           <Button
             onClick={() => handleSocialSignIn("github")}
             disabled={pendingProvider !== null}
-            className="w-full h-11 gap-2 bg-foreground text-background hover:bg-foreground/90 font-semibold shadow-none cursor-pointer"
+            className="w-full h-11 gap-2 bg-foreground text-background  font-semibold shadow-none cursor-pointer"
           >
             <svg
               className="h-5 w-5 fill-current"
@@ -108,7 +108,7 @@ export function AuthModal({
           </Button>
 
           <p className="text-center text-xs text-muted-foreground">
-            Sign in is required to enforce room permissions, chat identity, and presence sync.
+            Sign in to keep your identity and presence in sync across rooms.
           </p>
         </div>
       </DialogContent>

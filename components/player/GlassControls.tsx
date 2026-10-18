@@ -67,7 +67,7 @@ export function GlassControls({
   return (
     <div className="absolute inset-x-0 bottom-0 z-30 px-2 pb-1.5 pt-6 sm:pb-2 bg-linear-to-t from-black/80 via-black/30 to-transparent pointer-events-auto">
       {/* Slim control bar — stays compact so it never covers the video */}
-      <div className="flex flex-col gap-1 rounded-lg border border-white/10 bg-black/55 px-2 py-1.5 text-zinc-200">
+      <div className="flex flex-col gap-1 rounded-lg border border-[#f5f5f5]/10 bg-black/55 px-2 py-1.5 text-zinc-200">
         {/* Timeline Scrubber Bar — h-1, full width */}
         <div className="relative flex items-center w-full group/slider h-4 cursor-pointer">
           <input
@@ -105,7 +105,7 @@ export function GlassControls({
                     }}
                     aria-label={`Jump to pinned moment ${formatTime(m.seconds)}`}
                     title={`Pinned moment ${formatTime(m.seconds)}`}
-                    className="pointer-events-auto absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-2 w-2 items-center justify-center rounded-full bg-white cursor-pointer"
+                    className="pointer-events-auto absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-2 w-2 items-center justify-center rounded-full bg-[#f5f5f5] cursor-pointer"
                     style={{ left: `${pct}%` }}
                   >
                     <span className="sr-only">Jump</span>
@@ -114,7 +114,7 @@ export function GlassControls({
                   <span
                     key={m.id}
                     title={`Pinned moment ${formatTime(m.seconds)} (host can jump)`}
-                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-1.5 w-1.5 items-center justify-center rounded-full bg-white/80"
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 flex h-1.5 w-1.5 items-center justify-center rounded-full bg-[#f5f5f5]/80"
                     style={{ left: `${pct}%` }}
                   />
                 );
@@ -133,7 +133,7 @@ export function GlassControls({
                 variant="ghost"
                 size="icon"
                 onClick={isPlaying ? onPause : onPlay}
-                className="h-9 w-9 rounded-lg text-white hover:bg-white/10 hover:text-white active:scale-95 cursor-pointer"
+                className="h-9 w-9 rounded-lg text-[#f5f5f5]   active:scale-95 cursor-pointer"
                 aria-label={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
@@ -165,11 +165,11 @@ export function GlassControls({
           {/* Right: Role indicator & Fullscreen */}
           <div className="flex items-center gap-1.5">
             {isHost ? (
-              <span className="inline-flex h-6 items-center rounded-lg border border-white/15 bg-white/5 px-2 text-[10px] font-medium text-zinc-200">
+              <span className="inline-flex h-6 items-center rounded-lg border border-[#f5f5f5]/15 bg-[#f5f5f5]/5 px-2 text-[10px] font-medium text-zinc-200">
                 {controlLabel ?? "Host controlling"}
               </span>
             ) : (
-              <span className="inline-flex h-6 items-center rounded-lg border border-white/15 bg-white/5 px-2 text-[10px] font-medium text-zinc-300">
+              <span className="inline-flex h-6 items-center rounded-lg border border-[#f5f5f5]/15 bg-[#f5f5f5]/5 px-2 text-[10px] font-medium text-zinc-300">
                 Follower
               </span>
             )}
@@ -181,7 +181,7 @@ export function GlassControls({
                 variant="ghost"
                 size="icon"
                 onClick={onToggleFullscreen}
-                className="h-9 w-9 rounded-lg text-zinc-300 hover:text-white hover:bg-white/10 cursor-pointer"
+                className="h-9 w-9 rounded-lg text-zinc-300   cursor-pointer"
                 aria-label="Toggle Fullscreen"
               >
                 <svg className="h-4 w-4 fill-current" viewBox="0 0 24 24">

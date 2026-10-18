@@ -173,7 +173,7 @@ export function computeHighlights(
     peakLabel:
       peaks.length > 0
         ? peaks[0].label
-        : "No peaks yet — be the first to react!",
+        : "No peaks yet. Be the first to react!",
   };
 }
 

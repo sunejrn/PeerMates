@@ -145,7 +145,7 @@ export function GuidedEmbedPlayer({
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
             <p className="text-xs text-zinc-300">
-              This link can&apos;t play inside PeerMates — open it in the {label} app,
+              This link can&apos;t play inside PeerMates. Open it in the {label} app,
               then come back for the countdown.
             </p>
             <span className="font-mono text-[10px] text-zinc-500 break-all">
@@ -155,11 +155,11 @@ export function GuidedEmbedPlayer({
         )}
         {phase === "count" && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 bg-black/60">
-            <span className="text-6xl font-extrabold tabular-nums text-white">
+            <span className="text-6xl font-extrabold tabular-nums text-[#f5f5f5]">
               {countNum}
             </span>
             <span className="text-xs text-zinc-300">
-              Get ready — tap Play on the video at GO
+              Get ready. Tap Play on the video at GO
             </span>
           </div>
         )}
@@ -179,12 +179,12 @@ export function GuidedEmbedPlayer({
             Expected {formatGuidedClock(expected)}
           </span>
           <span className="text-[11px] text-muted-foreground">
-            — tap Play if you haven&apos;t yet
+            Tap Play if you have not yet
           </span>
           <button
             type="button"
             onClick={() => setShowResync((v) => !v)}
-            className="ml-auto min-h-11 rounded-lg border border-border px-3 text-xs font-medium cursor-pointer hover:bg-muted"
+            className="ml-auto min-h-11 rounded-lg border border-border px-3 text-xs font-medium cursor-pointer "
           >
             Re-sync me
           </button>
@@ -193,7 +193,7 @@ export function GuidedEmbedPlayer({
       {phase === "live" && showResync && (
         <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed" role="status">
           Seek your player to <strong className="font-mono">{formatGuidedClock(expected)}</strong> and
-          tap Play — you&apos;ll be back in sync with the room.
+          tap Play. You will be back in sync with the room.
         </p>
       )}
 

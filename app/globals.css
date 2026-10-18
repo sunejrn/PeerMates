@@ -50,30 +50,29 @@
 
 /*
  * Strict theme (no toggle — driven by prefers-color-scheme / .dark):
- *  light: background #fafaf9, text #000000
+ *  light: background whitesmoke #f5f5f5, text #000000
  *  dark:  background #333333, text #ffffff
- * Borders are neutral Vercel-style (#e5e5e5 light / white 14% dark),
- * never colored. Radius is uniformly rounded-lg (0.5rem); toggle
- * switches keep rounded-full via their own classes.
+ * Surfaces stay flat with borders only. Radius is uniformly rounded-lg
+ * (0.5rem); toggle switches keep rounded-full via their own classes.
  */
 :root {
-  --background: #fafaf9;
+  --background: #f5f5f5;
   --foreground: #000000;
-  --card: #fafaf9;
+  --card: #f5f5f5;
   --card-foreground: #000000;
-  --popover: #ffffff;
+  --popover: #f5f5f5;
   --popover-foreground: #000000;
   --primary: #000000;
-  --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
+  --primary-foreground: #f5f5f5;
+  --secondary: #ececec;
   --secondary-foreground: #000000;
-  --muted: #f4f4f5;
+  --muted: #ececec;
   --muted-foreground: #52525b;
-  --accent: #f4f4f5;
+  --accent: #ececec;
   --accent-foreground: #000000;
   --destructive: #dc2626;
-  --border: #e5e5e5;
-  --input: #e5e5e5;
+  --border: #dcdcdc;
+  --input: #dcdcdc;
   --ring: #a1a1aa;
   --chart-1: #71717a;
   --chart-2: #52525b;
@@ -81,13 +80,13 @@
   --chart-4: #27272a;
   --chart-5: #18181b;
   --radius: 0.5rem;
-  --sidebar: #fafaf9;
+  --sidebar: #f5f5f5;
   --sidebar-foreground: #000000;
   --sidebar-primary: #000000;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f4f4f5;
+  --sidebar-primary-foreground: #f5f5f5;
+  --sidebar-accent: #ececec;
   --sidebar-accent-foreground: #000000;
-  --sidebar-border: #e5e5e5;
+  --sidebar-border: #dcdcdc;
   --sidebar-ring: #a1a1aa;
 }
 
@@ -100,7 +99,7 @@
     --popover: #3d3d3d;
     --popover-foreground: #ffffff;
     --primary: #ffffff;
-    --primary-foreground: #000000;
+    --primary-foreground: #333333;
     --secondary: #404040;
     --secondary-foreground: #ffffff;
     --muted: #404040;
@@ -119,7 +118,7 @@
     --sidebar: #333333;
     --sidebar-foreground: #ffffff;
     --sidebar-primary: #ffffff;
-    --sidebar-primary-foreground: #000000;
+    --sidebar-primary-foreground: #333333;
     --sidebar-accent: #404040;
     --sidebar-accent-foreground: #ffffff;
     --sidebar-border: rgba(255, 255, 255, 0.14);
@@ -128,23 +127,23 @@
 }
 
 .light {
-  --background: #fafaf9;
+  --background: #f5f5f5;
   --foreground: #000000;
-  --card: #fafaf9;
+  --card: #f5f5f5;
   --card-foreground: #000000;
-  --popover: #ffffff;
+  --popover: #f5f5f5;
   --popover-foreground: #000000;
   --primary: #000000;
-  --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
+  --primary-foreground: #f5f5f5;
+  --secondary: #ececec;
   --secondary-foreground: #000000;
-  --muted: #f4f4f5;
+  --muted: #ececec;
   --muted-foreground: #52525b;
-  --accent: #f4f4f5;
+  --accent: #ececec;
   --accent-foreground: #000000;
   --destructive: #dc2626;
-  --border: #e5e5e5;
-  --input: #e5e5e5;
+  --border: #dcdcdc;
+  --input: #dcdcdc;
   --ring: #a1a1aa;
   color-scheme: light;
 }
@@ -157,7 +156,7 @@
   --popover: #3d3d3d;
   --popover-foreground: #ffffff;
   --primary: #ffffff;
-  --primary-foreground: #000000;
+  --primary-foreground: #333333;
   --secondary: #404040;
   --secondary-foreground: #ffffff;
   --muted: #404040;
@@ -176,7 +175,7 @@
   --sidebar: #333333;
   --sidebar-foreground: #ffffff;
   --sidebar-primary: #ffffff;
-  --sidebar-primary-foreground: #000000;
+  --sidebar-primary-foreground: #333333;
   --sidebar-accent: #404040;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: rgba(255, 255, 255, 0.14);
@@ -234,12 +233,13 @@
   height: 0;
 }
 
-/* Flat Vercel-style surfaces: no elevation anywhere on the site.
-   Cards, popovers, toasts, tooltips, and buttons all render with borders
-   only. This guard also neutralizes library-default shadows (e.g. sonner
+/* Flat surfaces: no elevation and no glow anywhere on the site.
+   Cards, popovers, toasts, tooltips, and buttons render with borders
+   only. This guard also neutralizes library-default shadows (sonner
    toasts, shadcn popovers) that carry their own box-shadow. */
 *, *::before, *::after {
   box-shadow: none !important;
+  text-shadow: none !important;
 }
 [class*="drop-shadow"] {
   filter: none !important;

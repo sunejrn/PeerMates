@@ -34,7 +34,7 @@ export const DURATION_TOLERANCE = 1.5;
 export const P2P_MAX_RECEIVERS = 8;
 
 export const RIGHTS_NOTICE =
-  "Only play content you have the right to use — your own videos or files you are licensed to play. Nothing is uploaded; playback happens locally on your device.";
+  "Only play content you have the right to use, your own videos or files you are licensed to play. Nothing is uploaded. Playback happens on your device.";
 
 async function sha256Hex(data: ArrayBuffer): Promise<string> {
   if (!crypto?.subtle) {
@@ -264,7 +264,7 @@ export async function preflightFile(file: File): Promise<PreflightResult> {
       duration: null,
       fatal: "iPhone Safari cannot play MKV files.",
       warning: null,
-      tip: "Fix: remux to MP4 (e.g. free HandBrake or ffmpeg -c copy) — no re-encode needed — then pick the .mp4 here.",
+      tip: "Fix: remux to MP4 (for example free HandBrake or ffmpeg -c copy), no re-encode needed, then pick the .mp4 here.",
     };
   }
   if (isiOS && (ext === "avi" || mime === "video/x-msvideo")) {
@@ -308,7 +308,7 @@ export async function preflightFile(file: File): Promise<PreflightResult> {
       const hevc = probe.canPlayType('video/mp4; codecs="hvc1"');
       if (!hevc) {
         warning =
-          "This device reports no HEVC support — if this file is HEVC/H.265 it may not play. An H.264 MP4 is the safest choice.";
+          "This device reports no HEVC support. If this file is HEVC/H.265 it may not play. An H.264 MP4 is the safest choice.";
       }
     } catch {
       // ignore
@@ -329,7 +329,7 @@ export async function preflightFile(file: File): Promise<PreflightResult> {
         fatal: "This browser refused to open the file.",
         warning: null,
         tip: isiOS
-          ? "Fix: use an MP4 (H.264 + AAC) file — iPhone Safari plays those natively."
+          ? "Fix: use an MP4 (H.264 + AAC) file. iPhone Safari plays those natively."
           : "Fix: try an MP4 (H.264 + AAC) file, or open this room in Chrome.",
       };
     }

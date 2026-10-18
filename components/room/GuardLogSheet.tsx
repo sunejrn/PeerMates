@@ -142,7 +142,7 @@ export function GuardLogSheet({
             type="button"
             onClick={onClose}
             aria-label="Close Guard log"
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+            className="flex h-10 w-10 items-center justify-center rounded-lg text-muted-foreground  cursor-pointer"
           >
             ✕
           </button>
@@ -196,7 +196,7 @@ export function GuardLogSheet({
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void restore(e.id)}
-                  className="min-h-11 rounded-lg border border-border text-xs font-medium cursor-pointer hover:bg-muted disabled:opacity-50"
+                  className="min-h-11 rounded-lg border border-border text-xs font-medium cursor-pointer  disabled:opacity-50"
                 >
                   {busy === `restore-${e.id}` ? "…" : "Restore"}
                 </button>
@@ -204,7 +204,7 @@ export function GuardLogSheet({
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void remove(e.id)}
-                  className="min-h-11 rounded-lg border border-border text-xs font-medium cursor-pointer hover:bg-muted disabled:opacity-50"
+                  className="min-h-11 rounded-lg border border-border text-xs font-medium cursor-pointer  disabled:opacity-50"
                 >
                   {busy === `delete-${e.id}` ? "…" : "Delete"}
                 </button>
@@ -212,7 +212,7 @@ export function GuardLogSheet({
                   type="button"
                   disabled={busy !== null}
                   onClick={() => void mute(e.senderId, e.senderName)}
-                  className="min-h-11 rounded-lg border border-border text-xs font-medium cursor-pointer hover:bg-muted disabled:opacity-50"
+                  className="min-h-11 rounded-lg border border-border text-xs font-medium cursor-pointer  disabled:opacity-50"
                 >
                   {busy === `mute-${e.senderId}` ? "…" : "Mute"}
                 </button>

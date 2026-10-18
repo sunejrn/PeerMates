@@ -107,7 +107,7 @@ export function Heatmap({
       </svg>
       {peaks.length > 0 && (
         <p className="mt-1 text-center text-xs font-semibold text-foreground" role="status">
-          Peak moment — {peaks[0].label}
+          Peak moment {peaks[0].label}
         </p>
       )}
     </div>

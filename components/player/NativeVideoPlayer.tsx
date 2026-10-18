@@ -324,7 +324,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         {/* Per-user caption size. ::cue must live in document CSS (not the
             shadow DOM) — one tiny style tag, same render path on iPhone
             Safari and Android Chrome. */}
-        <style>{`video.syncme-subs::cue{font-size:${subtitleSize === "s" ? "14px" : subtitleSize === "l" ? "24px" : "18px"};line-height:1.35;color:#fff;background:rgba(0,0,0,.65);text-shadow:0 1px 2px rgba(0,0,0,.8);}`}</style>
+        <style>{`video.syncme-subs::cue{font-size:${subtitleSize === "s" ? "14px" : subtitleSize === "l" ? "24px" : "18px"};line-height:1.35;color:#f5f5f5;background:rgba(0,0,0,.65);text-shadow:0 1px 2px rgba(0,0,0,.8);}`}</style>
         <video
           ref={videoRef}
           controls={controlsAllowed}
@@ -351,7 +351,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         {/* Loading spinner while the file/stream opens */}
         {!isLoaded && !loadError && effectiveSrc && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 p-6 text-center">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-white" aria-hidden />
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-[#f5f5f5]/20 border-t-white" aria-hidden />
             <p className="text-[11px] text-zinc-300">Loading video…</p>
           </div>
         )}
@@ -367,7 +367,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
             <button
               type="button"
               onClick={() => setRetryNonce((n) => n + 1)}
-              className="mt-1 min-h-11 rounded-lg border border-white/20 bg-white/10 px-4 text-xs font-semibold text-white"
+              className="mt-1 min-h-11 rounded-lg border border-[#f5f5f5]/20 bg-[#f5f5f5]/10 px-4 text-xs font-semibold text-[#f5f5f5]"
             >
               Try again
             </button>

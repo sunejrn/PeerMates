@@ -152,7 +152,7 @@ export function ModerationPanel({
                 className={`min-h-11 rounded-lg border text-xs font-medium transition-all cursor-pointer disabled:opacity-60 ${
                   active
                     ? "border-foreground bg-foreground text-background"
-                    : "border-border bg-background text-muted-foreground hover:text-foreground"
+                    : "border-border bg-background text-muted-foreground "
                 }`}
               >
                 {pending === `slow-${s}` ? "…" : s === 0 ? "Off" : `${s}s`}
@@ -184,7 +184,7 @@ export function ModerationPanel({
           }`}
         >
           <span
-            className={`absolute top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-white shadow-none transition-all ${
+            className={`absolute top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-[#f5f5f5] shadow-none transition-all ${
               chatMuted ? "left-[calc(100%-2.25rem)]" : "left-1"
             }`}
           />
@@ -202,7 +202,7 @@ export function ModerationPanel({
               {guardLoaded
                 ? guardOn
                   ? `Filtering spam & scams (${guardLevel}).`
-                  : "Off — chat is unfiltered."
+                  : "Off. Chat is unfiltered."
                 : "Loading Guard settings…"}
             </p>
           </div>
@@ -218,7 +218,7 @@ export function ModerationPanel({
             }`}
           >
             <span
-              className={`absolute top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-white shadow-none transition-all ${
+              className={`absolute top-1/2 h-8 w-8 -translate-y-1/2 rounded-full bg-[#f5f5f5] shadow-none transition-all ${
                 guardOn ? "left-[calc(100%-2.25rem)]" : "left-1"
               }`}
             />
@@ -238,7 +238,7 @@ export function ModerationPanel({
                 className={`min-h-11 rounded-lg border text-xs font-medium cursor-pointer disabled:opacity-60 ${
                   active
                     ? "border-foreground bg-foreground text-background"
-                    : "border-border bg-background text-muted-foreground hover:text-foreground"
+                    : "border-border bg-background text-muted-foreground "
                 }`}
               >
                 {pending === `guard-${l.id}` ? "…" : l.label}

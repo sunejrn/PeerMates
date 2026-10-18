@@ -103,7 +103,7 @@ export function ClarityCanvas({
       gl = null;
     }
     if (!gl) {
-      cbRef.current.onFallback("Ultra isn't supported on this device — using Light.");
+      cbRef.current.onFallback("Ultra is not supported on this device. Using Light.");
       return;
     }
 
@@ -136,7 +136,7 @@ export function ClarityCanvas({
       gl.uniform1f(gl.getUniformLocation(prog, "u_contrast"), 1.07);
       gl.uniform1f(gl.getUniformLocation(prog, "u_sat"), 1.12);
     } catch {
-      cbRef.current.onFallback("Ultra isn't supported on this device — using Light.");
+      cbRef.current.onFallback("Ultra is not supported on this device. Using Light.");
       return;
     }
 
@@ -184,7 +184,7 @@ export function ClarityCanvas({
         // CORS-tainted video: fall back to Light without alarming.
         if (!corsFailed) {
           corsFailed = true;
-          cbRef.current.onFallback("Ultra needs CORS access — using Light.", true);
+          cbRef.current.onFallback("Ultra needs CORS access. Using Light.", true);
         }
         return;
       }
@@ -199,7 +199,7 @@ export function ClarityCanvas({
         cbRef.current.onStats?.(Math.round(fps));
         if (!ultraPerfOk(frames, elapsed)) {
           cbRef.current.onFallback(
-            `Ultra managed ${Math.round(fps)}fps here — fell back to Light.`
+            `Ultra managed ${Math.round(fps)}fps here and fell back to Light.`
           );
           return;
         }

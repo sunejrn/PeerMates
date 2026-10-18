@@ -136,7 +136,7 @@ export function ReplayOverlay({ events, currentTime, mode, dataSaver = false, on
           {bubbles.map((b) => (
             <div
               key={b.id}
-              className="pointer-events-auto max-w-[85%] rounded-lg border border-white/10 bg-black/70 px-3 py-1.5 text-xs text-white backdrop-blur-sm"
+              className="pointer-events-auto max-w-[85%] rounded-lg border border-[#f5f5f5]/10 bg-black/70 px-3 py-1.5 text-xs text-[#f5f5f5] backdrop-blur-sm"
             >
               <span className="mr-1.5 font-bold text-zinc-100">
                 {(b.userName || "Guest").slice(0, 16)}
@@ -176,7 +176,7 @@ export function ReplayOverlay({ events, currentTime, mode, dataSaver = false, on
                 type="button"
                 onClick={() => playVoice(url)}
                 aria-label={`Play voice note from ${(v.userName || "Guest").slice(0, 16)} at ${fmtClock(v.videoTime)}`}
-                className="pointer-events-auto flex h-11 min-h-11 items-center gap-2 rounded-full border border-white/15 bg-black/70 px-3 text-xs font-semibold text-white backdrop-blur-sm cursor-pointer"
+                className="pointer-events-auto flex h-11 min-h-11 items-center gap-2 rounded-full border border-[#f5f5f5]/15 bg-black/70 px-3 text-xs font-semibold text-[#f5f5f5] backdrop-blur-sm cursor-pointer"
               >
                 <span aria-hidden>🎙</span>
                 {(v.userName || "Guest").slice(0, 12)} · {fmtClock(v.videoTime)}

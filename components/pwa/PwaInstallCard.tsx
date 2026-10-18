@@ -55,18 +55,17 @@ export function PwaInstallCard() {
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-bold text-foreground">
-            Install PeerMates for the full experience
+            Install PeerMates
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Fullscreen playback, faster loads, and home-screen access to your
-            watch parties.
+            Fullscreen playback and faster loads with home screen access.
           </p>
         </div>
         <button
           type="button"
           onClick={dismiss}
           aria-label="Dismiss install prompt"
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground  cursor-pointer"
         >
           ✕
         </button>
@@ -77,7 +76,7 @@ export function PwaInstallCard() {
           <Button
             onClick={handleInstall}
             disabled={busy}
-            className="w-full min-h-11 bg-[#333] dark:bg-white dark:text-black border text-white  text-xs font-semibold disabled:opacity-60"
+            className="w-full min-h-11 bg-[#333] dark:bg-[#f5f5f5] dark:text-[#333333] border text-[#f5f5f5]  text-xs font-semibold disabled:opacity-60"
           >
             {busy ? "Installing…" : "Install PeerMates"}
           </Button>
@@ -89,7 +88,7 @@ export function PwaInstallCard() {
               variant="outline"
               className="w-full min-h-11 text-xs"
             >
-              {showIOSSteps ? "Hide iPhone steps ▲" : "📱 How to install on iPhone ▼"}
+              {showIOSSteps ? "Hide iPhone steps" : "How to install on iPhone"}
             </Button>
             {showIOSSteps && (
               <ol className="list-decimal space-y-1.5 rounded-xl border border-border/70 bg-background/50 px-4 py-3 pl-8 text-xs text-muted-foreground">
@@ -102,7 +101,7 @@ export function PwaInstallCard() {
                   <strong className="text-foreground">Add to Home Screen</strong>.
                 </li>
                 <li>
-                  Tap <strong className="text-foreground">Add</strong> — PeerMates
+                  Tap <strong className="text-foreground">Add</strong>. PeerMates
                   opens fullscreen like a native app.
                 </li>
               </ol>

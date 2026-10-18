@@ -126,13 +126,13 @@ export function extractYouTubeId(url: string): string | null {
 /** Friendly guidance when a known provider link isn't usable. */export function providerHint(provider: ProviderId): string {
   switch (provider) {
     case "twitch":
-      return "Only Twitch past broadcasts (twitch.tv/videos/…) work — live channels and clips can't sync.";
+      return "Only Twitch past broadcasts (twitch.tv/videos/…) work. Live channels and clips can't sync.";
     case "drive":
-      return "That Google Drive link isn't a file preview — use Share → Copy link on the file itself.";
+      return "That Google Drive link isn't a file preview. Use Share → Copy link on the file itself.";
     case "facebook":
       return "This Facebook video can't be embedded. Ask the owner to make it public, then paste the video link.";
     default:
-      return "That link isn't a supported video page — paste a full video link from the provider.";
+      return "That link isn't a supported video page. Paste a full video link from the provider.";
   }
 }
 
@@ -179,7 +179,7 @@ export function detectVideoSource(url: string): VideoDetectionResult {
           cleanUrl: trimmed,
           provider: parsed.provider,
           detail:
-            "That link can't be embedded here — open the video in its app and paste a full video link instead.",
+            "That link can't be embedded here. Open the video in its app and paste a full video link instead.",
         };
       }
       return {

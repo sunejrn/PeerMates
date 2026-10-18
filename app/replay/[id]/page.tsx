@@ -251,7 +251,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
         </p>
         <Link
           href="/"
-          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg bg-foreground px-5 text-sm font-medium text-background hover:bg-foreground/90"
+          className="mt-6 inline-flex min-h-11 items-center justify-center rounded-lg bg-foreground px-5 text-sm font-medium text-background "
         >
           Back to PeerMates
         </Link>
@@ -264,7 +264,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
       <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-border/80 bg-background/85 px-3 sm:px-6 backdrop-blur-md">
         <Link
           href="/"
-          className="flex min-h-11 items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground hover:text-foreground shrink-0"
+          className="flex min-h-11 items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground  shrink-0"
         >
           <span aria-hidden>←</span> PeerMates
         </Link>
@@ -319,7 +319,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
 
         {needsFile && localUrl && fileMatch === false && (
           <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300" role="status">
-            This file looks different from the party&apos;s copy — timestamps still line up, but scenes may differ.
+            This file looks different from the party&apos;s copy. Timestamps still line up, but scenes may differ.
           </p>
         )}
 
@@ -357,7 +357,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
               className={`min-h-11 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 mode === m.id
                   ? "bg-background text-foreground shadow-none"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground "
               }`}
             >
               {m.label}
@@ -366,7 +366,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
         </div>
         {dataSaver && (
           <p className="text-[11px] text-muted-foreground text-center">
-            📉 Data Saver is on — replay shows reactions only.
+            📉 Data Saver is on. Replay shows reactions only.
           </p>
         )}
 
@@ -383,7 +383,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
                 onClick={() => void sendLayeredReaction(emoji)}
                 disabled={reacting}
                 aria-label={`React ${emoji} at ${fmtClock(currentTime)}`}
-                className="flex min-h-11 items-center justify-center rounded-lg border border-border text-xl cursor-pointer hover:bg-muted disabled:opacity-50"
+                className="flex min-h-11 items-center justify-center rounded-lg border border-border text-xl cursor-pointer  disabled:opacity-50"
               >
                 {emoji}
               </button>
@@ -402,19 +402,19 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
           <Heatmap buckets={meta.buckets} peaks={meta.peaks} durationSec={totalDuration} onSeek={seek} />
           <ul className="space-y-1.5 text-xs text-muted-foreground">
             {h.laugh && h.laugh.count > 0 && (
-              <li>Biggest laugh — <button type="button" onClick={() => seek(h.laugh!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.laugh.t)}</button> ({h.laugh.count} laughs)</li>
+              <li>Biggest laugh: <button type="button" onClick={() => seek(h.laugh!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.laugh.t)}</button> ({h.laugh.count} laughs)</li>
             )}
             {h.shock && h.shock.count > 0 && (
-              <li>Biggest shock — <button type="button" onClick={() => seek(h.shock!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.shock.t)}</button></li>
+              <li>Biggest shock: <button type="button" onClick={() => seek(h.shock!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.shock.t)}</button></li>
             )}
             {h.topVoice && (
-              <li>Top voice note — {h.topVoice.userName} at <button type="button" onClick={() => seek(h.topVoice!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.topVoice.t)}</button></li>
+              <li>Top voice note: {h.topVoice.userName} at <button type="button" onClick={() => seek(h.topVoice!.t)} className="font-mono font-bold text-foreground underline underline-offset-2 cursor-pointer">{fmtClock(h.topVoice.t)}</button></li>
             )}
             {h.chatter && (
-              <li>Most active chatter — <strong className="text-foreground">{h.chatter.name}</strong> ({h.chatter.count} messages)</li>
+              <li>Most active chatter: <strong className="text-foreground">{h.chatter.name}</strong> ({h.chatter.count} messages)</li>
             )}
             {h.firstReactor && (
-              <li>First to react — <strong className="text-foreground">{h.firstReactor.name}</strong> at {fmtClock(h.firstReactor.t)}</li>
+              <li>First to react: <strong className="text-foreground">{h.firstReactor.name}</strong> at {fmtClock(h.firstReactor.t)}</li>
             )}
           </ul>
         </Card>
@@ -460,20 +460,20 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
             {liveRoom && (
               <Link
                 href={`/room/${liveRoom}`}
-                className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-lg bg-foreground px-4 text-xs font-medium text-background hover:bg-foreground/90"
+                className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-lg bg-foreground px-4 text-xs font-medium text-background "
               >
                 Join the live room
               </Link>
             )}
             <Link
               href="/"
-              className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-lg border border-border bg-background px-4 text-xs font-medium hover:bg-muted"
+              className="inline-flex h-12 min-h-11 flex-1 items-center justify-center rounded-lg border border-border bg-background px-4 text-xs font-medium "
             >
               Start your own party
             </Link>
           </div>
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Replays keep timestamps, chat text, and emoji only — never video
+            Replays keep timestamps, chat text, and emoji only, never video
             files. {eventsLoading ? "Loading moments…" : `${events.length} moments in this replay.`}
           </p>
         </Card>

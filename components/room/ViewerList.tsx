@@ -283,7 +283,7 @@ export function ViewerList({
                       setExpandedId((prev) => (prev === m.id ? null : m.id))
                     }
                     aria-expanded={expanded}
-                    className="flex min-h-[44px] w-full items-center gap-2.5 px-3 sm:px-4 py-2 text-left hover:bg-muted/40 transition-colors cursor-pointer"
+                    className="flex min-h-[44px] w-full items-center gap-2.5 px-3 sm:px-4 py-2 text-left  transition-colors cursor-pointer"
                   >
                     <Avatar
                       member={m}

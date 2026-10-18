@@ -77,7 +77,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
                     ?.scrollIntoView({ block: "start" });
                 }}
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg cursor-pointer ${
-                  active ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                  active ? "text-foreground" : "text-muted-foreground "
                 }`}
               >
                 <Icon className="h-4.5 w-4.5" size={18} />
@@ -89,7 +89,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
           })}
         {(tab === "gif" || tab === "stickers") && (
           <p className="px-2 py-2 text-xs font-medium text-muted-foreground">
-            {tab === "gif" ? "GIFs" : "Stickers"} — tap to send instantly
+            {tab === "gif" ? "GIFs" : "Stickers"}. Tap to send instantly
           </p>
         )}
       </div>
@@ -123,7 +123,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
                   type="button"
                   onClick={() => handleSticker(e)}
                   aria-label={`Send sticker ${e}`}
-                  className="flex min-h-16 items-center justify-center rounded-lg border border-border text-3xl cursor-pointer hover:bg-muted"
+                  className="flex min-h-16 items-center justify-center rounded-lg border border-border text-3xl cursor-pointer "
                 >
                   {e}
                 </button>
@@ -133,7 +133,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
         ) : tab === "gif" ? (
           <div>
             <div className="rounded-lg border border-border bg-muted px-3 py-2 text-[11px] text-muted-foreground">
-              GIF provider is not connected yet — showing quick reactions. Tap any
+              GIF provider is not connected yet. Showing quick reactions. Tap any
               reaction to send it instantly.
             </div>
             <div className="mt-2 grid grid-cols-4 gap-1.5">
@@ -143,7 +143,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
                   type="button"
                   onClick={() => handleSticker(e)}
                   aria-label={`Send reaction ${e}`}
-                  className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-border cursor-pointer hover:bg-muted"
+                  className="flex min-h-16 flex-col items-center justify-center gap-1 rounded-lg border border-border cursor-pointer "
                 >
                   <span className="text-3xl">{e}</span>
                   <span className="text-[9px] font-mono uppercase text-muted-foreground">GIF</span>
@@ -161,7 +161,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
                   type="button"
                   onClick={() => handlePick(e)}
                   aria-label={`Insert ${e}`}
-                  className="flex h-10 items-center justify-center rounded-lg text-xl cursor-pointer hover:bg-muted"
+                  className="flex h-10 items-center justify-center rounded-lg text-xl cursor-pointer "
                 >
                   {e}
                 </button>
@@ -180,7 +180,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
                       type="button"
                       onClick={() => handlePick(e)}
                       aria-label={`Insert ${e}`}
-                      className="flex h-10 items-center justify-center rounded-lg text-xl cursor-pointer hover:bg-muted"
+                      className="flex h-10 items-center justify-center rounded-lg text-xl cursor-pointer "
                     >
                       {e}
                     </button>
@@ -198,7 +198,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
                       type="button"
                       onClick={() => handlePick(e)}
                       aria-label={`Insert ${e}`}
-                      className="flex h-10 items-center justify-center rounded-lg text-xl cursor-pointer hover:bg-muted"
+                      className="flex h-10 items-center justify-center rounded-lg text-xl cursor-pointer "
                     >
                       {e}
                     </button>
@@ -224,7 +224,7 @@ export function EmojiPicker({ onPick, onSendSticker, initialTab = "emoji" }: Emo
               aria-pressed={tab === t}
               className={`h-10 flex-1 text-xs font-medium cursor-pointer ${
                 i > 0 ? "border-l border-border" : ""
-              } ${tab === t ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"} ${
+              } ${tab === t ? "bg-muted text-foreground" : "text-muted-foreground "} ${
                 i === 0 ? "rounded-l-lg" : ""
               } ${i === 2 ? "rounded-r-lg" : ""}`}
             >

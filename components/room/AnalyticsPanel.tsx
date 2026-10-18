@@ -292,7 +292,7 @@ export function AnalyticsPanel({
         </div>
         {stats.totalMessages === 0 ? (
           <p className="py-6 text-center text-xs text-muted-foreground">
-            No activity yet — say hello and watch the curve move.
+            No activity yet. Say hello and watch the curve move.
           </p>
         ) : (
           <>
@@ -352,7 +352,7 @@ export function AnalyticsPanel({
         </h3>
         {stats.topEmoji.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted-foreground">
-            No reactions yet — long-press a message to react.
+            No reactions yet. Long press a message to react.
           </p>
         ) : (
           <ul className="mt-2 space-y-2">

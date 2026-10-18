@@ -30,11 +30,11 @@ export function NicknameGate({
       return;
     }
     if (/^guest/i.test(clean) && clean.length < 7) {
-      setError("That nickname is too generic — add something personal.");
+      setError("That nickname is too generic. Add something personal.");
       return;
     }
     setError(null);
-    toast.success(`Welcome, ${clean}! 🎉`);
+    toast.success(`Welcome, ${clean}!`);
     onJoin(clean);
   };
 
@@ -49,11 +49,11 @@ export function NicknameGate({
             Party #{slug}
           </p>
           <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
-            Join &ldquo;{roomTitle}&rdquo;
+            Join {roomTitle}
           </h2>
           <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
-            Just pick a nickname — no signup needed. The host controls playback;
-            you can chat + react.
+            Pick a nickname. No signup needed. The host controls playback and you
+            can chat and react.
           </p>
         </div>
         <form onSubmit={submit} className="space-y-3 text-left">
@@ -80,7 +80,7 @@ export function NicknameGate({
           )}
           <Button
             type="submit"
-            className="w-full h-12 min-h-11 bg-linear-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold cursor-pointer"
+            className="w-full h-12 min-h-11 bg-linear-to-r from-violet-600 to-indigo-600   text-[#f5f5f5] font-semibold cursor-pointer"
           >
             Join party →
           </Button>

@@ -756,7 +756,7 @@ export class RealtimeChannelService {
     if (!this.streamChannel || !this.streamLive) {
       throw new ChatSendError(
         "OFFLINE_MEDIA",
-        "Media upload needs a live connection — your text was kept, try the file again.",
+        "Media upload needs a live connection. Your text was kept, try the file again.",
         0
       );
     }

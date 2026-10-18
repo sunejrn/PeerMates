@@ -7,6 +7,7 @@ import { PROVIDER_LABELS } from "@/lib/video/parseUrl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Modal } from "@/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
@@ -166,7 +167,7 @@ export function RoomLobby() {
           : "";
       return `Too many rooms created.${wait}`;
     }
-    return data.message || data.error || "Failed to create room";
+    return data.message || data.error || "Could not create the room.";
   };
 
   const handleSelectPreset = (preset: Preset) => {
@@ -194,14 +195,14 @@ export function RoomLobby() {
     }
 
     if (!videoUrl.trim()) {
-      toast.error("Please enter a video URL.");
+      toast.error("Enter a video URL.");
       return;
     }
 
     if (!detection.isValid) {
       toast.error(
         detection.detail ||
-          "Please enter a valid YouTube, HLS (.m3u8), or MP4/WebM video URL."
+          "Enter a valid YouTube, HLS (.m3u8), or MP4/WebM link."
       );
       return;
     }
@@ -230,10 +231,10 @@ export function RoomLobby() {
         localStorage.setItem("watchtogether_has_created_once", "true");
       }
 
-      toast.success("PeerMates room created!");
+      toast.success("Party created.");
       router.push(`/room/${data.slug}`);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to create party");
+      toast.error(err?.message || "Could not create the party.");
     } finally {
       setIsCreating(false);
     }
@@ -245,7 +246,7 @@ export function RoomLobby() {
       return;
     }
     if (!rightsOk) {
-      toast.error("Please confirm you have the right to play this file.");
+      toast.error("Confirm you have the right to play this file.");
       return;
     }
     try {
@@ -275,10 +276,10 @@ export function RoomLobby() {
         localStorage.setItem("watchtogether_has_created_once", "true");
       }
 
-      toast.success("PeerMates Party created! Pick the file again inside the room.");
+      toast.success("Party created. Pick the file again inside the room.");
       router.push(`/room/${data.slug}`);
     } catch (err: any) {
-      toast.error(err?.message || "Failed to create party");
+      toast.error(err?.message || "Could not create the party.");
     } finally {
       setIsCreating(false);
     }
@@ -292,11 +293,12 @@ export function RoomLobby() {
         <Card className="w-full border-border bg-card/70 p-5 sm:p-8 backdrop-blur-xl shadow-none rounded-2xl flex flex-col justify-between">
           <div className="space-y-2 mb-6 text-left">
             <h2 className="text-xl sm:text-2xl font-bold text-card-foreground tracking-tight flex items-center gap-2">
-              Start a PeerMates Party
+              Start a watch party
             </h2>
             <p className="text-xs sm:text-sm text-muted-foreground">
-              Paste any YouTube URL, HLS stream (.m3u8), or direct video file link
-              or bring your own movie with My Files to sync playback with your friends.
+              Paste a YouTube link, HLS stream (.m3u8), or direct video file URL.
+              Or bring your own movie with My Files and sync playback with your
+              friends.
             </p>
           </div>
 
@@ -323,7 +325,7 @@ export function RoomLobby() {
                     className={`min-h-11 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                       sourceTab === t.id
                         ? "bg-background text-foreground shadow-none"
-                        : "text-muted-foreground hover:text-foreground"
+                        : "text-muted-foreground "
                     }`}
                   >
                     {t.label}
@@ -333,12 +335,12 @@ export function RoomLobby() {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Party Title (Optional)
+                  Party title (optional)
                 </label>
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g. Movie Night with Friends"
+                  placeholder="e.g. Movie night with friends"
                   className="h-11 sm:h-10 bg-background/80 border-input text-foreground focus-visible:ring-violet-500 text-sm"
                 />
               </div>
@@ -372,16 +374,16 @@ export function RoomLobby() {
                 <Input
                   value={videoUrl}
                   onChange={(e) => setVideoUrl(e.target.value)}
-                  placeholder="YouTube link — or Other sources below for more"
+                  placeholder="YouTube link or Other sources below"
                   className="h-11 sm:h-10 bg-background/80 border-input text-foreground focus-visible:ring-violet-500 font-mono text-xs sm:text-sm"
                   required={sourceTab === "link"}
                 />
                 <button
                   type="button"
                   onClick={() => setShowSources(true)}
-                  className="min-h-11 w-full rounded-lg border border-border bg-background/60 px-3 text-xs font-semibold text-foreground cursor-pointer hover:bg-muted"
+                  className="min-h-11 w-full rounded-lg border border-border bg-background/60 px-3 text-xs font-semibold text-foreground cursor-pointer "
                 >
-                  Other sources — Facebook, Vimeo, TikTok & more
+                  Other sources: Facebook, Vimeo, TikTok and more
                 </button>
                 {/* Auto-detect preview: provider + control level before starting */}
                 {videoUrl.trim() && detection.isValid && detection.provider && (
@@ -403,7 +405,8 @@ export function RoomLobby() {
                     )}
                     {detection.control === "guided" && (
                       <p className="text-[11px] text-muted-foreground">
-                        Countdown sync — everyone taps Play on their own player at GO.
+                        Countdown sync. Everyone taps Play on their own player at
+                        GO.
                       </p>
                     )}
                   </div>
@@ -416,10 +419,10 @@ export function RoomLobby() {
                 </span>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
                   Everyone picks the <strong className="text-foreground">same movie</strong> on
-                  their own device — nothing is uploaded, so multi-GB files work. Only
-                  timestamps sync.
+                  their own device. Nothing is uploaded, so multi GB files work.
+                  Only timestamps sync.
                 </p>
-                <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-background/60 px-3 py-2 text-xs font-medium text-foreground hover:border-violet-500/50 transition-all">
+                <label className="flex min-h-11 cursor-pointer items-center justify-center rounded-lg border border-dashed border-border bg-background/60 px-3 py-2 text-xs font-medium text-foreground  transition-all">
                   <input
                     type="file"
                     accept={LOCAL_FILE_ACCEPT}
@@ -467,7 +470,7 @@ export function RoomLobby() {
                 {filePick.phase === "ready" && filePick.fp && (
                   <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-xs space-y-1">
                     <p className="font-semibold text-emerald-700 dark:text-emerald-300">
-                      ✅ Playable here — {formatBytes(filePick.fp.size)} · {formatDuration(filePick.fp.duration)}
+                      ✅ Playable here. {formatBytes(filePick.fp.size)} · {formatDuration(filePick.fp.duration)}
                     </p>
                     {filePick.preflight?.warning && (
                       <p className="text-amber-700 dark:text-amber-300">⚠️ {filePick.preflight.warning}</p>
@@ -498,7 +501,7 @@ export function RoomLobby() {
                 <button
                   type="button"
                   onClick={() => setShowPresets(true)}
-                  className="min-h-11 w-full rounded-lg border border-dashed border-border bg-background/60 px-3 text-xs font-semibold text-muted-foreground cursor-pointer hover:text-foreground"
+                  className="min-h-11 w-full rounded-lg border border-dashed border-border bg-background/60 px-3 text-xs font-semibold text-muted-foreground cursor-pointer "
                 >
                   Test presets
                 </button>
@@ -514,11 +517,11 @@ export function RoomLobby() {
                 (sourceTab === "myfiles" &&
                   (filePick.phase !== "ready" || !filePick.fp || !rightsOk))
               }
-              className="w-full h-12 sm:h-11 mt-4 bg-[#333] dark:bg-white dark:text-black border text-white font-semibold shadow-none transition-all cursor-pointer"
+              className="w-full h-12 sm:h-11 mt-4 bg-[#333] dark:bg-[#f5f5f5] dark:text-[#333333] border text-[#f5f5f5] font-semibold shadow-none transition-all cursor-pointer"
             >
               {isCreating ? (
                 <span className="flex items-center gap-2">
-                  <Spinner className="text-white" />
+                  <Spinner className="text-[#f5f5f5]" />
                   Creating Room...
                 </span>
               ) : (
@@ -532,10 +535,11 @@ export function RoomLobby() {
         <div className="flex w-full flex-col justify-between rounded-2xl border border-border bg-card/40 p-6 sm:p-8 backdrop-blur-md text-left space-y-6">
           <div className="space-y-3">
             <h3 className="text-2xl font-bold text-card-foreground">
-              How PeerMates Works
+              How PeerMates works
             </h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Engineered with a host-authoritative sync model, millisecond transit correction, and persistent Upstash Redis caching.
+              One host controls playback and everyone else stays on the same
+              frame. We keep the room state in sync and correct for network lag.
             </p>
           </div>
 
@@ -543,10 +547,11 @@ export function RoomLobby() {
             <div className="flex items-start gap-3">
               <div className="space-y-0.5">
                 <h4 className="text-sm font-semibold text-foreground">
-                  Frame-Accurate Host Control
+                  The host leads
                 </h4>
                 <p className="text-xs text-muted-foreground">
-                  Whenever the host plays, pauses, or seeks, followers reconcile within &plusmn;0.5s with zero seek-thrashing.
+                  When the host plays, pauses, or seeks, everyone else catches up
+                  within about half a second.
                 </p>
               </div>
             </div>
@@ -554,10 +559,11 @@ export function RoomLobby() {
             <div className="flex items-start gap-3">
               <div className="space-y-0.5">
                 <h4 className="text-sm font-semibold text-foreground">
-                  Unified Player Engine
+                  One player, every source
                 </h4>
                 <p className="text-xs text-muted-foreground">
-                  Supports YouTube embeds, adaptive HLS (.m3u8) streams, and direct MP4 files through an identical control interface.
+                  YouTube embeds, HLS (.m3u8) streams, and direct MP4 files all
+                  use the same controls.
                 </p>
               </div>
             </div>
@@ -565,10 +571,11 @@ export function RoomLobby() {
             <div className="flex items-start gap-3">
               <div className="space-y-0.5">
                 <h4 className="text-sm font-semibold text-foreground">
-                  Realtime Presence & Host Migration
+                  Live chat and host handoff
                 </h4>
                 <p className="text-xs text-muted-foreground">
-                  GetStream channel powers live chat, viewer presence avatars, and promotes the longest-tenured viewer if host leaves.
+                  Chat and viewer avatars run on GetStream. If the host leaves,
+                  the viewer who joined first takes over.
                 </p>
               </div>
             </div>
@@ -588,221 +595,206 @@ export function RoomLobby() {
       <AuthModal
         open={showAuthModal}
         onOpenChange={setShowAuthModal}
-        title="Sign In Required"
-        description="You have already used your 1 free party creation. Please sign in with Google or GitHub to create unlimited PeerMates parties and invite your friends."
+        title="Sign in to continue"
+        description="You have used your one free party. Sign in with Google or GitHub to create unlimited parties and invite your friends."
       />
 
-      {/* Other sources — two steps. Step 1 lists providers; tapping one
-          keeps this open and docks a detail panel (title + your own link)
-          beside it on desktop with a connector, or full-screen-normal
-          on mobile. */}
-      {showSources && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Other video sources">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={closeSources}
-            aria-hidden
-          />
-          <div className="relative flex max-h-[80dvh] w-full max-w-md flex-col items-stretch md:max-w-4xl md:flex-row">
-            {/* Step 1: provider list (hidden on mobile once step 2 opens) */}
-            <div className={`${sourceDraft ? "hidden md:flex" : "flex"} max-h-[80dvh] w-full flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-none md:max-w-md`}>
-              <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-                <div>
-                  <h3 className="text-sm font-semibold">Other sources</h3>
-                  <p className="text-[11px] text-muted-foreground">
-                    Pick a provider, then add your title + link.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={closeSources}
-                  aria-label="Close other sources"
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="no-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">
-                {PROVIDER_SHORTCUTS.map((p) => {
-                  const selected = sourceDraft?.name === p.name;
-                  return (
-                    <button
-                      key={p.name}
-                      type="button"
-                      onClick={() => pickProvider(p)}
-                      aria-pressed={selected}
-                      className={`flex min-h-11 w-full items-center gap-3 rounded-lg border px-3 py-2 text-left cursor-pointer hover:bg-muted ${
-                        selected ? "border-foreground bg-muted" : "border-border"
-                      }`}
-                    >
-                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-sm font-bold">
-                        {p.name.charAt(0)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-xs font-semibold">{p.name}</span>
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          {p.desc}
-                        </span>
-                        <span className="block truncate font-mono text-[10px] text-muted-foreground/70">
-                          {p.example}
-                        </span>
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Figma-style connector (desktop only) */}
-            {sourceDraft && (
-              <div className="hidden w-14 shrink-0 items-center justify-center md:flex" aria-hidden>
-                <svg viewBox="0 0 48 24" className="w-12 text-foreground" fill="none">
-                  <line x1="8" y1="12" x2="40" y2="12" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" opacity="0.5" />
-                  <circle cx="6" cy="12" r="3" fill="currentColor" />
-                  <circle cx="42" cy="12" r="3" fill="currentColor" />
-                </svg>
-              </div>
-            )}
-
-            {/* Step 2: title + own link (side panel on desktop, normal modal on mobile) */}
-            {sourceDraft && (
-              <div className="flex max-h-[80dvh] w-full flex-col overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-none md:max-w-md">
-                <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
-                  <div className="min-w-0">
-                    <h3 className="truncate text-sm font-semibold">
-                      {sourceDraft.name} link
-                    </h3>
-                    <p className="text-[11px] text-muted-foreground">
-                      Add your title + paste your own {sourceDraft.name} URL.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSourceDraft(null)}
-                    aria-label="Back to providers"
-                    className="flex h-11 shrink-0 items-center rounded-lg px-3 text-xs font-medium text-muted-foreground hover:text-foreground cursor-pointer md:hidden"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeSources}
-                    aria-label="Close"
-                    className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer md:flex"
-                  >
-                    ✕
-                  </button>
-                </div>
-                <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="source-draft-title">
-                      Party title
-                    </label>
-                    <Input
-                      id="source-draft-title"
-                      value={draftTitle}
-                      onChange={(e) => setDraftTitle(e.target.value)}
-                      placeholder={`${sourceDraft.name} watch party`}
-                      className="h-11 bg-background/80 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="source-draft-url">
-                      {sourceDraft.name} video URL
-                    </label>
-                    <Input
-                      id="source-draft-url"
-                      value={draftUrl}
-                      onChange={(e) => setDraftUrl(e.target.value)}
-                      placeholder={sourceDraft.example}
-                      inputMode="url"
-                      className="h-11 bg-background/80 font-mono text-xs"
-                    />
-                  </div>
-                  {draftUrl.trim() && (
-                    draftDetection.isValid ? (
-                      <div className="space-y-1 rounded-lg border border-border bg-background/60 px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                          <span className="font-semibold">
-                            {(draftDetection.provider && PROVIDER_LABELS[draftDetection.provider]) ?? "Video"}
-                          </span>
-                          <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-                            {draftDetection.control === "guided" ? "Guided sync" : "Full sync"}
-                          </span>
-                        </div>
-                        <p className="truncate font-mono text-[10px] text-muted-foreground">
-                          {draftDetection.providerId ?? draftDetection.cleanUrl}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-[11px] text-amber-700 dark:text-amber-300" role="alert">
-                        {draftDetection.detail || "That link doesn't look usable yet — keep editing."}
-                      </p>
-                    )
-                  )}
-                  <Button
-                    type="button"
-                    onClick={useDraftLink}
-                    disabled={!draftUrl.trim() || !draftDetection.isValid}
-                    className="min-h-11 w-full bg-foreground text-background text-xs font-semibold disabled:opacity-50"
-                  >
-                    Use this link
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Test presets modal — the four sample videos, organized */}
-      {showPresets && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Test presets">
-          <div
-            className="absolute inset-0 bg-black/60"
-            onClick={() => setShowPresets(false)}
-            aria-hidden
-          />
-          <div className="relative w-full max-w-md overflow-hidden rounded-lg border border-border bg-popover text-popover-foreground shadow-none">
-            <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+      {/* Other sources — two steps inside one Material dialog. Step 1 lists
+          providers; tapping one docks a detail panel (title + your own link)
+          beside it on desktop, or replaces it on mobile. */}
+      <Modal
+        open={showSources}
+        onClose={closeSources}
+        size="full"
+        label="Other video sources"
+        hideHandle
+        className="p-0"
+      >
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          {/* Step 1: provider list (hidden on mobile once step 2 opens) */}
+          <div className={`${sourceDraft ? "hidden sm:flex" : "flex"} min-h-0 w-full flex-1 flex-col sm:max-w-sm sm:flex-initial sm:shrink-0 sm:border-r sm:border-border`}>
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-5 py-3.5">
               <div>
-                <h3 className="text-sm font-semibold">Test presets</h3>
-                <p className="text-[11px] text-muted-foreground">
-                  Sample videos to try PeerMates instantly.
+                <h3 className="text-base font-semibold">Other sources</h3>
+                <p className="text-xs text-muted-foreground">
+                  Pick a provider, then add your title + link.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setShowPresets(false)}
-                aria-label="Close test presets"
-                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+                onClick={closeSources}
+                aria-label="Close other sources"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground cursor-pointer"
               >
                 ✕
               </button>
             </div>
-            <div className="space-y-1 p-3">
-              {PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => {
-                    handleSelectPreset(p);
-                    setShowPresets(false);
-                  }}
-                  className="flex min-h-11 w-full items-center gap-3 rounded-lg border border-border px-3 py-2 text-left cursor-pointer hover:bg-muted"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-xs font-semibold">{p.label}</span>
-                    <span className="block truncate font-mono text-[10px] text-muted-foreground">
-                      {p.url}
+            <div className="no-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">
+              {PROVIDER_SHORTCUTS.map((p) => {
+                const selected = sourceDraft?.name === p.name;
+                return (
+                  <button
+                    key={p.name}
+                    type="button"
+                    onClick={() => pickProvider(p)}
+                    aria-pressed={selected}
+                    className={`flex min-h-11 w-full items-center gap-3 rounded-xl border px-3 py-2 text-left cursor-pointer  ${
+                      selected ? "border-foreground bg-muted" : "border-border"
+                    }`}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-sm font-bold">
+                      {p.name.charAt(0)}
                     </span>
-                  </span>
-                </button>
-              ))}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-semibold">{p.name}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {p.desc}
+                      </span>
+                      <span className="block truncate font-mono text-[10px] text-muted-foreground/70">
+                        {p.example}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
+
+          {/* Step 2: title + own link (side panel on desktop, its own panel on mobile) */}
+          {sourceDraft && (
+            <div className="flex min-h-0 w-full flex-1 flex-col">
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-3">
+                <div className="min-w-0">
+                  <h3 className="truncate text-base font-semibold">
+                    {sourceDraft.name} link
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Add your title + paste your own {sourceDraft.name} URL.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSourceDraft(null)}
+                  aria-label="Back to providers"
+                  className="flex h-11 shrink-0 items-center rounded-lg px-3 text-xs font-medium text-muted-foreground cursor-pointer sm:hidden"
+                >
+                  ← Back
+                </button>
+                <button
+                  type="button"
+                  onClick={closeSources}
+                  aria-label="Close"
+                  className="hidden h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground cursor-pointer sm:flex"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain p-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="source-draft-title">
+                    Party title
+                  </label>
+                  <Input
+                    id="source-draft-title"
+                    value={draftTitle}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                    placeholder={`${sourceDraft.name} watch party`}
+                    className="h-11 bg-background/80 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground" htmlFor="source-draft-url">
+                    {sourceDraft.name} video URL
+                  </label>
+                  <Input
+                    id="source-draft-url"
+                    value={draftUrl}
+                    onChange={(e) => setDraftUrl(e.target.value)}
+                    placeholder={sourceDraft.example}
+                    inputMode="url"
+                    className="h-11 bg-background/80 font-mono text-xs"
+                  />
+                </div>
+                {draftUrl.trim() && (
+                  draftDetection.isValid ? (
+                    <div className="space-y-1 rounded-lg border border-border bg-background/60 px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                        <span className="font-semibold">
+                          {(draftDetection.provider && PROVIDER_LABELS[draftDetection.provider]) ?? "Video"}
+                        </span>
+                        <span className="rounded-full border border-border px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
+                          {draftDetection.control === "guided" ? "Guided sync" : "Full sync"}
+                        </span>
+                      </div>
+                      <p className="truncate font-mono text-[10px] text-muted-foreground">
+                        {draftDetection.providerId ?? draftDetection.cleanUrl}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300" role="alert">
+                      {draftDetection.detail || "That link does not look usable yet. Keep editing."}
+                    </p>
+                  )
+                )}
+                <Button
+                  type="button"
+                  onClick={useDraftLink}
+                  disabled={!draftUrl.trim() || !draftDetection.isValid}
+                  className="min-h-11 w-full bg-foreground text-background text-xs font-semibold disabled:opacity-50"
+                >
+                  Use this link
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </Modal>
+
+      {/* Test presets modal — the four sample videos, organized */}
+      <Modal
+        open={showPresets}
+        onClose={() => setShowPresets(false)}
+        size="md"
+        label="Test presets"
+        className="p-0"
+      >
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-5 py-3.5">
+          <div>
+            <h3 className="text-base font-semibold">Test presets</h3>
+            <p className="text-xs text-muted-foreground">
+              Sample videos to try PeerMates right away.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowPresets(false)}
+            aria-label="Close test presets"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="no-scrollbar min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3">
+          {PRESETS.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => {
+                handleSelectPreset(p);
+                setShowPresets(false);
+              }}
+              className="flex min-h-11 w-full items-center gap-3 rounded-xl border border-border px-3 py-2 text-left cursor-pointer"
+            >
+              <span className="min-w-0 flex-1">
+                <span className="block text-xs font-semibold">{p.label}</span>
+                <span className="block truncate font-mono text-[10px] text-muted-foreground">
+                  {p.url}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Modal>
     </div>
   );
 }

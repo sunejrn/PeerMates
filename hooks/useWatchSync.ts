@@ -1381,7 +1381,7 @@ export function useWatchSync({
   const requestControl = useCallback(async () => {
     await postControlAction({ action: "request" });
     setMyRequestPending(true);
-    toast.success("Control requested — the host was notified. ✋");
+    toast.success("Control requested. The host was notified. ✋");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
@@ -1458,7 +1458,7 @@ export function useWatchSync({
   const setChatMuted = useCallback(
     async (muted: boolean) => {
       await postModerationAction({ action: "muteall", muted });
-      toast.success(muted ? "Viewers muted — chat is read-only." : "Chat unmuted for everyone.");
+      toast.success(muted ? "Viewers muted. Chat is read-only." : "Chat unmuted for everyone.");
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [slug]
@@ -1508,7 +1508,7 @@ export function useWatchSync({
           videoType: data.room.videoType,
         });
       }
-      toast.success("Switched to a local file — everyone picks it on their device.");
+      toast.success("Switched to a local file. Everyone picks it on their device.");
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [slug]
