@@ -9,7 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { toast } from "sonner";
 import { useAppSettings, type ThemeChoice, type ChatFontSize } from "@/hooks/useAppSettings";
-import { getRoomHistory, clearRoomHistory } from "@/lib/rooms/history";
+import {
+  getRoomHistory,
+  clearRoomHistory,
+  resolveRoomScope,
+} from "@/lib/rooms/history";
+import { useSession } from "@/lib/auth-client";
 
 const REGION_OPTIONS: { code: string; label: string }[] = [
   { code: "", label: "Auto (from locale)" },
@@ -106,6 +111,7 @@ function SelectControl({
 }
 
 export default function SettingsPage() {
+  const { data: session } = useSession();
   const { settings, loaded, update, reset } = useAppSettings();
   const [bugName, setBugName] = useState("");
   const [bugTitle, setBugTitle] = useState("");
@@ -148,7 +154,7 @@ export default function SettingsPage() {
       const payload = {
         exportedAt: new Date().toISOString(),
         settings,
-        rooms: getRoomHistory(),
+        rooms: getRoomHistory(resolveRoomScope(session?.user?.id)),
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], {
         type: "application/json",
@@ -168,7 +174,7 @@ export default function SettingsPage() {
   };
 
   const handleClearHistory = () => {
-    clearRoomHistory();
+    clearRoomHistory(resolveRoomScope(session?.user?.id));
     toast.success("Room history cleared.");
   };
 

@@ -450,18 +450,23 @@ export default function RoomPage({
     if (!room || !slug) return;
     try {
       void import("@/lib/rooms/history").then(({ recordRoomVisit }) => {
-        recordRoomVisit({
-          slug,
-          title: room.title,
-          videoType: room.videoType,
-          hostName: room.hostName,
-        });
+        // Scope by the effective identity so the All Rooms page stays
+        // private per user (signed-in user id, else this device's guest id).
+        recordRoomVisit(
+          {
+            slug,
+            title: room.title,
+            videoType: room.videoType,
+            hostName: room.hostName,
+          },
+          effectiveId
+        );
       });
     } catch {
       // history is best-effort
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, room?.slug]);
+  }, [slug, room?.slug, effectiveId]);
 
   // ---- Refresh persistence: device backup of the room position ----
   // Server Redis state is authoritative and survives host leaves; this

@@ -1,9 +1,13 @@
 /**
- * Per-device "All Rooms" history (localStorage, no signup needed).
+ * Per-user "All Rooms" history (localStorage).
  *
  * Every room visit records { slug, title, videoType, hostName, lastVisit }.
  * The All Rooms page lists them newest-first; entries auto-expire after
  * 30 days when the settings toggle `autoDeleteRooms` is ON (default).
+ *
+ * History is bucketed by a scope so each account only ever sees its own
+ * rooms (a signed-in user's rooms are keyed by their user id; guests fall
+ * back to their per-device guest id).
  */
 
 export interface RoomHistoryEntry {
@@ -20,11 +24,30 @@ export interface RoomHistoryEntry {
 const KEY = "peermates:rooms:v1";
 export const ROOM_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SETTINGS_KEY = "peermates:settings:v1";
+const GUEST_ID_KEY = "syncme_guest_id";
 
-function readAll(): RoomHistoryEntry[] {
+/** Storage bucket for a scope. User-scoped so each account's rooms stay
+ *  private even on a shared device; the base key is only the anonymous
+ *  fallback (never shown by the auth-gated All Rooms page). */
+function storageKey(scope?: string | null): string {
+  return scope ? `${KEY}:u:${scope}` : KEY;
+}
+
+/** Resolve the history scope: the signed-in user id, else the device guest id. */
+export function resolveRoomScope(userId?: string | null): string | null {
+  if (userId) return userId;
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(GUEST_ID_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function readAll(scope?: string | null): RoomHistoryEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(KEY);
+    const raw = window.localStorage.getItem(storageKey(scope));
     if (!raw) return [];
     const parsed = JSON.parse(raw) as RoomHistoryEntry[];
     if (!Array.isArray(parsed)) return [];
@@ -34,9 +57,12 @@ function readAll(): RoomHistoryEntry[] {
   }
 }
 
-function writeAll(list: RoomHistoryEntry[]): void {
+function writeAll(list: RoomHistoryEntry[], scope?: string | null): void {
   try {
-    window.localStorage.setItem(KEY, JSON.stringify(list.slice(0, 200)));
+    window.localStorage.setItem(
+      storageKey(scope),
+      JSON.stringify(list.slice(0, 200))
+    );
   } catch {
     // storage full/blocked — history is best-effort
   }
@@ -54,15 +80,18 @@ function autoDeleteEnabled(): boolean {
   }
 }
 
-export function recordRoomVisit(entry: {
-  slug: string;
-  title: string;
-  videoType?: string;
-  hostName?: string;
-}): void {
+export function recordRoomVisit(
+  entry: {
+    slug: string;
+    title: string;
+    videoType?: string;
+    hostName?: string;
+  },
+  scope?: string | null
+): void {
   if (typeof window === "undefined" || !entry.slug) return;
   const now = Date.now();
-  const list = readAll();
+  const list = readAll(scope);
   const idx = list.findIndex((e) => e.slug === entry.slug);
   if (idx >= 0) {
     list[idx] = {
@@ -82,27 +111,33 @@ export function recordRoomVisit(entry: {
       lastVisit: now,
     });
   }
-  writeAll(list);
+  writeAll(list, scope);
 }
 
 /** Newest-first, with 30-day expiry applied when the toggle is ON. */
-export function getRoomHistory(): RoomHistoryEntry[] {
+export function getRoomHistory(scope?: string | null): RoomHistoryEntry[] {
   const now = Date.now();
-  const list = readAll();
+  const list = readAll(scope);
   if (autoDeleteEnabled()) {
     const fresh = list.filter((e) => now - e.lastVisit < ROOM_TTL_MS);
-    if (fresh.length !== list.length) writeAll(fresh);
+    if (fresh.length !== list.length) writeAll(fresh, scope);
     return fresh.sort((a, b) => b.lastVisit - a.lastVisit);
   }
   return [...list].sort((a, b) => b.lastVisit - a.lastVisit);
 }
 
-export function deleteRoomFromHistory(slug: string): void {
-  writeAll(readAll().filter((e) => e.slug !== slug));
+export function deleteRoomFromHistory(
+  slug: string,
+  scope?: string | null
+): void {
+  writeAll(
+    readAll(scope).filter((e) => e.slug !== slug),
+    scope
+  );
 }
 
-export function clearRoomHistory(): void {
-  writeAll([]);
+export function clearRoomHistory(scope?: string | null): void {
+  writeAll([], scope);
 }
 
 export function timeAgo(ts: number): string {

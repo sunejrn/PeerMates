@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
 import { AuthButton } from "@/components/auth/AuthButton";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,15 +17,27 @@ import {
 } from "@/lib/rooms/history";
 
 export default function AllRoomsPage() {
+  const router = useRouter();
+  const { data: session, isPending } = useSession();
+  const userId = session?.user?.id;
   const [rooms, setRooms] = useState<RoomHistoryEntry[] | null>(null);
 
+  // All Rooms is private: only the signed-in user's own history is ever read.
+  // Unauthenticated visitors are already redirected by proxy.ts — this is the
+  // client-side backstop for expired sessions / direct client navigations.
   useEffect(() => {
-    setRooms(getRoomHistory());
-  }, []);
+    if (isPending) return;
+    if (!userId) {
+      router.replace("/");
+      return;
+    }
+    setRooms(getRoomHistory(userId));
+  }, [isPending, userId, router]);
 
   const handleDelete = (slug: string) => {
-    deleteRoomFromHistory(slug);
-    setRooms(getRoomHistory());
+    if (!userId) return;
+    deleteRoomFromHistory(slug, userId);
+    setRooms(getRoomHistory(userId));
   };
 
   return (
@@ -58,12 +72,17 @@ export default function AllRoomsPage() {
         <div className="mb-6 space-y-1">
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">All Rooms</h1>
           <p className="text-sm text-muted-foreground">
-            Every party you created or joined on this device. Rooms disappear
+            Every party you created or joined on your account. Rooms disappear
             automatically 30 days after your last visit (toggle in Settings).
           </p>
         </div>
 
-        {rooms === null ? (
+        {isPending || !userId ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+            <Spinner className="shrink-0" />
+            {isPending ? "Checking your session…" : "Redirecting to sign in…"}
+          </div>
+        ) : rooms === null ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Spinner className="shrink-0" /> Loading your rooms…
           </div>
