@@ -3,32 +3,41 @@
 Built with ❤️ by [@sunejrn](https://x.com/sunejrn)
 
 Watch videos together in frame-accurate sync — YouTube, HLS, MP4, or your own
-movie files — with live chat, voice notes, AI-translated subtitles, and
-host-controlled playback for up to ~500 viewers per room.
-   
+movie files — with live chat, voice notes, AI-translated subtitles, moderation,
+and host-controlled playback for up to ~500 viewers per room.
+
 ## Screenshots
-  
-| Lobby (desktop) | Guest join (desktop) |
+
+### Desktop
+
+| Lobby — start or join a party | Watch room — synced player + live panels |
 | --- | --- |
-| ![Lobby on desktop](public/screenshots/lobby-desktop.png) | ![Guest nickname join on desktop](public/screenshots/room-join-desktop.png) |
+| ![Lobby: create a party or join with a code](public/screenshots/lobby-desktop.png) | ![Watch room with the unified player, presence, and host controls](public/screenshots/room-desktop.png) |
 
-| Lobby (mobile, 390px) | Guest join (mobile, 390px) |
+| Party Replay — heatmap, highlights, and Wrapped | Settings — appearance, chat, playback, data |
 | --- | --- |
-| ![Lobby on mobile](public/screenshots/lobby-mobile.png) | ![Guest nickname join on mobile](public/screenshots/room-join-mobile.png) |
+| ![Party Replay with the reaction heatmap and highlight cards](public/screenshots/replay-desktop.png) | ![Settings page](public/screenshots/settings-desktop.png) |
 
-| Invite sheet (mobile) | Party Replay (desktop) |
+### Mobile (390px)
+
+| Lobby | Watch room |
 | --- | --- |
-| ![Invite sheet with link, WhatsApp share, and QR code](public/screenshots/invite-sheet-mobile.png) | ![Party Replay with heatmap scrubber](public/screenshots/replay-desktop.png) |
+| ![Lobby on mobile](public/screenshots/lobby-mobile.png) | ![Watch room on mobile](public/screenshots/room-mobile.png) |
 
-| Party Replay (mobile, full page) |
-| --- |
-| ![Party Replay on mobile with heatmap, highlights, and Wrapped card](public/screenshots/replay-mobile.png) |
+| Guest nickname join | Invite sheet — link, WhatsApp, QR |
+| --- | --- |
+| ![Guest nickname join gate on mobile](public/screenshots/room-join-mobile.png) | ![Invite sheet with copy link, WhatsApp share, and QR code](public/screenshots/invite-sheet-mobile.png) |
 
-> Screenshots are static captures of the lobby (`/`), the guest nickname
-> gate (`/room/[code]`), the invite sheet, and a Party Replay (`/replay/[id]`).
-> To retake them, run the dev server, create a room via `POST /api/rooms`, and
-> screenshot `/`, `/room/<slug>` (plus the open invite sheet), and a saved
-> `/replay/<id>` at 1440×900 and 390×844.
+| Settings | Party Replay (full page) |
+| --- | --- |
+| ![Settings on mobile](public/screenshots/settings-mobile.png) | ![Party Replay on mobile with heatmap, highlights, and Wrapped card](public/screenshots/replay-mobile.png) |
+
+> Screenshots are static captures of the lobby (`/`), the watch room
+> (`/room/[slug]`) both as host and at the guest nickname gate, the invite
+> sheet, settings (`/settings`), and a saved Party Replay (`/replay/[id]`).
+> To retake them, run the dev server, create a room via `POST /api/rooms`,
+> join it (set `syncme_nickname` in `localStorage` to skip the gate), and
+> screenshot at 1440×900 and 390×844.
 
 ## Features
 
@@ -47,6 +56,7 @@ host-controlled playback for up to ~500 viewers per room.
 - 3s host heartbeat + Redis playback snapshots, so late joiners land in sync
 - Tap-to-play overlay for iPhone Safari autoplay blocks; fullscreen on iPhone
   (`webkitEnterFullscreen`) and Android/desktop (standard Fullscreen API)
+- Automatic host migration when the host disconnects
 
 **Clarity Engine (client-only, free)**
 - Off / Light / Ultra switch in the Watching tab. Light is a subtle
@@ -67,15 +77,22 @@ host-controlled playback for up to ~500 viewers per room.
 - Create a party from a link or your own file; join with a 6-letter code or
   pasted invite link (codes verified before navigating)
 - Guest join with just a nickname — no signup; Google or GitHub sign-in for
-  unlimited hosting
+  unlimited hosting (guests get one free party creation, then an auth prompt)
+- All Rooms (`/rooms`) — a private, auth-gated list of the rooms you've
+  visited, scoped to your account (guests fall back to their device id) and
+  auto-expiring after 30 days (toggle in Settings)
 - Invite sheet: copy link, one-tap Share to WhatsApp, native share sheet, and
   a QR code for in-person sharing
 
 **Chat**
 - WhatsApp-style voice notes (tap to record, preview with speed control, send),
-  photo/file attachments with on-device compression, replies, emoji reactions,
+  optional push-to-talk (hold to record, release to send)
+- Photo/file attachments with on-device compression, replies, emoji reactions,
   typing indicators, slow mode, and viewer mute-all
 - Message count tracks visible messages (deleted tombstones excluded)
+- **Chat Guard** (server-side, fail-open): automatic spam & scam filtering
+  with low/medium/high sensitivity and an on-demand Guard log. Chat never
+  blocks on the guard — slow or unreachable engine means the message is allowed
 
 **Subtitles + AI**
 - Host/co-host uploads `.srt`/`.vtt` — synced for everyone via `<track>`
@@ -86,13 +103,22 @@ host-controlled playback for up to ~500 viewers per room.
   (default Gemini Flash-Lite free tier; OpenRouter credit exhaustion falls back
   to Gemini automatically; quota errors keep original subtitles playing)
 
+**Host streaming & file transfer (P2P, small groups)**
+- "Stream from host" sends the host's local video straight to viewers over
+  WebRTC — STUN with an OpenRelay TURN fallback for tricky NATs
+- Honest about scale: the host uploads once per viewer with quality capped
+  automatically, so it tops out at 8 receivers. Big rooms should share a
+  link or matching local files (zero media bandwidth)
+- Send a file over a WebRTC DataChannel (128 KB chunks, low-buffer backpressure,
+  4 GB guard) — bytes go peer-to-peer, a server never stores them
+
 **Roles & moderation (server-enforced, never UI-only)**
 - Host + host-appointed co-hosts: playback control, source changes, kicks,
-  mutes, slow mode. Viewers: chat + react only
+  mutes, slow mode, Chat Guard, host streaming. Viewers: chat + react only
 - Upstash role check on every control event plus GetStream channel role
   mirroring; automatic host migration when the host disconnects
 - Upstash rate limits on state writes, chat, presence, reactions, room
-  creation/joins, and all AI calls
+  creation/joins, moderation, finalize, and all AI calls
 
 **Party Replay**
 - Every reaction, message, voice note, and pin is captured with its video
@@ -100,14 +126,15 @@ host-controlled playback for up to ~500 viewers per room.
 - Host ends the party and saves public / circle / private (or discards);
   reaction heatmap with labeled peaks plus auto-highlights (biggest laugh,
   shock, funniest voice note, top chatter, first reactor)
+- Layered replay: late friends watch with the crowd, add their own reactions
+  on top, and delete their own moments
 - Party Wrapped share card (OG + 9:16 story image) and a `/replay/[id]` page
-  where late friends watch with the crowd, react on top, and delete their own
-  moments
+  with a "Join the live room" CTA when the party is still running
 
 **Live analytics**
-- Room Analytics tab (mobile + desktop): message activity over the session,
-  top chatters, reaction breakdown, and media/moment counts — pure CSS/SVG
-  bars, no chart library
+- Room Analytics tab (mobile + desktop): message activity over the session as
+  a smooth SVG curve, top chatters, reaction breakdown, and media/moment
+  counts — pure CSS/SVG bars, no chart library
 
 **Settings & personalization (`/settings`)**
 - Appearance: follow system, or force light / dark (applied instantly,
@@ -115,8 +142,13 @@ host-controlled playback for up to ~500 viewers per room.
 - Chat: typing indicators, message sounds, message text size, presence
   avatars, global live-chat visibility
 - Playback defaults: autoplay, audio-only, Data Saver, data-cost region
-- Saved nickname (pre-fills the guest join gate), room history, data
-  export / clear, and in-app bug reporting
+- Saved nickname (pre-fills the guest join gate), room history
+  auto-delete (30 days), reduce motion, confirm-before-leave, data
+  export / clear, and in-app bug reporting (emailed via Resend)
+
+**Data awareness**
+- Data Saver mode + a live session data meter with regional cost estimates
+  (approximate prepaid mobile-data prices, always labeled as estimates)
 
 **Flat Vercel-style UI**
 - No shadows anywhere — cards, popovers, dialogs, and buttons render with
@@ -124,10 +156,11 @@ host-controlled playback for up to ~500 viewers per room.
 - Monochrome notifications: a single theme-aware toast style (no per-type
   colors)
 
-**Mobile-first**
+**Mobile-first & PWA**
 - 360px-first layout, 44px tap targets, safe-area insets, `dvh` units, no
-  horizontal scroll; hidden-scroll chat with pinned input bar; PWA installable
-  with an offline page; Data Saver + session data meter with regional pricing
+  horizontal scroll; hidden-scroll chat with pinned input bar
+- Installable PWA with an install spotlight/card (Android `beforeinstallprompt`
+  + iOS Add-to-Home-Screen steps) and an offline shell (`/offline`)
 
 ## Tech stack
 
@@ -135,11 +168,13 @@ host-controlled playback for up to ~500 viewers per room.
 | --- | --- |
 | App | Next.js 16 (App Router) + React 19 + Tailwind CSS 4 |
 | Realtime | GetStream Chat (`livestream` channels; polling fallback) |
-| State | Upstash Redis (presence, playback, roles, subtitles, rate limits) |
+| State | Upstash Redis (presence, playback, roles, subtitles, guard, rate limits) |
 | DB | Neon Postgres + Drizzle ORM |
 | Auth | better-auth (Google + GitHub OAuth) |
 | AI | Gemini / OpenRouter / Claude via `lib/ai.ts` |
+| Chat Guard | Python sidecar (`api/chatguard.py`) called server-side, fail-open |
 | Video | `hls.js`, YouTube IFrame API, native `<video>` |
+| P2P | WebRTC (STUN + OpenRelay TURN) for host streaming & file transfer |
 
 ## Getting started
 
@@ -164,7 +199,12 @@ Copy `.env.example` to `.env.local` and fill in:
 | `AI_PROVIDER` | `gemini` (default), `openrouter`, or `claude` |
 | `GEMINI_API_KEY` (+ `GEMINI_MODEL`) | AI Studio (free tier; also the automatic fallback) |
 | `OPENROUTER_API_KEY` (+ `OPENROUTER_MODEL`) | [openrouter.ai](https://openrouter.ai) keys page |
-| `CLAUDE_API_KEY` (+ `CLAUDE_MODEL`) | Anthropic console (for later use) |
+| `CLAUDE_API_KEY` (+ `CLAUDE_MODEL`) | Anthropic console |
+| `NEXT_PUBLIC_ENABLE_PTT` | optional `1` to enable hold-to-record push-to-talk (default off) |
+| `RESEND_API_KEY` / `REPORT_FROM` | Resend (in-app bug reports; server-only) |
+
+> `VERCEL_URL` is picked up automatically on Vercel and used as a fallback
+> origin for the Chat Guard sidecar and share links.
 
 ```bash
 npm run build   # production check
@@ -197,31 +237,59 @@ npm start       # serve the production build
 ```
 app/
   page.tsx                 Lobby: create party + join by code
+  rooms/page.tsx           All Rooms (auth-gated, user-scoped history)
   room/[slug]/page.tsx     Watch room (player, chat, panels)
+  replay/[id]/             Party Replay + OG image + 9:16 story route
+  settings/page.tsx        Settings
+  offline/page.tsx         PWA offline shell
   api/rooms/[slug]/…       state, presence, messages, roles, moderation,
-                           subtitles, subtitles/translate, recap, …
+                           guard, guided, localfile, signals, subtitles,
+                           subtitles/translate, recap, finalize, …
+  api/replay/[id]/…        replay data + events
+  api/chatguard.py         Chat Guard Python sidecar (fail-open)
+  api/report-bug/          Resend email for in-app bug reports
 components/
-  player/                  Unified player (YouTube / HLS / MP4 / local file)
-  chat/                    ChatPanel + WhatsApp-style VoiceRecorder
-  room/                    Lobby, InviteSheet, NicknameGate, SubtitlesPanel, …
-hooks/                     useWatchSync, useRoomSubtitles, useGuestIdentity, …
+  player/                  Unified player, GuidedEmbedPlayer, ClarityCanvas
+  chat/                    ChatPanel + VoiceRecorder + EmojiPicker
+  room/                    RoomLobby, InviteSheet, NicknameGate, ModerationPanel,
+                           GuardLogSheet, StreamFromHost, SendFilePanel, …
+  pwa/                     Install card + spotlight
+hooks/                     useWatchSync, useRoomSubtitles, useGuestIdentity,
+                           useDataSaver, useDataMeter, useClarity, useAppSettings, …
 lib/
   ai.ts                    Provider-agnostic LLM module (server-only)
+  guard/engine.ts          Chat Guard client (server-only, fail-open)
+  webrtc/                  P2P host streaming + DataChannel file transfer
+  data/pricing.ts          Mobile-data cost estimates
   redis/                   Upstash stores with in-memory dev fallback
-  rooms/                   Roles, actor resolution, invite-code helpers
+  rooms/                   Roles, actor resolution, invite codes, history
+  replay/                  Heatmap/highlights + persistence
   subtitles/               SRT/VTT parse + serialize (shared client/server)
   video/
     detector.ts            Source detection (+ embed/guided classification)
     parseUrl.ts            Provider URL parser (unit-tested, client-safe)
     clarity.ts             Clarity Engine tiers + capability detection
-  redis/guided.ts          Guided-sync shared countdown clock
-components/
-  player/                  Unified player (YouTube / HLS / MP4 / local file),
-                           GuidedEmbedPlayer (official iframes + countdown),
-                           ClarityCanvas (Ultra WebGL overlay)
 db/                        Drizzle schema + client (Neon)
+proxy.ts                   Route protection (/rooms)
 public/screenshots/        README screenshots
 ```
+
+## Roadmap
+
+These are the planned or in-progress directions, drawn from notes and
+feature-flagged code in the repo:
+
+- **Host streaming at scale** — WebRTC P2P currently tops out at 8 receivers;
+  an SFU (e.g. LiveKit's free tier) is the planned upgrade for large
+  host-streamed rooms. Big rooms already have zero-bandwidth paths (shared
+  links, matching local files).
+- **Claude as a first-class provider** — `lib/ai.ts` already routes
+  `AI_PROVIDER=claude`; it's wired and ready to switch on, alongside the
+  Gemini/OpenRouter defaults.
+- **Clarity Ultra on WebGPU** — WebGPU is feature-detected for reporting today;
+  WebGL is the shipping path, with WebGPU as the intended faster tier.
+- **Push-to-talk** — implemented behind `NEXT_PUBLIC_ENABLE_PTT` and off by
+  default; slated to default on after broader device testing.
 
 ## Deploy on Vercel
 
@@ -230,6 +298,11 @@ project Environment Variables (including `BETTER_AUTH_URL` with the production
 URL and the Google/GitHub OAuth credentials), then deploy. OAuth providers
 need the production redirect URIs registered (see Google setup above; same
 pattern for GitHub: `https://<your-app>.vercel.app/api/auth/callback/github`).
+
+Chat Guard ships as a Python serverless function at `api/chatguard.py` in the
+same project — Vercel detects and deploys it alongside the Next.js app, and
+`lib/guard/engine.ts` calls it server-side (with a short timeout and
+fail-open behavior).
 
 ## Contributing
 
