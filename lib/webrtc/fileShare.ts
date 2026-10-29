@@ -12,15 +12,16 @@
  *  2. viewer -> host  : file-accept { sdp }  (auto-accept; toast shown first)
  *     (or file-reject { reason } when the viewer can't take it)
  *  3. datachannel "peermates-file": one JSON meta frame, then raw binary
- *     chunks (up to 256KB, with a 64KB fallback), then one JSON done frame.
+ *     chunks (128KB, with a 64KB fallback), then one JSON done frame.
  *  4. host -> viewer : file-done { name, size } (resync cue via polling)
  */
 
 import type { SignalKind, SignalMessage } from "@/lib/redis/signals";
 import { RTC_ICE_SERVERS } from "@/lib/webrtc/ice";
+import { guessMime } from "@/lib/video/localfile";
 
 const SIGNAL_POLL_MS = 400;
-export const FILE_CHUNK_BYTES = 256 * 1024;
+export const FILE_CHUNK_BYTES = 128 * 1024;
 const FALLBACK_CHUNK_BYTES = 64 * 1024;
 /** Read this many chunks ahead of the network so disk I/O never stalls it. */
 const READ_AHEAD_CHUNKS = 4;
@@ -158,7 +159,7 @@ export class P2PFileHostSession {
     const meta: FileMeta = {
       name: file.name,
       size: file.size,
-      mime: file.type || "video/mp4",
+      mime: guessMime(file.name, file.type),
     };
 
     const offer = await pc.createOffer();
@@ -252,7 +253,7 @@ export class P2PFileHostSession {
         if (buf.byteLength <= FALLBACK_CHUNK_BYTES) {
           throw new Error("Connection dropped mid-transfer.");
         }
-        // Older Safari/Firefox builds cap message size below 256KB.
+        // Older Safari/Firefox builds cap message size below 128KB.
         chunkBytes = FALLBACK_CHUNK_BYTES;
         for (
           let start = 0;
@@ -544,6 +545,11 @@ export class P2PFileReceiver {
         this.onError?.(
           "The file transfer connection failed. Ask the host to send again."
         );
+        try {
+          pc.close();
+        } catch {
+          // ignore
+        }
         this.pcs.delete(hostId);
         this.pendingIce.delete(hostId);
       }
@@ -560,10 +566,12 @@ export class P2PFileReceiver {
           if (typeof ev.data === "string") {
             const msg = JSON.parse(ev.data) as { t?: string; size?: number } & Partial<FileMeta>;
             if (msg.t === "meta") {
+              const name = String(msg.name || meta.name);
+              const reportedMime = String(msg.mime || meta.mime || "");
               expectedMeta = {
-                name: String(msg.name || meta.name),
+                name,
                 size: Number(msg.size || meta.size),
-                mime: String(msg.mime || meta.mime),
+                mime: guessMime(name, reportedMime),
                 fpId: (msg as FileMeta).fpId,
               };
               return;
@@ -571,10 +579,15 @@ export class P2PFileReceiver {
             if (msg.t === "done") {
               const m = expectedMeta ?? meta;
               finished = true;
-              const file = new File(chunks, m.name, {
-                type: m.mime || "video/mp4",
-              });
-              this.onFile?.({ file, meta: m, fromName: undefined });
+              if (received !== m.size) {
+                this.onError?.(
+                  `The file arrived incomplete (${received} of ${m.size} bytes). Ask the host to send it again.`
+                );
+              } else {
+                const blob = new Blob(chunks, { type: m.mime || "" });
+                const file = new File([blob], m.name, { type: m.mime || "" });
+                this.onFile?.({ file, meta: m, fromName: undefined });
+              }
               try {
                 pc.close();
               } catch {

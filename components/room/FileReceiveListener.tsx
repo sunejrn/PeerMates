@@ -109,9 +109,14 @@ export function FileReceiveListener({
           if (host && fp) {
             const cmp = compareFingerprints(host, fp);
             match = cmp.match;
+            if (!match) {
+              const message = `The received file does not match the host copy. ${cmp.reasons[0] ?? ""}`.trim();
+              toast.error(message);
+              notify(100, "error", message);
+              return;
+            }
           }
         } catch {
-          // fingerprint failure — still play (bytes came from the host)
           match = true;
         }
         const resolved: LocalFingerprint = fp ?? {

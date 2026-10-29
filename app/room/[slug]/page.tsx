@@ -1580,7 +1580,7 @@ export default function RoomPage({
                 onTransferChange={setFileTransfer}
               />
             )}
-            {isLocalRoom && (
+            {!canControl && (
               <FileReceiveListener
                 slug={slug}
                 myId={effectiveId}
