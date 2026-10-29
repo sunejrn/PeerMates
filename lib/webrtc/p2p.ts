@@ -21,23 +21,7 @@
  */
 
 import type { SignalKind, SignalMessage } from "@/lib/redis/signals";
-
-const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    // Free public TURN relay (OpenRelay project credentials). Reached only
-    // when a direct peer path fails — e.g. symmetric NAT on either side.
-    {
-      urls: [
-        "turn:openrelay.metered.ca:80",
-        "turn:openrelay.metered.ca:443",
-        "turn:openrelay.metered.ca:443?transport=tcp",
-      ],
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-  ],
-};
+import { RTC_ICE_SERVERS } from "@/lib/webrtc/ice";
 
 const SIGNAL_POLL_MS = 800;
 
@@ -214,7 +198,7 @@ export class P2PHostSession {
   private async addViewer(viewerId: string): Promise<void> {
     if (this.stopped || !this.stream) return;
     this.removeViewer(viewerId);
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(RTC_ICE_SERVERS);
     this.pcs.set(viewerId, pc);
     this.emitCount();
 
@@ -340,6 +324,7 @@ export class P2PViewerSession {
     }, 25000);
     this.pollTimer = setInterval(() => void this.drain(), SIGNAL_POLL_MS);
     document.addEventListener("visibilitychange", this.onVis);
+    window.addEventListener("pagehide", this.onPageHide);
     await this.drain();
   }
 
@@ -347,10 +332,30 @@ export class P2PViewerSession {
     if (typeof document !== "undefined" && !document.hidden) void this.drain();
   };
 
+  /** Best-effort leave when the tab closes, so receiver slots don't leak. */
+  private onPageHide = (): void => {
+    if (!this.hostId) return;
+    try {
+      void fetch(`/api/rooms/${this.slug}/signals`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to: this.hostId,
+          kind: "p2p-leave",
+          payload: null,
+        }),
+        keepalive: true,
+      });
+    } catch {
+      // page is going away
+    }
+  };
+
   /** Stop timers + connection without emitting "ended" (internal resets). */
   private async leaveSilently(): Promise<void> {
     this.stopped = true;
     document.removeEventListener("visibilitychange", this.onVis);
+    window.removeEventListener("pagehide", this.onPageHide);
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
@@ -411,7 +416,7 @@ export class P2PViewerSession {
           // ignore
         }
       }
-      const pc = new RTCPeerConnection(ICE_SERVERS);
+      const pc = new RTCPeerConnection(RTC_ICE_SERVERS);
       this.pc = pc;
       pc.ontrack = (e) => {
         const [stream] = e.streams;

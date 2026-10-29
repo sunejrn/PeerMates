@@ -18,7 +18,7 @@ interface StreamFromHostPanelProps {
   /** Host player video element for captureStream(). */
   getHostVideo: () => HTMLVideoElement | null;
   /** Host-only: advertise sharing server-side (moderation p2pshare). */
-  onShareToggle: (on: boolean) => Promise<void>;
+  onShareToggle: (on: boolean, silent?: boolean) => Promise<void>;
   /** Host has a local file loaded — enables auto-share of playback. */
   hostHasFile?: boolean;
   /** Viewer has no local file — auto-join the host stream when live. */
@@ -61,6 +61,7 @@ export function StreamFromHostPanel({
   const [shareError, setShareError] = useState<string | null>(null);
   const [receiverCount, setReceiverCount] = useState(0);
   const hostSessionRef = useRef<P2PHostSession | null>(null);
+  const shareBusyRef = useRef(false);
   // Viewer watch state
   const [p2pState, setP2pState] = useState<P2PState>("idle");
   const [p2pDetail, setP2pDetail] = useState<string | null>(null);
@@ -153,6 +154,7 @@ export function StreamFromHostPanel({
       setShareError("No video element yet. Pick your file and let it load first.");
       return;
     }
+    shareBusyRef.current = true;
     try {
       setShareBusy(true);
       await onShareToggle(true);
@@ -167,6 +169,9 @@ export function StreamFromHostPanel({
       await session.start(video);
       setSharing(true);
     } catch (err) {
+      autoSharedRef.current = false;
+      hostSessionRef.current?.stop();
+      hostSessionRef.current = null;
       setShareError(
         err instanceof Error ? err.message : "Could not start sharing."
       );
@@ -176,6 +181,7 @@ export function StreamFromHostPanel({
         // ignore
       }
     } finally {
+      shareBusyRef.current = false;
       setShareBusy(false);
     }
   };
@@ -246,33 +252,50 @@ export function StreamFromHostPanel({
   // right away — no extra tap needed. Retries until the video element
   // exists (metadata can lag on long movies).
   const autoSharedRef = useRef(false);
+  const onShareToggleRef = useRef(onShareToggle);
+  useEffect(() => {
+    onShareToggleRef.current = onShareToggle;
+  }, [onShareToggle]);
   useEffect(() => {
     if (!isHost || !hostHasFile || autoSharedRef.current) return;
     let cancelled = false;
     let attempts = 0;
-    const t = setInterval(() => {
+    const attempt = () => {
       if (cancelled) return;
-      attempts += 1;
       if (hostSessionRef.current) {
         autoSharedRef.current = true;
         clearInterval(t);
         return;
       }
+      if (autoSharedRef.current || shareBusyRef.current) return;
+      attempts += 1;
       const video = getHostVideo();
       if (video && video.readyState >= 1) {
+        if (shareBusyRef.current) return;
         autoSharedRef.current = true;
-        clearInterval(t);
         void startSharingRef.current();
       } else if (attempts >= 20) {
         clearInterval(t);
       }
-    }, 1500);
+    };
+    const t = setInterval(attempt, 1500);
+    attempt();
     return () => {
       cancelled = true;
       clearInterval(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, hostHasFile]);
+
+  // Re-assert the sharing flag before its 15-minute TTL expires, otherwise
+  // late joiners think the host stopped sharing even though the stream is up.
+  useEffect(() => {
+    if (!isHost || !sharing) return;
+    const t = setInterval(() => {
+      void onShareToggleRef.current(true, true).catch(() => {});
+    }, 4 * 60_000);
+    return () => clearInterval(t);
+  }, [isHost, sharing]);
 
   // Viewer auto-watch: file-less joiners join the host stream as soon as
   // it is advertised — they never have to pick a file they don't have.
@@ -411,7 +434,7 @@ export function StreamFromHostPanel({
               </p>
               <div className="flex gap-1.5">
                 <Button onClick={backToLive} variant="outline" className="flex-1 min-h-11 text-xs">
-                  ↺ Back to live
+                  Back to live
                 </Button>
                 <Button onClick={stopWatching} variant="outline" className="flex-1 min-h-11 text-xs">
                   Stop watching
@@ -448,34 +471,38 @@ export function HostStreamMain({
   const [max, setMax] = useState(P2P_MAX_RECEIVERS);
   const [state, setState] = useState<P2PState>("idle");
   const [detail, setDetail] = useState<string | null>(null);
+  const [needsTap, setNeedsTap] = useState(false);
   const sessionRef = useRef<P2PViewerSession | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const pendingRef = useRef<MediaStream | null>(null);
-  const triedRef = useRef(false);
+  const retryAtRef = useRef(0);
+  const failedAttemptsRef = useRef(0);
+
+  const startPlayback = useCallback((stream: MediaStream, video: HTMLVideoElement) => {
+    try {
+      video.srcObject = stream;
+      void video
+        .play()
+        .then(() => setNeedsTap(false))
+        .catch(() => setNeedsTap(true));
+    } catch {
+      setNeedsTap(true);
+    }
+  }, []);
 
   const attach = useCallback((stream: MediaStream) => {
     pendingRef.current = stream;
     const v = videoRef.current;
     if (!v) return;
-    try {
-      v.srcObject = stream;
-      void v.play().catch(() => {});
-    } catch {
-      // user can press play manually
-    }
-  }, []);
+    startPlayback(stream, v);
+  }, [startPlayback]);
 
   // Attach a stream that arrived before the video node mounted.
   useEffect(() => {
     const pending = pendingRef.current;
     const v = videoRef.current;
     if (pending && v && !v.srcObject) {
-      try {
-        v.srcObject = pending;
-        void v.play().catch(() => {});
-      } catch {
-        // ignore
-      }
+      startPlayback(pending, v);
     }
   });
 
@@ -485,6 +512,22 @@ export function HostStreamMain({
       onState: (s, d) => {
         setState(s);
         setDetail(d ?? null);
+        if (s === "failed" || s === "full" || s === "ended") {
+          sessionRef.current = null;
+          failedAttemptsRef.current += 1;
+          // Retry a couple of times (host may still be starting), then wait
+          // for the explicit Try again tap instead of spamming signaling.
+          retryAtRef.current =
+            Date.now() + (failedAttemptsRef.current < 3 ? 8000 : 5 * 60_000);
+        }
+        if (s === "connected") {
+          failedAttemptsRef.current = 0;
+          // Autoplay with sound may be blocked — show the Play overlay.
+          const v = videoRef.current;
+          if (v) {
+            void v.play().then(() => setNeedsTap(false)).catch(() => setNeedsTap(true));
+          }
+        }
       },
       onStream: attach,
     });
@@ -509,11 +552,11 @@ export function HostStreamMain({
         setMax(Number(data.p2p?.max ?? P2P_MAX_RECEIVERS));
         if (
           Boolean(data.sharing) &&
-          !triedRef.current &&
           !sessionRef.current &&
+          failedAttemptsRef.current < 3 &&
+          Date.now() >= retryAtRef.current &&
           Number(data.p2p?.receivers ?? 0) < Number(data.p2p?.max ?? P2P_MAX_RECEIVERS)
         ) {
-          triedRef.current = true;
           void join();
         }
       } catch {
@@ -546,6 +589,7 @@ export function HostStreamMain({
           ref={videoRef}
           playsInline
           controls
+          onPlaying={() => setNeedsTap(false)}
           className="h-full w-full object-contain"
         />
       ) : (
@@ -575,7 +619,8 @@ export function HostStreamMain({
               <button
                 type="button"
                 onClick={() => {
-                  triedRef.current = false;
+                  failedAttemptsRef.current = 0;
+                  retryAtRef.current = 0;
                   setState("idle");
                   void join();
                 }}
@@ -592,6 +637,26 @@ export function HostStreamMain({
             </div>
           )}
         </div>
+      )}
+      {/* Browsers can block autoplay with sound. One tap starts the live
+          stream inside a user gesture instead of leaving a silent black box. */}
+      {live && needsTap && (
+        <button
+          type="button"
+          onClick={() => {
+            const v = videoRef.current;
+            if (!v) return;
+            void v.play().then(() => setNeedsTap(false)).catch(() => {});
+          }}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-2 bg-black/65 p-6 text-center"
+        >
+          <span className="text-sm font-semibold text-[#f5f5f5]">
+            Tap to play the host stream
+          </span>
+          <span className="max-w-xs text-[11px] text-zinc-300">
+            Your browser blocked autoplay with sound. One tap starts you live.
+          </span>
+        </button>
       )}
       {/* Keep the video node mounted for auto-attach even before live */}
       {!live && <video ref={videoRef} playsInline controls className="hidden" />}

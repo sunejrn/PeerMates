@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { P2PFileHostSession } from "@/lib/webrtc/fileShare";
+import type { FileTransferNoticeState } from "@/components/room/FileTransferNotice";
 import { formatBytes } from "@/lib/video/localfile";
 
 interface SendFileMember {
@@ -23,6 +24,8 @@ interface SendFilePanelProps {
   file: File | null;
   fileName?: string | null;
   members: SendFileMember[];
+  /** Drives the persistent transfer card in the room layout. */
+  onTransferChange?: (state: FileTransferNoticeState | null) => void;
 }
 
 /**
@@ -33,32 +36,31 @@ interface SendFilePanelProps {
  * auto-loads into their player so everyone watches in sync. Only the host
  * (and co-hosts the host promotes) keep control.
  */
-export function SendFilePanel({ slug, myId, myName, file, fileName, members }: SendFilePanelProps) {
+export function SendFilePanel({
+  slug,
+  myId,
+  myName,
+  file,
+  fileName,
+  members,
+  onTransferChange,
+}: SendFilePanelProps) {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<Record<string, { sent: number; size: number }>>({});
   const [doneIds, setDoneIds] = useState<Record<string, boolean>>({});
   const sessionRef = useRef<P2PFileHostSession | null>(null);
+  const transferIdRef = useRef<string>("");
+  const transferNameRef = useRef<string>("");
+  const sentRef = useRef<Record<string, number>>({});
+  const doneRef = useRef<Record<string, boolean>>({});
 
   const targets = useMemo(
     () => members.filter((m) => m.id !== myId),
     [members, myId]
   );
-  const needFile = useMemo(
-    () => targets.filter((m) => m.fileMatch !== true),
-    [targets]
-  );
-
-  useEffect(() => {
-    // Pre-select everyone who doesn't have the file yet.
-    setSelected((prev) => {
-      const next = { ...prev };
-      for (const m of needFile) {
-        if (!(m.id in next)) next[m.id] = true;
-      }
-      return next;
-    });
-  }, [needFile]);
+  const isSelected = (member: SendFileMember) =>
+    selected[member.id] ?? member.fileMatch !== true;
 
   useEffect(() => {
     return () => {
@@ -67,14 +69,13 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
     };
   }, []);
 
-  const allSelected = targets.length > 0 && targets.every((m) => selected[m.id]);
-  const selectedIds = targets.filter((m) => selected[m.id]).map((m) => m.id);
+  const allSelected = targets.length > 0 && targets.every(isSelected);
+  const selectedIds = targets.filter(isSelected).map((m) => m.id);
 
   const toggleAll = () => {
-    setSelected((prev) => {
+    setSelected(() => {
       const next: Record<string, boolean> = {};
-      for (const m of targets) next[m.id] = !allSelected ? true : false;
-      void prev;
+      for (const m of targets) next[m.id] = !allSelected;
       return next;
     });
   };
@@ -91,20 +92,67 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
     setSending(true);
     setDoneIds({});
     setProgress({});
+    sentRef.current = {};
+    doneRef.current = {};
+    transferIdRef.current = `send-${Date.now()}`;
+    transferNameRef.current = file.name;
+    const totalBytes = Math.max(1, file.size * selectedIds.length);
+    const notify = (next: {
+      percent: number;
+      phase: FileTransferNoticeState["phase"];
+      detail?: string;
+    }) => {
+      onTransferChange?.({
+        id: transferIdRef.current,
+        name: transferNameRef.current,
+        direction: "send",
+        ...next,
+      });
+    };
+    notify({
+      percent: 1,
+      phase: "sending",
+      detail: `Sending to ${selectedIds.length} viewer${selectedIds.length === 1 ? "" : "s"}...`,
+    });
+    let failed = false;
     try {
       if (!sessionRef.current) {
         sessionRef.current = new P2PFileHostSession(slug, myId, myName || "Host");
       }
       const session = sessionRef.current;
       session.onProgress = (p) => {
+        sentRef.current[p.userId] = p.sentBytes;
         setProgress((prev) => ({ ...prev, [p.userId]: { sent: p.sentBytes, size: p.size } }));
+        const sent = selectedIds.reduce(
+          (sum, id) => sum + (sentRef.current[id] ?? 0),
+          0
+        );
+        notify({
+          percent: Math.max(1, Math.min(99, Math.round((sent / totalBytes) * 100))),
+          phase: "sending",
+          detail: `Sending to ${selectedIds.length} viewer${selectedIds.length === 1 ? "" : "s"}...`,
+        });
       };
       session.onDone = (userId) => {
+        doneRef.current[userId] = true;
         setDoneIds((prev) => ({ ...prev, [userId]: true }));
+        if (selectedIds.every((id) => doneRef.current[id])) {
+          notify({
+            percent: 100,
+            phase: "ready",
+            detail: "File sent. Press play to keep watching.",
+          });
+        }
       };
       session.onError = (userId, message) => {
+        failed = true;
         const member = targets.find((m) => m.id === userId);
         toast.error(`${member?.name || "Viewer"}: ${message}`);
+        notify({
+          percent: 1,
+          phase: "error",
+          detail: `${member?.name || "Viewer"}: ${message}`,
+        });
       };
       toast.success(`Sending ${file.name} to ${selectedIds.length} viewer${selectedIds.length === 1 ? "" : "s"}. Keep this tab open.`);
       // Sequential sends keep host uplink stable (parallel N×bitrate stalls).
@@ -112,11 +160,26 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
         try {
           await session.sendTo(file, viewerId);
         } catch (err) {
+          failed = true;
           const member = targets.find((m) => m.id === viewerId);
-          toast.error(err instanceof Error ? `${member?.name || "Viewer"}: ${err.message}` : "Send failed.");
+          const message =
+            err instanceof Error ? err.message : "Send failed.";
+          toast.error(`${member?.name || "Viewer"}: ${message}`);
+          notify({
+            percent: 1,
+            phase: "error",
+            detail: `${member?.name || "Viewer"}: ${message}`,
+          });
         }
       }
-      toast.success("File sent. Viewers loaded it in sync.");
+      if (!failed && selectedIds.every((id) => doneRef.current[id])) {
+        notify({
+          percent: 100,
+          phase: "ready",
+          detail: "File sent. Press play to keep watching.",
+        });
+        toast.success("File sent. Viewers can press play when ready.");
+      }
     } finally {
       setSending(false);
     }
@@ -163,7 +226,7 @@ export function SendFilePanel({ slug, myId, myName, file, fileName, members }: S
                 >
                   <input
                     type="checkbox"
-                    checked={!!selected[m.id]}
+                    checked={isSelected(m)}
                     onChange={() =>
                       setSelected((prev) => ({ ...prev, [m.id]: !prev[m.id] }))
                     }

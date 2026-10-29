@@ -8,7 +8,7 @@
  * - Same-origin static assets: stale-while-revalidate.
  */
 
-const CACHE = "syncme-shell-v1";
+const CACHE = "syncme-shell-v2";
 const SHELL = ["/", "/offline", "/manifest.webmanifest", "/icon-192.png", "/icon-512.png"];
 
 self.addEventListener("install", (event) => {

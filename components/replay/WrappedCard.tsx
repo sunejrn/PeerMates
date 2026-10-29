@@ -139,7 +139,7 @@ export function WrappedCard({ meta }: { meta: WrappedMeta }) {
             href={url}
             className="shrink-0 font-medium text-foreground underline underline-offset-2"
           >
-            Watch replay →
+            Watch replay
           </a>
         </div>
       </div>

@@ -11,6 +11,10 @@ import { ModerationPanel } from "@/components/room/ModerationPanel";
 import { LocalFileGate } from "@/components/room/LocalFileGate";
 import { SendFilePanel } from "@/components/room/SendFilePanel";
 import { FileReceiveListener } from "@/components/room/FileReceiveListener";
+import {
+  FileTransferNotice,
+  type FileTransferNoticeState,
+} from "@/components/room/FileTransferNotice";
 import { StreamFromHostPanel, HostStreamMain } from "@/components/room/StreamFromHost";
 import { DataPanel } from "@/components/room/DataPanel";
 import { ClarityPanel } from "@/components/room/ClarityPanel";
@@ -112,7 +116,15 @@ export default function RoomPage({
   const [localMatch, setLocalMatch] = useState<boolean | null>(null);
   const [playBlocked, setPlayBlocked] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(true);
+  const [fileTransfer, setFileTransfer] =
+    useState<FileTransferNoticeState | null>(null);
+  const [pendingReceivedFile, setPendingReceivedFile] = useState<{
+    file: File;
+    fp: LocalFingerprint;
+    match: boolean;
+  } | null>(null);
   const fileRestoredRef = useRef(false);
+  const autoPlayAfterTransferRef = useRef(false);
   // Mobile tab state for narrow viewports (< lg) — persisted per room, so a
   // refresh (or coming back later) reopens exactly the tab you left.
   const [mobileTab, setMobileTab] = usePersistentState<
@@ -402,6 +414,46 @@ export default function RoomPage({
     })();
   };
 
+  const handleReceivedFileReady = (payload: {
+    file: File;
+    fp: LocalFingerprint;
+    match: boolean;
+  }) => {
+    setPendingReceivedFile(payload);
+  };
+
+  const handleTransferPlay = () => {
+    const pending = pendingReceivedFile;
+    const sameFile =
+      !!pending &&
+      !!localFile &&
+      localFile.file.name === pending.file.name &&
+      localFile.file.size === pending.file.size;
+    if (pending && !sameFile) {
+      autoPlayAfterTransferRef.current = true;
+      handleFileJoin(
+        pending.file,
+        createLocalObjectUrl(pending.file),
+        pending.fp,
+        pending.match
+      );
+    }
+    if (pending) setPendingReceivedFile(null);
+    // A newly loaded file starts in handlePlayerReady; an already-loaded
+    // file (or the sender's own player) can start right now.
+    if (!pending || sameFile) {
+      const player = playerRef.current;
+      if (player) {
+        void Promise.resolve(player.play()).then(() => {
+          setPlayBlocked(false);
+        }).catch(() => {
+          setPlayBlocked(true);
+        });
+      }
+    }
+    setFileTransfer(null);
+  };
+
   const handleFileClear = () => {
     setLocalFile((prev) => {
       if (prev) revokeLocalObjectUrl(prev.url);
@@ -457,12 +509,16 @@ export default function RoomPage({
     void loadHostFile(true);
   };
 
-  const handleShareToggle = async (on: boolean) => {
+  const handleShareToggle = async (on: boolean, silent = false) => {
     try {
       await setP2PSharing(on);
-      toast.success(on ? "Sharing your playback via P2P." : "Stopped P2P sharing.");
+      if (!silent) {
+        toast.success(on ? "Sharing your playback via P2P." : "Stopped P2P sharing.");
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Share toggle failed.");
+      if (!silent) {
+        toast.error(err instanceof Error ? err.message : "Share toggle failed.");
+      }
       throw err;
     }
   };
@@ -621,6 +677,20 @@ export default function RoomPage({
         if (playing && !canControlRefSafe.current) {
           try {
             await p.play();
+          } catch {
+            setPlayBlocked(true);
+          }
+        }
+      }
+      // A received file waits on the transfer card's Play button. Once the
+      // new player is ready, that tap starts playback immediately.
+      if (autoPlayAfterTransferRef.current) {
+        autoPlayAfterTransferRef.current = false;
+        const p = playerRef.current;
+        if (p) {
+          try {
+            await p.play();
+            setPlayBlocked(false);
           } catch {
             setPlayBlocked(true);
           }
@@ -914,7 +984,7 @@ export default function RoomPage({
             href="/"
             className="flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground "
           >
-            ← Back to Lobby
+            Back to Lobby
           </Link>
           <AuthButton />
         </header>
@@ -987,9 +1057,9 @@ export default function RoomPage({
             href="/"
             aria-label="Back to Lobby"
             title="Back to Lobby"
-            className="hidden lg:flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-lg text-muted-foreground   transition-colors"
+            className="hidden lg:flex h-11 shrink-0 items-center justify-center rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors"
           >
-            <span aria-hidden>←</span>
+            lobby
           </Link>
 
           <div className="flex items-center gap-2 min-w-0">
@@ -1477,6 +1547,7 @@ export default function RoomPage({
                 file={localFile?.file ?? null}
                 fileName={localFile?.file.name ?? hostFp?.name ?? null}
                 members={members}
+                onTransferChange={setFileTransfer}
               />
             )}
             {!canControl && (
@@ -1486,8 +1557,9 @@ export default function RoomPage({
                 myName={effectiveName}
                 hostFingerprint={hostFp}
                 enabled={isLocalRoom}
-                onFileReceived={handleFileJoin}
+                onFileReady={handleReceivedFileReady}
                 publishMatch={setFileMatch}
+                onTransferChange={setFileTransfer}
               />
             )}
             {isLocalRoom && (isHost || localMatch !== true) && (
@@ -1634,6 +1706,12 @@ export default function RoomPage({
           </div>
         </div>
       </main>
+
+      <FileTransferNotice
+        state={fileTransfer}
+        onPlay={handleTransferPlay}
+        onDismissError={() => setFileTransfer(null)}
+      />
     </div>
   );
 }

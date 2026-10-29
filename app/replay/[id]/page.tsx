@@ -266,7 +266,7 @@ export default function ReplayPage({ params }: { params: Promise<{ id: string }>
           href="/"
           className="flex min-h-11 items-center gap-1.5 text-xs sm:text-sm font-semibold text-muted-foreground  shrink-0"
         >
-          <span aria-hidden>←</span> PeerMates
+          PeerMates
         </Link>
         <p className="min-w-0 flex-1 truncate px-3 text-center text-xs sm:text-sm font-bold">
           {meta.title} <span className="text-muted-foreground font-medium">· replay</span>

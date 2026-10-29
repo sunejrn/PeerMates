@@ -106,12 +106,15 @@ playback.
 
 **Host streaming & file transfer (P2P, small groups)**
 - "Stream from host" sends the host's local video straight to viewers over
-  WebRTC — STUN with an OpenRelay TURN fallback for tricky NATs
+  WebRTC — STUN plus configurable TURN (OpenRelay fallback) for tricky NATs
 - Honest about scale: the host uploads once per viewer with quality capped
   automatically, so it tops out at 8 receivers. Big rooms should share a
   link or matching local files (zero media bandwidth)
 - Send a file over a WebRTC DataChannel (128 KB chunks, low-buffer backpressure,
   4 GB guard) — bytes go peer-to-peer, a server never stores them
+- Sender and receiver both get a persistent 1–100% transfer card; when it
+  reaches 100% it offers Play, which loads the movie and starts playback on
+  that device (the card never blocks or dismisses on outside clicks)
 
 **Roles & moderation (server-enforced, never UI-only)**
 - Host + host-appointed co-hosts: playback control, source changes, kicks,
@@ -175,7 +178,7 @@ playback.
 | AI | Gemini / OpenRouter / Claude via `lib/ai.ts` |
 | Chat Guard | Python sidecar (`api/chatguard.py`) called server-side, fail-open |
 | Video | Native `<video>`, local object URLs, IndexedDB persistence, ClarityCanvas |
-| P2P | WebRTC (STUN + OpenRelay TURN) for host streaming & file transfer |
+| P2P | WebRTC (STUN + configurable TURN, OpenRelay fallback) for host streaming & file transfer |
 
 ## Getting started
 
@@ -202,6 +205,7 @@ Copy `.env.example` to `.env.local` and fill in:
 | `OPENROUTER_API_KEY` (+ `OPENROUTER_MODEL`) | [openrouter.ai](https://openrouter.ai) keys page |
 | `CLAUDE_API_KEY` (+ `CLAUDE_MODEL`) | Anthropic console |
 | `NEXT_PUBLIC_ENABLE_PTT` | optional `1` to enable hold-to-record push-to-talk (default off) |
+| `NEXT_PUBLIC_TURN_URLS` / `NEXT_PUBLIC_TURN_USERNAME` / `NEXT_PUBLIC_TURN_CREDENTIAL` | optional TURN relay for strict NATs; falls back to OpenRelay |
 | `RESEND_API_KEY` / `REPORT_FROM` | Resend (in-app bug reports; server-only) |
 
 > `VERCEL_URL` is picked up automatically on Vercel and used as a fallback
@@ -232,6 +236,29 @@ npm start       # serve the production build
   feature code changes needed.
 - All AI keys are server-only (no `NEXT_PUBLIC_` prefix); the browser never
   sees them.
+
+## TURN relay setup (optional)
+
+WebRTC works directly on most home networks. For friends on different
+networks, strict NATs, or mobile carriers, configure a TURN relay:
+
+```env
+NEXT_PUBLIC_TURN_URLS=turn:your-relay.example.com:3478,turns:your-relay.example.com:5349?transport=tcp
+NEXT_PUBLIC_TURN_USERNAME=your_turn_username
+NEXT_PUBLIC_TURN_CREDENTIAL=your_turn_password
+```
+
+- Leave these unset to use the best-effort public OpenRelay fallback.
+- Restart `npm run dev` after changing them; for Vercel, add the same
+  variables and redeploy.
+- Verify the relay with Metered's
+  [TURN Server Testing Tool](https://www.metered.ca/turn-server-testing).
+- Static credentials work for small rooms. For production, rotate short-lived
+  credentials with the
+  [Metered TURN REST API](https://www.metered.ca/docs/turn-rest-api/).
+
+This app uses native WebRTC, not Metered's Video SDK, so the Metered Video
+REST API and Video SDK guides are not required.
 
 ## Project structure
 

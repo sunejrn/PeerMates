@@ -17,10 +17,7 @@
  */
 
 import type { SignalKind, SignalMessage } from "@/lib/redis/signals";
-
-const ICE_SERVERS: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
-};
+import { RTC_ICE_SERVERS } from "@/lib/webrtc/ice";
 
 const SIGNAL_POLL_MS = 800;
 export const FILE_CHUNK_BYTES = 128 * 1024;
@@ -117,7 +114,7 @@ export class P2PFileHostSession {
     this.listen();
     this.closePeer(viewerId);
 
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(RTC_ICE_SERVERS);
     this.pcs.set(viewerId, pc);
     const channel = pc.createDataChannel("peermates-file", { ordered: true });
     this.channels.set(viewerId, channel);
@@ -394,7 +391,7 @@ export class P2PFileReceiver {
         // ignore
       }
     }
-    const pc = new RTCPeerConnection(ICE_SERVERS);
+    const pc = new RTCPeerConnection(RTC_ICE_SERVERS);
     this.pcs.set(hostId, pc);
     const chunks: BlobPart[] = [];
     let received = 0;

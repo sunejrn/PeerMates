@@ -3,9 +3,9 @@
 import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { P2PFileReceiver, type FileMeta } from "@/lib/webrtc/fileShare";
+import type { FileTransferNoticeState } from "@/components/room/FileTransferNotice";
 import {
   compareFingerprints,
-  createLocalObjectUrl,
   fingerprintFile,
   type LocalFingerprint,
 } from "@/lib/video/localfile";
@@ -17,21 +17,21 @@ interface FileReceiveListenerProps {
   /** Host fingerprint for match verification (null while loading). */
   hostFingerprint: LocalFingerprint | null;
   enabled: boolean;
-  /** Auto-load the received file into the room player. */
-  onFileReceived: (
-    file: File,
-    objectUrl: string,
-    fp: LocalFingerprint,
-    match: boolean
-  ) => void;
+  /** Received bytes are ready; the room waits for the user's Play tap. */
+  onFileReady: (payload: {
+    file: File;
+    fp: LocalFingerprint;
+    match: boolean;
+  }) => void;
   publishMatch: (match: boolean | null) => void;
+  /** Drives the persistent transfer card in the room layout. */
+  onTransferChange?: (state: FileTransferNoticeState | null) => void;
 }
 
 /**
- * Viewer-side auto-receive: toasts FIRST ("Host is sending you the movie"),
- * then accepts the WebRTC transfer, verifies the fingerprint, auto-loads the
- * file into the player, and re-syncs to the room position. Render once per
- * room (no visible UI except progress toasts).
+ * Viewer-side auto-receive: the card counts 1-100 as the host streams the
+ * file, then waits for an explicit Play tap before loading it into the room
+ * player. Render once per room (no visible UI except the transfer card).
  */
 export function FileReceiveListener({
   slug,
@@ -39,51 +39,67 @@ export function FileReceiveListener({
   myName,
   hostFingerprint,
   enabled,
-  onFileReceived,
+  onFileReady,
   publishMatch,
+  onTransferChange,
 }: FileReceiveListenerProps) {
   const hostFpRef = useRef(hostFingerprint);
   useEffect(() => {
     hostFpRef.current = hostFingerprint;
   }, [hostFingerprint]);
-  const cbRef = useRef({ onFileReceived, publishMatch });
+  const cbRef = useRef({ onFileReady, publishMatch, onTransferChange });
   useEffect(() => {
-    cbRef.current = { onFileReceived, publishMatch };
+    cbRef.current = { onFileReady, publishMatch, onTransferChange };
   });
 
   useEffect(() => {
     if (!enabled || !myId) return;
     const receiver = new P2PFileReceiver(slug, myId, myName || "Viewer");
-    // One stable toast id per transfer: sonner updates the SAME toast in
-    // place instead of dismissing + recreating it (which flashed). Progress
-    // only re-renders when the 25%-bucket changes, and the toast never
-    // auto-expires mid-transfer (dismissed explicitly on done/error/unmount).
-    let progressToastId: string | undefined;
-    let lastBucket = -1;
+    let transferId = "";
+    let fileName = "";
+    let lastPercent = 1;
+    const notify = (
+      percent: number,
+      phase: FileTransferNoticeState["phase"],
+      detail?: string
+    ) => {
+      lastPercent = percent;
+      cbRef.current.onTransferChange?.({
+        id: transferId || `receive-${Date.now()}`,
+        name: fileName || "Movie file",
+        percent,
+        phase,
+        direction: "receive",
+        detail,
+      });
+    };
 
     receiver.onOfferToast = (meta: FileMeta, fromName?: string) => {
-      toast.info(
-        `${fromName || "Host"} is sending you the movie ${meta.name}. Loading it now.`,
-        { duration: 6000 }
+      transferId = `receive-${slug}-${meta.name}-${meta.size}`;
+      fileName = meta.name;
+      lastPercent = 1;
+      notify(
+        1,
+        "receiving",
+        `${fromName || "The host"} is sending ${meta.name}. Keep this tab open.`
       );
     };
     receiver.onProgress = (meta, receivedBytes) => {
-      const pct = Math.round((receivedBytes / Math.max(1, meta.size)) * 100);
-      const bucket = Math.min(3, Math.floor(pct / 25));
-      if (bucket === lastBucket && progressToastId !== undefined) return;
-      lastBucket = bucket;
-      progressToastId = `file-receive-${meta.name}-${meta.size}`;
-      toast.loading(`Receiving ${meta.name} ${bucket * 25}%`, {
-        id: progressToastId,
-        duration: Infinity,
-      });
+      if (!transferId) {
+        transferId = `receive-${slug}-${meta.name}-${meta.size}`;
+        fileName = meta.name;
+      }
+      const percent = Math.max(
+        1,
+        Math.min(99, Math.round((receivedBytes / Math.max(1, meta.size)) * 100))
+      );
+      if (percent === lastPercent) return;
+      notify(percent, "receiving", `Receiving ${meta.name} from the host...`);
     };
     receiver.onFile = async ({ file, meta }) => {
       try {
-        if (progressToastId !== undefined) toast.dismiss(progressToastId);
-        progressToastId = undefined;
-        lastBucket = -1;
-        const url = createLocalObjectUrl(file);
+        if (!fileName) fileName = meta.name;
+        notify(100, "preparing", "Checking the received file...");
         // Verify: fingerprint the received bytes against the host file.
         let match = true;
         let fp: LocalFingerprint | null = null;
@@ -98,33 +114,32 @@ export function FileReceiveListener({
           // fingerprint failure — still play (bytes came from the host)
           match = true;
         }
+        const resolved: LocalFingerprint = fp ?? {
+          v: 1,
+          name: meta.name,
+          size: meta.size,
+          duration: 0,
+          mime: meta.mime,
+          chunks: ["0".repeat(64), "0".repeat(64), "0".repeat(64)] as [string, string, string],
+          fpId: "000000000000",
+        };
         cbRef.current.publishMatch(match);
-        cbRef.current.onFileReceived(
-          file,
-          url,
-          fp ?? {
-            v: 1,
-            name: meta.name,
-            size: meta.size,
-            duration: 0,
-            mime: meta.mime,
-            chunks: ["0".repeat(64), "0".repeat(64), "0".repeat(64)] as [string, string, string],
-            fpId: "000000000000",
-          },
-          match
-        );
-        toast.success(`${meta.name} received. Playing in sync with the host.`);
+        cbRef.current.onFileReady({ file, fp: resolved, match });
+        notify(100, "ready", "Received. Press play to start watching.");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Could not load the received file.");
+        const message =
+          err instanceof Error ? err.message : "Could not prepare the received file.";
+        toast.error(message);
+        notify(lastPercent, "error", message);
       }
     };
     receiver.onError = (message) => {
       toast.error(message);
+      notify(lastPercent, "error", message);
     };
     receiver.start();
     return () => {
       receiver.stop();
-      if (progressToastId !== undefined) toast.dismiss(progressToastId);
     };
   }, [slug, myId, myName, enabled]);
 

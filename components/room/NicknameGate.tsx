@@ -82,7 +82,7 @@ export function NicknameGate({
             type="submit"
             className="w-full h-12 min-h-11 bg-linear-to-r from-violet-600 to-indigo-600   text-[#f5f5f5] font-semibold cursor-pointer"
           >
-            Join party →
+            Join party
           </Button>
         </form>
         <p className="text-[11px] text-muted-foreground">
