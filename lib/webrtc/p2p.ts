@@ -47,7 +47,7 @@ async function sendSignal(
 
 async function pollMailbox(slug: string, userId: string): Promise<SignalMessage[]> {
   const res = await fetch(
-    `/api/rooms/${slug}/signals?for=${encodeURIComponent(userId)}`
+    `/api/rooms/${slug}/signals?for=${encodeURIComponent(userId)}&lane=p2p`
   );
   if (!res.ok) return [];
   const data = await res.json().catch(() => ({}));
@@ -110,9 +110,11 @@ export class P2PHostSession {
   private hostId: string;
   private events: P2PHostEvents;
   private pcs = new Map<string, RTCPeerConnection>();
+  private pendingIce = new Map<string, RTCIceCandidateInit[]>();
   private stream: MediaStream | null = null;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
+  private draining = false;
 
   constructor(slug: string, hostId: string, events: P2PHostEvents = {}) {
     this.slug = slug;
@@ -161,19 +163,24 @@ export class P2PHostSession {
   };
 
   private async drain(): Promise<void> {
-    if (this.stopped) return;
-    let signals: SignalMessage[] = [];
+    if (this.stopped || this.draining) return;
+    this.draining = true;
     try {
-      signals = await pollMailbox(this.slug, this.hostId);
-    } catch {
-      return;
-    }
-    for (const s of signals) {
+      let signals: SignalMessage[] = [];
       try {
-        await this.handle(s);
-      } catch (err) {
-        console.warn("P2P host signal handling notice:", err);
+        signals = await pollMailbox(this.slug, this.hostId);
+      } catch {
+        return;
       }
+      for (const s of signals) {
+        try {
+          await this.handle(s);
+        } catch (err) {
+          console.warn("P2P host signal handling notice:", err);
+        }
+      }
+    } finally {
+      this.draining = false;
     }
   }
 
@@ -186,9 +193,29 @@ export class P2PHostSession {
     if (!pc) return;
     if (s.kind === "p2p-answer") {
       await pc.setRemoteDescription(s.payload as RTCSessionDescriptionInit);
+      const queued = this.pendingIce.get(s.from) ?? [];
+      this.pendingIce.delete(s.from);
+      for (const candidate of queued) {
+        try {
+          await pc.addIceCandidate(candidate);
+        } catch {
+          // stale candidate
+        }
+      }
     } else if (s.kind === "p2p-ice") {
       if (s.payload) {
-        await pc.addIceCandidate(s.payload as RTCIceCandidateInit);
+        const candidate = s.payload as RTCIceCandidateInit;
+        if (!pc.remoteDescription) {
+          const queued = this.pendingIce.get(s.from) ?? [];
+          queued.push(candidate);
+          this.pendingIce.set(s.from, queued);
+        } else {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch {
+            // stale candidate
+          }
+        }
       }
     } else if (s.kind === "p2p-leave") {
       this.removeViewer(s.from);
@@ -244,6 +271,7 @@ export class P2PHostSession {
   }
 
   private removeViewer(viewerId: string): void {
+    this.pendingIce.delete(viewerId);
     const pc = this.pcs.get(viewerId);
     if (pc) {
       try {
@@ -271,8 +299,10 @@ export class P2PViewerSession {
   private events: P2PViewerEvents;
   private pc: RTCPeerConnection | null = null;
   private hostId: string | null = null;
+  private pendingIce: RTCIceCandidateInit[] = [];
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
+  private draining = false;
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(
@@ -383,6 +413,7 @@ export class P2PViewerSession {
       }
       this.pc = null;
     }
+    this.pendingIce = [];
   }
 
   async leave(): Promise<void> {
@@ -391,19 +422,24 @@ export class P2PViewerSession {
   }
 
   private async drain(): Promise<void> {
-    if (this.stopped) return;
-    let signals: SignalMessage[] = [];
+    if (this.stopped || this.draining) return;
+    this.draining = true;
     try {
-      signals = await pollMailbox(this.slug, this.viewerId);
-    } catch {
-      return;
-    }
-    for (const s of signals) {
+      let signals: SignalMessage[] = [];
       try {
-        await this.handle(s);
-      } catch (err) {
-        console.warn("P2P viewer signal handling notice:", err);
+        signals = await pollMailbox(this.slug, this.viewerId);
+      } catch {
+        return;
       }
+      for (const s of signals) {
+        try {
+          await this.handle(s);
+        } catch (err) {
+          console.warn("P2P viewer signal handling notice:", err);
+        }
+      }
+    } finally {
+      this.draining = false;
     }
   }
 
@@ -448,6 +484,16 @@ export class P2PViewerSession {
         }
       };
       await pc.setRemoteDescription(s.payload as RTCSessionDescriptionInit);
+      // Replay host candidates that arrived before the offer.
+      const queued = this.pendingIce;
+      this.pendingIce = [];
+      for (const candidate of queued) {
+        try {
+          await pc.addIceCandidate(candidate);
+        } catch {
+          // stale candidate
+        }
+      }
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       if (this.hostId) {
@@ -458,8 +504,17 @@ export class P2PViewerSession {
         });
       }
     } else if (s.kind === "p2p-ice") {
-      if (s.payload && this.pc) {
-        await this.pc.addIceCandidate(s.payload as RTCIceCandidateInit);
+      if (s.payload) {
+        const candidate = s.payload as RTCIceCandidateInit;
+        if (!this.pc?.remoteDescription) {
+          this.pendingIce.push(candidate);
+        } else {
+          try {
+            await this.pc.addIceCandidate(candidate);
+          } catch {
+            // stale candidate
+          }
+        }
       }
     } else if (s.kind === "p2p-full") {
       await this.leaveSilently();

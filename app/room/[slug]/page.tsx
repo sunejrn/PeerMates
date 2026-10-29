@@ -92,6 +92,23 @@ function playMessageChime(): void {
   }, 800);
 }
 
+function ChatTabLabel({
+  label,
+  count,
+}: {
+  label: string;
+  count: number;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span>{label}</span>
+      <span className="inline-flex h-[1.15rem] min-w-[1.15rem] items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-semibold leading-none tabular-nums text-white">
+        {count > 99 ? "99+" : count}
+      </span>
+    </span>
+  );
+}
+
 export default function RoomPage({
   params,
 }: {
@@ -1168,7 +1185,7 @@ export default function RoomPage({
                 }}
                 className="flex min-h-11 items-center rounded-lg px-3 text-sm  text-left"
               >
-                live chat ({visibleMessageCount})
+                <ChatTabLabel label="live chat" count={visibleMessageCount} />
               </button>
               <button
                 type="button"
@@ -1309,6 +1326,19 @@ export default function RoomPage({
                 <span className="text-sm text-[#f5f5f5]">loading file...</span>
               </div>
             )}
+            {fileTransfer?.direction === "receive" &&
+              fileTransfer.phase === "receiving" && (
+                <div
+                  className="pointer-events-none absolute inset-0 z-[45] flex flex-col items-center justify-center gap-2 rounded-lg bg-black/35 p-6 text-center backdrop-blur-md"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <Spinner className="size-6 text-[#f5f5f5]" />
+                  <span className="text-sm text-[#f5f5f5]">
+                    connecting, please wait...
+                  </span>
+                </div>
+              )}
           </div>
 
           {/* Reconnecting / offline banner */}
@@ -1359,7 +1389,7 @@ export default function RoomPage({
                   : "text-muted-foreground "
               }`}
             >
-              live chat ({visibleMessageCount})
+              <ChatTabLabel label="live chat" count={visibleMessageCount} />
             </button>
           </div>
         </div>
@@ -1405,7 +1435,7 @@ export default function RoomPage({
                   : "text-muted-foreground "
               }`}
             >
-              chat ({visibleMessageCount})
+              <ChatTabLabel label="chat" count={visibleMessageCount} />
             </button>
           </div>
 
@@ -1550,7 +1580,7 @@ export default function RoomPage({
                 onTransferChange={setFileTransfer}
               />
             )}
-            {!canControl && (
+            {isLocalRoom && (
               <FileReceiveListener
                 slug={slug}
                 myId={effectiveId}

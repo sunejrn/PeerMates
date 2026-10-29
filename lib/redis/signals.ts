@@ -22,6 +22,12 @@ export type SignalKind =
   | "file-ice" // either -> peer: file-transfer ICE candidate
   | "file-done"; // host -> viewer: transfer complete marker (resync cue)
 
+export type SignalLane = "p2p" | "file";
+
+export function signalLane(kind: SignalKind): SignalLane {
+  return kind.startsWith("file-") ? "file" : "p2p";
+}
+
 export interface SignalMessage {
   id: string;
   from: string;
@@ -32,8 +38,8 @@ export interface SignalMessage {
   at: number;
 }
 
-const MAILBOX_KEY = (slug: string, userId: string) =>
-  `room:${slug}:sig:${userId}`;
+const MAILBOX_KEY = (slug: string, userId: string, lane: SignalLane) =>
+  `room:${slug}:sig:${lane}:${userId}`;
 const MAILBOX_TTL = 60 * 5; // 5 minutes — setup only, never media
 const MAX_MAILBOX = 50;
 
@@ -50,9 +56,10 @@ export async function pushSignal(
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     at: Date.now(),
   };
+  const lane = signalLane(msg.kind);
   if (redis) {
     try {
-      const key = MAILBOX_KEY(slug, toUserId);
+      const key = MAILBOX_KEY(slug, toUserId, lane);
       await redis.lpush(key, JSON.stringify(full));
       await redis.ltrim(key, 0, MAX_MAILBOX - 1);
       await redis.expire(key, MAILBOX_TTL);
@@ -61,22 +68,22 @@ export async function pushSignal(
       console.warn("Redis signal push failed, using memory:", err);
     }
   }
-  const boxKey = `${slug}:${toUserId}`;
+  const boxKey = `${slug}:${lane}:${toUserId}`;
   const list = memMail.get(boxKey) ?? [];
   list.unshift(full);
   memMail.set(boxKey, list.slice(0, MAX_MAILBOX));
   return full;
 }
 
-/** Drain + return all pending signals for a user (newest last). */
-export async function drainSignals(
+async function drainLane(
   slug: string,
   userId: string,
-  limit = 50
+  lane: SignalLane,
+  limit: number
 ): Promise<SignalMessage[]> {
   if (redis) {
     try {
-      const key = MAILBOX_KEY(slug, userId);
+      const key = MAILBOX_KEY(slug, userId, lane);
       const out: SignalMessage[] = [];
       for (let i = 0; i < limit; i++) {
         const raw = await redis.rpop<string>(key);
@@ -94,8 +101,23 @@ export async function drainSignals(
       console.warn("Redis signal drain failed, using memory:", err);
     }
   }
-  const boxKey = `${slug}:${userId}`;
+  const boxKey = `${slug}:${lane}:${userId}`;
   const list = memMail.get(boxKey) ?? [];
   memMail.set(boxKey, []);
   return list.reverse().slice(0, limit);
+}
+
+/** Drain + return pending signals for one lane (newest last). */
+export async function drainSignals(
+  slug: string,
+  userId: string,
+  limit = 50,
+  lane?: SignalLane
+): Promise<SignalMessage[]> {
+  if (lane) return drainLane(slug, userId, lane, limit);
+  const [p2p, file] = await Promise.all([
+    drainLane(slug, userId, "p2p", limit),
+    drainLane(slug, userId, "file", limit),
+  ]);
+  return [...p2p, ...file].sort((a, b) => a.at - b.at).slice(0, limit);
 }

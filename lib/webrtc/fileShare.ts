@@ -12,17 +12,22 @@
  *  2. viewer -> host  : file-accept { sdp }  (auto-accept; toast shown first)
  *     (or file-reject { reason } when the viewer can't take it)
  *  3. datachannel "peermates-file": one JSON meta frame, then raw binary
- *     chunks (64KB), then one JSON done frame.
+ *     chunks (up to 256KB, with a 64KB fallback), then one JSON done frame.
  *  4. host -> viewer : file-done { name, size } (resync cue via polling)
  */
 
 import type { SignalKind, SignalMessage } from "@/lib/redis/signals";
 import { RTC_ICE_SERVERS } from "@/lib/webrtc/ice";
 
-const SIGNAL_POLL_MS = 800;
-export const FILE_CHUNK_BYTES = 128 * 1024;
+const SIGNAL_POLL_MS = 400;
+export const FILE_CHUNK_BYTES = 256 * 1024;
+const FALLBACK_CHUNK_BYTES = 64 * 1024;
+/** Read this many chunks ahead of the network so disk I/O never stalls it. */
+const READ_AHEAD_CHUNKS = 4;
+/** Let the SCTP window fill deeply before pausing (faster on high-latency links). */
+const BUFFER_HIGH_WATER = 16 * 1024 * 1024;
 /** Host progress callbacks are throttled to this cadence (UI stays smooth). */
-const PROGRESS_REPORT_MS = 250;
+const PROGRESS_REPORT_MS = 200;
 const MAX_FILE_BYTES = 4 * 1024 * 1024 * 1024; // 4GB guard
 
 export interface FileMeta {
@@ -46,27 +51,35 @@ async function sendSignal(
 
 async function pollMailbox(slug: string, userId: string): Promise<SignalMessage[]> {
   const res = await fetch(
-    `/api/rooms/${slug}/signals?for=${encodeURIComponent(userId)}`
+    `/api/rooms/${slug}/signals?for=${encodeURIComponent(userId)}&lane=file`
   );
   if (!res.ok) return [];
   const data = await res.json().catch(() => ({}));
   return Array.isArray(data.signals) ? data.signals : [];
 }
 
-function waitForBufferLow(channel: RTCDataChannel, threshold = 4 * 1024 * 1024): Promise<void> {
-  if (channel.bufferedAmount <= threshold) return Promise.resolve();
+function waitForBufferLow(
+  channel: RTCDataChannel,
+  threshold = BUFFER_HIGH_WATER
+): Promise<void> {
+  if (channel.readyState !== "open" || channel.bufferedAmount <= threshold) {
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, 2000);
-    const onLow = () => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
       clearTimeout(timer);
+      channel.removeEventListener("bufferedamountlow", finish);
       resolve();
     };
+    const timer = setTimeout(finish, 2500);
     try {
       channel.bufferedAmountLowThreshold = threshold;
-      channel.addEventListener("bufferedamountlow", onLow, { once: true });
+      channel.addEventListener("bufferedamountlow", finish, { once: true });
     } catch {
-      clearTimeout(timer);
-      resolve();
+      finish();
     }
   });
 }
@@ -85,8 +98,10 @@ export class P2PFileHostSession {
   private hostName: string;
   private pcs = new Map<string, RTCPeerConnection>();
   private channels = new Map<string, RTCDataChannel>();
+  private pendingIce = new Map<string, RTCIceCandidateInit[]>();
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
+  private draining = false;
   onProgress: ((p: FileSendProgress) => void) | null = null;
   onDone: ((userId: string) => void) | null = null;
   onError: ((userId: string, message: string) => void) | null = null;
@@ -101,9 +116,14 @@ export class P2PFileHostSession {
   listen(): void {
     if (this.pollTimer) return;
     this.stopped = false;
+    document.addEventListener("visibilitychange", this.onVis);
     this.pollTimer = setInterval(() => void this.drain(), SIGNAL_POLL_MS);
     void this.drain();
   }
+
+  private onVis = (): void => {
+    if (!document.hidden) void this.drain();
+  };
 
   /** Offer `file` to one viewer. Resolves when the transfer completes. */
   async sendTo(file: File, viewerId: string): Promise<void> {
@@ -120,6 +140,7 @@ export class P2PFileHostSession {
     this.channels.set(viewerId, channel);
     try {
       channel.binaryType = "arraybuffer";
+      channel.bufferedAmountLowThreshold = BUFFER_HIGH_WATER;
     } catch {
       // ignore
     }
@@ -131,11 +152,6 @@ export class P2PFileHostSession {
           kind: "file-ice",
           payload: e.candidate.toJSON(),
         });
-      }
-    };
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed") {
-        this.onError?.(viewerId, "Connection failed (NAT/firewall). Keep the tab open and try again.");
       }
     };
 
@@ -159,20 +175,65 @@ export class P2PFileHostSession {
       throw new Error(data?.message || data?.error || "Could not reach that viewer.");
     }
 
-    // Wait for the channel to open (answer arrives via mailbox drain).
+    // Wait for the channel to open (answer arrives via mailbox drain). Fail
+    // as soon as ICE dies instead of leaving the card stuck at 1%.
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error("Viewer did not accept in time (30s). They may have left the room.")), 30000);
-      channel.onopen = () => {
+      let settled = false;
+      const finish = (err?: Error) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timeout);
-        resolve();
+        pc.removeEventListener("connectionstatechange", onState);
+        channel.removeEventListener("error", onError);
+        channel.removeEventListener("close", onClose);
+        if (err) reject(err);
+        else resolve();
       };
+      const timeout = setTimeout(
+        () =>
+          finish(
+            new Error(
+              "Could not connect to the viewer. Keep both tabs open and try again."
+            )
+          ),
+        20000
+      );
+      const onState = () => {
+        if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+          finish(
+            new Error(
+              "Connection failed (NAT/firewall). Keep both tabs open and try again."
+            )
+          );
+        }
+      };
+      const onError = () => finish(new Error("The transfer connection failed."));
+      const onClose = () =>
+        finish(new Error("The viewer closed the transfer connection."));
+      pc.addEventListener("connectionstatechange", onState);
+      channel.addEventListener("error", onError);
+      channel.addEventListener("close", onClose);
+      channel.onopen = () => finish();
+      if (channel.readyState === "open") finish();
+      if (pc.connectionState === "failed") onState();
     });
 
-    // Stream the file in slices — never hold the whole movie in RAM.
-    // Progress is throttled (time-based) so large files don't spam React
-    // re-renders once per chunk.
+    // Stream the file in slices — never hold the whole movie in RAM. Reads
+    // are pipelined so the SCTP window stays full, and progress is throttled
+    // so large files don't spam React re-renders once per chunk.
+    let readOffset = 0;
+    let chunkBytes = FILE_CHUNK_BYTES;
     let offset = 0;
     let lastReport = 0;
+    const readNext = async (): Promise<ArrayBuffer | null> => {
+      if (readOffset >= file.size) return null;
+      const end = Math.min(file.size, readOffset + chunkBytes);
+      const buf = await file.slice(readOffset, end).arrayBuffer();
+      readOffset += buf.byteLength;
+      return buf;
+    };
+    const reads: Promise<ArrayBuffer | null>[] = [];
+    for (let i = 0; i < READ_AHEAD_CHUNKS; i++) reads.push(readNext());
     const report = (force = false) => {
       const now = Date.now();
       if (force || now - lastReport >= PROGRESS_REPORT_MS) {
@@ -180,17 +241,37 @@ export class P2PFileHostSession {
         this.onProgress?.({ userId: viewerId, sentBytes: offset, size: file.size });
       }
     };
-    channel.send(JSON.stringify({ t: "meta", ...meta }));
-    while (offset < file.size) {
-      if (this.stopped) throw new Error("Cancelled.");
-      const slice = file.slice(offset, offset + FILE_CHUNK_BYTES);
-      const buf = await slice.arrayBuffer();
+    const sendBuffer = async (buf: ArrayBuffer) => {
       await waitForBufferLow(channel);
       try {
         channel.send(buf);
       } catch {
-        throw new Error("Connection dropped mid-transfer.");
+        if (channel.readyState !== "open") {
+          throw new Error("Connection dropped mid-transfer.");
+        }
+        if (buf.byteLength <= FALLBACK_CHUNK_BYTES) {
+          throw new Error("Connection dropped mid-transfer.");
+        }
+        // Older Safari/Firefox builds cap message size below 256KB.
+        chunkBytes = FALLBACK_CHUNK_BYTES;
+        for (
+          let start = 0;
+          start < buf.byteLength;
+          start += FALLBACK_CHUNK_BYTES
+        ) {
+          await waitForBufferLow(channel);
+          channel.send(buf.slice(start, start + FALLBACK_CHUNK_BYTES));
+        }
       }
+    };
+
+    channel.send(JSON.stringify({ t: "meta", ...meta }));
+    while (offset < file.size) {
+      if (this.stopped) throw new Error("Cancelled.");
+      const buf = await reads.shift();
+      if (!buf) break;
+      reads.push(readNext());
+      await sendBuffer(buf);
       offset += buf.byteLength;
       report();
     }
@@ -211,22 +292,29 @@ export class P2PFileHostSession {
       // cue is best-effort; datachannel done-frame already landed
     }
     this.onDone?.(viewerId);
+    // Keep the channel until the next send/stop. Closing immediately can
+    // abort the queued "done" frame on slower links before it is delivered.
   }
 
   private async drain(): Promise<void> {
-    if (this.stopped) return;
-    let signals: SignalMessage[] = [];
+    if (this.stopped || this.draining) return;
+    this.draining = true;
     try {
-      signals = await pollMailbox(this.slug, this.hostId);
-    } catch {
-      return;
-    }
-    for (const s of signals) {
+      let signals: SignalMessage[] = [];
       try {
-        await this.handle(s);
-      } catch (err) {
-        console.warn("file-share host signal notice:", err);
+        signals = await pollMailbox(this.slug, this.hostId);
+      } catch {
+        return;
       }
+      for (const s of signals) {
+        try {
+          await this.handle(s);
+        } catch (err) {
+          console.warn("file-share host signal notice:", err);
+        }
+      }
+    } finally {
+      this.draining = false;
     }
   }
 
@@ -235,13 +323,33 @@ export class P2PFileHostSession {
     if (!pc) return;
     if (s.kind === "file-accept") {
       const sdp = (s.payload as { sdp?: RTCSessionDescriptionInit })?.sdp;
-      if (sdp) await pc.setRemoteDescription(sdp);
+      if (sdp) {
+        await pc.setRemoteDescription(sdp);
+        // Candidates can arrive before the answer (trickle starts on
+        // setLocalDescription). Replay them now instead of dropping them.
+        const queued = this.pendingIce.get(s.from) ?? [];
+        this.pendingIce.delete(s.from);
+        for (const candidate of queued) {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch {
+            // stale candidate
+          }
+        }
+      }
     } else if (s.kind === "file-ice") {
       if (s.payload) {
-        try {
-          await pc.addIceCandidate(s.payload as RTCIceCandidateInit);
-        } catch {
-          // late candidate — ignore
+        const candidate = s.payload as RTCIceCandidateInit;
+        if (!pc.remoteDescription) {
+          const queued = this.pendingIce.get(s.from) ?? [];
+          queued.push(candidate);
+          this.pendingIce.set(s.from, queued);
+        } else {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch {
+            // stale candidate
+          }
         }
       }
     } else if (s.kind === "file-reject") {
@@ -259,6 +367,7 @@ export class P2PFileHostSession {
       // ignore
     }
     this.channels.delete(viewerId);
+    this.pendingIce.delete(viewerId);
     const pc = this.pcs.get(viewerId);
     if (pc) {
       try {
@@ -272,6 +381,7 @@ export class P2PFileHostSession {
 
   stop(): void {
     this.stopped = true;
+    document.removeEventListener("visibilitychange", this.onVis);
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
@@ -294,7 +404,9 @@ export class P2PFileReceiver {
   private viewerName: string;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private stopped = false;
+  private draining = false;
   private pcs = new Map<string, RTCPeerConnection>();
+  private pendingIce = new Map<string, RTCIceCandidateInit[]>();
   onOfferToast: ((meta: FileMeta, fromName?: string) => void) | null = null;
   onProgress: ((meta: FileMeta, receivedBytes: number) => void) | null = null;
   onFile: ((f: ReceivedFile) => void) | null = null;
@@ -309,12 +421,18 @@ export class P2PFileReceiver {
   start(): void {
     if (this.pollTimer) return;
     this.stopped = false;
+    document.addEventListener("visibilitychange", this.onVis);
     this.pollTimer = setInterval(() => void this.drain(), SIGNAL_POLL_MS);
     void this.drain();
   }
 
+  private onVis = (): void => {
+    if (!document.hidden) void this.drain();
+  };
+
   stop(): void {
     this.stopped = true;
+    document.removeEventListener("visibilitychange", this.onVis);
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
@@ -327,22 +445,28 @@ export class P2PFileReceiver {
       }
     }
     this.pcs.clear();
+    this.pendingIce.clear();
   }
 
   private async drain(): Promise<void> {
-    if (this.stopped) return;
-    let signals: SignalMessage[] = [];
+    if (this.stopped || this.draining) return;
+    this.draining = true;
     try {
-      signals = await pollMailbox(this.slug, this.viewerId);
-    } catch {
-      return;
-    }
-    for (const s of signals) {
+      let signals: SignalMessage[] = [];
       try {
-        await this.handle(s);
-      } catch (err) {
-        console.warn("file-share viewer signal notice:", err);
+        signals = await pollMailbox(this.slug, this.viewerId);
+      } catch {
+        return;
       }
+      for (const s of signals) {
+        try {
+          await this.handle(s);
+        } catch (err) {
+          console.warn("file-share viewer signal notice:", err);
+        }
+      }
+    } finally {
+      this.draining = false;
     }
   }
 
@@ -365,12 +489,19 @@ export class P2PFileReceiver {
       return;
     }
     if (s.kind === "file-ice") {
-      const pc = this.pcs.get(s.from);
-      if (pc && s.payload) {
-        try {
-          await pc.addIceCandidate(s.payload as RTCIceCandidateInit);
-        } catch {
-          // late candidate — ignore
+      if (s.payload) {
+        const pc = this.pcs.get(s.from);
+        const candidate = s.payload as RTCIceCandidateInit;
+        if (!pc?.remoteDescription) {
+          const queued = this.pendingIce.get(s.from) ?? [];
+          queued.push(candidate);
+          this.pendingIce.set(s.from, queued);
+        } else {
+          try {
+            await pc.addIceCandidate(candidate);
+          } catch {
+            // stale candidate
+          }
         }
       }
       return;
@@ -393,8 +524,9 @@ export class P2PFileReceiver {
     }
     const pc = new RTCPeerConnection(RTC_ICE_SERVERS);
     this.pcs.set(hostId, pc);
-    const chunks: BlobPart[] = [];
+    const chunks: ArrayBuffer[] = [];
     let received = 0;
+    let finished = false;
     let expectedMeta: FileMeta | null = null;
 
     pc.onicecandidate = (e) => {
@@ -404,6 +536,16 @@ export class P2PFileReceiver {
           kind: "file-ice",
           payload: e.candidate.toJSON(),
         });
+      }
+    };
+    pc.onconnectionstatechange = () => {
+      if (!finished && pc.connectionState === "failed") {
+        finished = true;
+        this.onError?.(
+          "The file transfer connection failed. Ask the host to send again."
+        );
+        this.pcs.delete(hostId);
+        this.pendingIce.delete(hostId);
       }
     };
     pc.ondatachannel = (e) => {
@@ -428,8 +570,10 @@ export class P2PFileReceiver {
             }
             if (msg.t === "done") {
               const m = expectedMeta ?? meta;
-              const blob = new Blob(chunks, { type: m.mime || "video/mp4" });
-              const file = new File([blob], m.name, { type: m.mime || "video/mp4" });
+              finished = true;
+              const file = new File(chunks, m.name, {
+                type: m.mime || "video/mp4",
+              });
               this.onFile?.({ file, meta: m, fromName: undefined });
               try {
                 pc.close();
@@ -437,6 +581,7 @@ export class P2PFileReceiver {
                 // ignore
               }
               this.pcs.delete(hostId);
+              this.pendingIce.delete(hostId);
               return;
             }
             return;
@@ -452,6 +597,16 @@ export class P2PFileReceiver {
     };
 
     await pc.setRemoteDescription(offer);
+    // Host candidates may have arrived before the offer was applied.
+    const queued = this.pendingIce.get(hostId) ?? [];
+    this.pendingIce.delete(hostId);
+    for (const candidate of queued) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch {
+        // stale candidate
+      }
+    }
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     await sendSignal(this.slug, {

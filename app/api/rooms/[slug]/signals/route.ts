@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRoomBySlug } from "@/lib/rooms/store";
-import { drainSignals, pushSignal, type SignalKind } from "@/lib/redis/signals";
+import {
+  drainSignals,
+  pushSignal,
+  type SignalKind,
+  type SignalLane,
+} from "@/lib/redis/signals";
 import {
   addP2PReceiver,
   removeP2PReceiver,
@@ -33,8 +38,10 @@ const KINDS: SignalKind[] = [
 const MAX_PAYLOAD_BYTES = 64 * 1024;
 
 /**
- * GET /api/rooms/[slug]/signals?for=<userId>
- * Drains the caller's signaling mailbox (viewer/host P2P setup only).
+ * GET /api/rooms/[slug]/signals?for=<userId>&lane=p2p|file
+ * Drains only the requested lane, so the P2P stream session and the file
+ * transfer session can poll the same user without eating each other's
+ * offers/answers.
  */
 export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
@@ -53,7 +60,19 @@ export async function GET(req: NextRequest, { params }: RouteParams) {
         { status: 403 }
       );
     }
-    const signals = await drainSignals(slug, forUser);
+    const laneParam = req.nextUrl.searchParams.get("lane");
+    if (laneParam && laneParam !== "p2p" && laneParam !== "file") {
+      return NextResponse.json(
+        { error: "lane must be p2p or file" },
+        { status: 400 }
+      );
+    }
+    const signals = await drainSignals(
+      slug,
+      forUser,
+      50,
+      (laneParam as SignalLane | null) ?? undefined
+    );
     return NextResponse.json({ signals });
   } catch (error: unknown) {
     return NextResponse.json(
