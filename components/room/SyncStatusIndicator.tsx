@@ -6,6 +6,7 @@ interface SyncStatusIndicatorProps {
   syncState: SyncState;
   driftSeconds: number;
   isHost: boolean;
+  isCohost?: boolean;
 }
 
 /**
@@ -16,14 +17,23 @@ export function SyncStatusIndicator({
   syncState,
   driftSeconds,
   isHost,
+  isCohost = false,
 }: SyncStatusIndicatorProps) {
   const base =
-    "flex items-center rounded-lg border border-border bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground whitespace-nowrap";
+    "flex items-center rounded-lg border border-border bg-muted px-2 py-1 text-[11px] text-muted-foreground whitespace-nowrap";
 
   if (isHost) {
     return (
       <div className={base} role="status">
-        <span>Authoritative Host</span>
+        <span>host</span>
+      </div>
+    );
+  }
+
+  if (isCohost) {
+    return (
+      <div className={base} role="status">
+        <span>cohost</span>
       </div>
     );
   }
@@ -31,7 +41,7 @@ export function SyncStatusIndicator({
   if (syncState === "buffering") {
     return (
       <div className={base} role="status">
-        <span>Host Buffering...</span>
+        <span>viewer · host buffering</span>
       </div>
     );
   }
@@ -40,7 +50,8 @@ export function SyncStatusIndicator({
     return (
       <div className={base} role="status">
         <span>
-          Synced{driftSeconds > 0 ? ` (${driftSeconds.toFixed(2)}s drift)` : ""}
+          viewer · synced
+          {driftSeconds > 0 ? ` (${driftSeconds.toFixed(2)}s drift)` : ""}
         </span>
       </div>
     );
@@ -49,14 +60,14 @@ export function SyncStatusIndicator({
   if (syncState === "syncing") {
     return (
       <div className={base} role="status">
-        <span>Syncing... ({driftSeconds.toFixed(1)}s)</span>
+        <span>viewer · syncing ({driftSeconds.toFixed(1)}s)</span>
       </div>
     );
   }
 
   return (
     <div className={base} role="status">
-      <span>Disconnected</span>
+      <span>viewer · disconnected</span>
     </div>
   );
 }

@@ -323,6 +323,28 @@
    own fixed height with internal scroll (scrollbar hidden), so the
    Watching & Info content scrolls without ever moving the page or
    the video. */
+/* Uniform typography: lowercase labels and normal weights everywhere. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.uppercase {
+  text-transform: lowercase !important;
+  font-weight: 400 !important;
+}
+
+.font-medium,
+.font-semibold,
+.font-bold,
+.font-extrabold,
+.font-black,
+b,
+strong {
+  font-weight: 400 !important;
+}
+
 .room-chat-dock {
   height: 30rem;
   height: min(30rem, calc(100dvh - 24rem));

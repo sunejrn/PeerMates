@@ -180,9 +180,7 @@ export function ViewerList({
     <Card className="border-border bg-card rounded-lg overflow-hidden">
       <div className="px-3 sm:px-4 pt-3 pb-2 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-xs font-medium text-muted-foreground">
-            People
-          </h3>
+          <h3 className="text-xs text-muted-foreground">people</h3>
           <span className="text-[11px] font-mono text-muted-foreground">
             {members.length} watching
             {cohostCount > 0 && ` · ${cohostCount} co-host${cohostCount === 1 ? "" : "s"}`}

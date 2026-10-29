@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { detectVideoSource, localFileSourceFor } from "@/lib/video/detector";
+import { localFileSourceFor } from "@/lib/video/detector";
 import { isValidFingerprint } from "@/lib/video/localfile";
 import { setRoomFingerprint } from "@/lib/redis/localfile";
 import { createRoomInDb, getRecentRooms } from "@/lib/rooms/store";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/redis/ratelimit";
-import { rateLimited, errMessage } from "@/lib/rooms/actor";
+import { rateLimited } from "@/lib/rooms/actor";
 import { nanoid } from "nanoid";
 
 function clientIp(req: NextRequest): string {
@@ -23,87 +23,49 @@ export async function POST(req: NextRequest) {
   );
   if (!allowed) return rateLimited(retryAfter);
   try {
-    const body = await req.json();
-    const { title, videoUrl, localFile } = body;
-
-    // "My Files" creation path: no URL — the host picked a file on their
-    // device. Only the tiny fingerprint travels; bytes stay local.
-    let videoSource: string;
-    let videoType: "youtube" | "hls" | "mp4" | "localfile" | "embed";
-    let fingerprint: Parameters<typeof setRoomFingerprint>[1] | null = null;
-
-    if (localFile && typeof localFile === "object") {
-      if (!isValidFingerprint(localFile)) {
-        return NextResponse.json(
-          { error: "Invalid file fingerprint. Re-select your file and try again." },
-          { status: 400 }
-        );
-      }
-      fingerprint = localFile;
-      videoType = "localfile";
-      videoSource = localFileSourceFor(localFile.fpId);
-    } else {
-      if (!videoUrl || typeof videoUrl !== "string") {
-        return NextResponse.json(
-          { error: "A valid video URL is required." },
-          { status: 400 }
-        );
-      }
-
-      const detection = detectVideoSource(videoUrl);
-      if (!detection.isValid || !detection.type) {
-        return NextResponse.json(
-          {
-            error:
-              detection.detail ||
-              "Invalid video URL. Please provide a YouTube link, an HLS (.m3u8) stream, or a direct MP4 file URL.",
-          },
-          { status: 400 }
-        );
-      }
-      videoSource = detection.cleanUrl;
-      videoType = detection.type;
-    }
-
-    // Check user session
-    let hostId = "guest_" + nanoid(6);
-    let hostName = "Guest Host";
-    let hostImage: string | undefined;
-    let isAuthenticated = false;
-
-    try {
-      const session = await auth.api.getSession({
-        headers: req.headers,
-      });
-      if (session?.user) {
-        hostId = session.user.id;
-        hostName = session.user.name;
-        hostImage = session.user.image || undefined;
-        isAuthenticated = true;
-      }
-    } catch {
-      // Unauthenticated
-    }
-
-    // GATING: If user is not authenticated, check if they've already created once
-    const hasCreatedCookie = req.cookies.get("watchtogether_has_created_once");
-    if (!isAuthenticated && hasCreatedCookie?.value === "true") {
+    // Rooms can only be created by a signed-in user — no guest path.
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session?.user) {
       return NextResponse.json(
         {
           error: "AUTH_REQUIRED",
-          message:
-            "You have already used your 1 free PeerMates party creation. Please sign in with Google or GitHub to create unlimited parties.",
+          message: "Sign in with Google or GitHub to create a party.",
         },
-        { status: 403 }
+        { status: 401 }
       );
     }
+
+    const body = await req.json().catch(() => ({}));
+    const { title, localFile } = body;
+
+    // Only "My Files" rooms are supported: the host picked a file on their
+    // device. Only the tiny fingerprint travels; bytes stay local.
+    if (!localFile || typeof localFile !== "object") {
+      return NextResponse.json(
+        { error: "Pick a movie file to create a PeerMates party." },
+        { status: 400 }
+      );
+    }
+    if (!isValidFingerprint(localFile)) {
+      return NextResponse.json(
+        { error: "Invalid file fingerprint. Re-select your file and try again." },
+        { status: 400 }
+      );
+    }
+
+    const fingerprint = localFile;
+    const videoType = "localfile" as const;
+    const videoSource = localFileSourceFor(localFile.fpId);
+    const hostId = session.user.id;
+    const hostName = session.user.name;
+    const hostImage = session.user.image || undefined;
 
     // Generate short shareable slug (e.g. 6 chars)
     const slug = nanoid(6).toLowerCase();
 
     const room = await createRoomInDb({
       slug,
-      title: title && title.trim() ? title.trim() : "PeerMates Party",
+      title: title && String(title).trim() ? String(title).trim() : "PeerMates Party",
       hostId,
       hostName,
       hostImage,
@@ -111,32 +73,22 @@ export async function POST(req: NextRequest) {
       videoType,
     });
 
-    // Persist the host fingerprint so viewers can compare their own file.
-    if (fingerprint) {
-      await setRoomFingerprint(slug, fingerprint);
-    }
+    // Persist the host fingerprint (Redis + durable DB) so viewers can compare
+    // their own file and the host is never asked to re-pick it.
+    await setRoomFingerprint(slug, fingerprint);
 
-    const response = NextResponse.json({
+    return NextResponse.json({
       success: true,
       slug: room.slug,
       room,
     });
-
-    // Set cookie if unauthenticated so hard refreshes cannot bypass the 1-time limit
-    if (!isAuthenticated) {
-      response.cookies.set("watchtogether_has_created_once", "true", {
-        path: "/",
-        maxAge: 60 * 60 * 24 * 365, // 1 year
-        sameSite: "lax",
-        httpOnly: true,
-      });
-    }
-
-    return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Failed to create room:", error);
     return NextResponse.json(
-      { error: error?.message || "Internal server error" },
+      {
+        error:
+          error instanceof Error ? error.message : "Internal server error",
+      },
       { status: 500 }
     );
   }
@@ -146,9 +98,12 @@ export async function GET() {
   try {
     const recent = await getRecentRooms();
     return NextResponse.json({ rooms: recent });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Failed to fetch rooms" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to fetch rooms",
+      },
       { status: 500 }
     );
   }

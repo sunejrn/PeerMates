@@ -1476,21 +1476,6 @@ export function useWatchSync({
     [slug]
   );
 
-  const changeVideoSource = useCallback(
-    async (videoUrl: string) => {
-      const data = await postModerationAction({ action: "source", videoUrl });
-      if (data?.room) {
-        onSourceChangedRef.current?.({
-          videoSource: data.room.videoSource,
-          videoType: data.room.videoType,
-        });
-      }
-      toast.success("Video source changed for everyone.");
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [slug]
-  );
-
   /**
    * Switch the room to a "My Files" movie (privileged only, server-enforced).
    * Viewers then pick the same file on their own devices; only timestamps
@@ -1564,7 +1549,6 @@ export function useWatchSync({
     unmuteMember,
     setSlowMode,
     setChatMuted,
-    changeVideoSource,
     switchToLocalFile,
     setP2PSharing,
     setFileMatch,

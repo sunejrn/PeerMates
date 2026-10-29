@@ -12,8 +12,21 @@ import Hls from "hls.js";
 
 export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
   function NativeVideoPlayer(
-    { src, videoType, isHost = true, canControl, localSrc, onAutoplayBlocked, dataSaver = false, onFragmentBytes, onPlayerEvent, onReady, subtitleTrackUrl, subtitleSize = "m" },
-    ref
+    {
+      src,
+      videoType,
+      isHost = true,
+      canControl,
+      localSrc,
+      onAutoplayBlocked,
+      dataSaver = false,
+      onFragmentBytes,
+      onPlayerEvent,
+      onReady,
+      subtitleTrackUrl,
+      subtitleSize = "m",
+    },
+    ref,
   ) {
     const videoRef = useRef<HTMLVideoElement>(null);
     const hlsRef = useRef<Hls | null>(null);
@@ -100,7 +113,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
           }
         },
       }),
-      [onAutoplayBlocked]
+      [onAutoplayBlocked],
     );
 
     useEffect(() => {
@@ -120,8 +133,8 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         // protection, or a wrong URL (HTML page instead of a video file).
         setLoadError(
           videoType === "mp4"
-            ? "This video file could not be loaded. It may have expired (YouTube-extracted MP4 links expire fast), block hotlinking, or need an exact .mp4 URL."
-            : "This stream could not be loaded. Check the URL and try again."
+            ? "This video file could not be loaded. Check that it is a playable video and select it again."
+            : "This stream could not be loaded. Check the file and try again.",
         );
       };
 
@@ -167,7 +180,7 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
                   break;
                 default:
                   setLoadError(
-                    "This stream could not be loaded. Check the URL and try again."
+                    "This stream could not be loaded. Check the URL and try again.",
                   );
                   hls.destroy();
                   break;
@@ -308,7 +321,9 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
     if (videoType === "localfile" && !localSrc) {
       return (
         <div className="relative h-full w-full bg-black flex flex-col items-center justify-center gap-2 p-6 text-center">
-          <span className="text-3xl" aria-hidden>📁</span>
+          <span className="text-3xl" aria-hidden>
+            📁
+          </span>
           <p className="text-xs sm:text-sm font-medium text-zinc-200">
             No local file selected
           </p>
@@ -351,7 +366,10 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         {/* Loading spinner while the file/stream opens */}
         {!isLoaded && !loadError && effectiveSrc && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/40 p-6 text-center">
-            <span className="h-6 w-6 animate-spin rounded-full border-2 border-[#f5f5f5]/20 border-t-white" aria-hidden />
+            <span
+              className="h-6 w-6 animate-spin rounded-full border-2 border-[#f5f5f5]/20 border-t-white"
+              aria-hidden
+            />
             <p className="text-[11px] text-zinc-300">Loading video…</p>
           </div>
         )}
@@ -375,5 +393,5 @@ export const NativeVideoPlayer = forwardRef<UnifiedPlayerRef, VideoPlayerProps>(
         )}
       </div>
     );
-  }
+  },
 );

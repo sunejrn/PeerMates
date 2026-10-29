@@ -1,4 +1,8 @@
 import { redis } from "./client";
+import {
+  getRoomFileFingerprint,
+  saveRoomFileFingerprint,
+} from "@/lib/rooms/fileStore";
 import type { LocalFingerprint } from "@/lib/video/localfile";
 
 const FP_KEY = (slug: string) => `room:${slug}:localfile`;
@@ -28,6 +32,9 @@ export async function setRoomFingerprint(
   slug: string,
   fp: LocalFingerprint
 ): Promise<void> {
+  // Always keep the tiny fingerprint in the database too, so it survives
+  // Redis expiry / restarts and the host is never asked to re-pick.
+  await saveRoomFileFingerprint(slug, fp);
   if (redis) {
     try {
       await redis.set(FP_KEY(slug), JSON.stringify(fp), { ex: FP_TTL });
@@ -45,18 +52,22 @@ export async function getRoomFingerprint(
   if (redis) {
     try {
       const raw = await redis.get<string | LocalFingerprint>(FP_KEY(slug));
-      if (!raw) return null;
-      const parsed =
-        typeof raw === "string" ? JSON.parse(raw) : (raw as LocalFingerprint);
-      if (parsed && parsed.v === 1 && typeof parsed.size === "number") {
-        return parsed;
+      if (raw) {
+        const parsed =
+          typeof raw === "string" ? JSON.parse(raw) : (raw as LocalFingerprint);
+        if (parsed && parsed.v === 1 && typeof parsed.size === "number") {
+          return parsed;
+        }
       }
-      return null;
     } catch (err) {
-      console.warn("Redis fingerprint read failed, using memory:", err);
+      console.warn("Redis fingerprint read failed, using database:", err);
     }
   }
-  return memFp.get(slug) ?? null;
+  const mem = memFp.get(slug);
+  if (mem) return mem;
+  const durable = await getRoomFileFingerprint(slug);
+  if (durable) memFp.set(slug, durable);
+  return durable;
 }
 
 // ---- P2P "Stream from host" receivers (capped small group) ----

@@ -2,6 +2,7 @@ import { db } from "@/db/drizzle";
 import { rooms, roomParticipants, user } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { VideoType } from "@/lib/video/detector";
+import { redis } from "@/lib/redis/client";
 import { setRoomState } from "@/lib/redis/roomState";
 import { seedHostRole, setRole } from "@/lib/redis/roles";
 import type { LocalFingerprint } from "@/lib/video/localfile";
@@ -20,8 +21,65 @@ export interface RoomRecord {
   hostImage?: string;
 }
 
-// In-memory fallback if Neon database is not connected
-const fallbackRooms = new Map<string, RoomRecord>();
+// In-memory fallback if Neon database is not connected. Keep it on
+// globalThis so every route bundle in the same server process sees the same
+// rooms (Next.js compiles route handlers into separate module graphs).
+const globalRooms = globalThis as unknown as {
+  __peermatesFallbackRooms?: Map<string, RoomRecord>;
+};
+const fallbackRooms =
+  globalRooms.__peermatesFallbackRooms ??
+  (globalRooms.__peermatesFallbackRooms = new Map<string, RoomRecord>());
+
+const ROOM_RECORD_KEY = (slug: string) => `room:${slug}:record`;
+const ROOM_RECORD_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+function serializeRoom(room: RoomRecord): Record<string, unknown> {
+  return { ...room, createdAt: room.createdAt.toISOString() };
+}
+
+function reviveRoom(raw: unknown): RoomRecord | null {
+  try {
+    const value =
+      typeof raw === "string"
+        ? (JSON.parse(raw) as Record<string, unknown>)
+        : (raw as Record<string, unknown> | null);
+    if (!value || typeof value.slug !== "string") return null;
+    return {
+      ...(value as unknown as RoomRecord),
+      createdAt: new Date(
+        typeof value.createdAt === "string" || value.createdAt instanceof Date
+          ? value.createdAt
+          : Date.now()
+      ),
+    };
+  } catch {
+    return null;
+  }
+}
+
+// Redis is the shared fallback when Postgres writes fail or are unavailable.
+// It also makes room lookups fast and identical across route bundles.
+async function cacheRoomRecord(room: RoomRecord): Promise<void> {
+  if (!redis) return;
+  try {
+    await redis.set(ROOM_RECORD_KEY(room.slug), serializeRoom(room), {
+      ex: ROOM_RECORD_TTL_SECONDS,
+    });
+  } catch {
+    // database + in-memory fallback still work
+  }
+}
+
+async function readRoomRecord(slug: string): Promise<RoomRecord | null> {
+  if (!redis) return null;
+  try {
+    const raw = await redis.get<unknown>(ROOM_RECORD_KEY(slug));
+    return reviveRoom(raw);
+  } catch {
+    return null;
+  }
+}
 
 export async function createRoomInDb(data: {
   slug: string;
@@ -85,6 +143,7 @@ export async function createRoomInDb(data: {
   }
 
   fallbackRooms.set(data.slug, roomData);
+  await cacheRoomRecord(roomData);
 
   // Initialize live Redis playback state
   await setRoomState(data.slug, {
@@ -109,6 +168,18 @@ export async function createRoomInDb(data: {
 }
 
 export async function getRoomBySlug(slug: string): Promise<RoomRecord | null> {
+  // Rooms created or already read on this instance are cached here. Returning
+  // the same object keeps subsequent reads instant (and mutations in place)
+  // instead of paying a DB round-trip on every room/file API call.
+  const cached = fallbackRooms.get(slug);
+  if (cached) return cached;
+
+  const shared = await readRoomRecord(slug);
+  if (shared) {
+    fallbackRooms.set(slug, shared);
+    return shared;
+  }
+
   try {
     if (process.env.DATABASE_URL) {
       const results = await db
@@ -126,7 +197,7 @@ export async function getRoomBySlug(slug: string): Promise<RoomRecord | null> {
           .where(eq(user.id, r.hostId))
           .limit(1);
 
-        return {
+        const room: RoomRecord = {
           id: r.id,
           slug: r.slug,
           title: r.title,
@@ -139,6 +210,9 @@ export async function getRoomBySlug(slug: string): Promise<RoomRecord | null> {
           hostName: hostUser[0]?.name || "Host",
           hostImage: hostUser[0]?.image || undefined,
         };
+        fallbackRooms.set(slug, room);
+        void cacheRoomRecord(room);
+        return room;
       }
     }
   } catch (err) {
@@ -283,6 +357,7 @@ export async function transferRoomHost(
     // best-effort only
   }
 
+  await cacheRoomRecord(room);
   return room;
 }
 
@@ -345,5 +420,6 @@ export async function changeRoomSource(
     // best-effort only
   }
 
+  await cacheRoomRecord(room);
   return room;
 }

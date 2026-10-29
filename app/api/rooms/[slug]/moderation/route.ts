@@ -15,7 +15,7 @@ import {
 } from "@/lib/redis/roles";
 import { removePresence } from "@/lib/redis/presence";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/redis/ratelimit";
-import { detectVideoSource, localFileSourceFor } from "@/lib/video/detector";
+import { localFileSourceFor } from "@/lib/video/detector";
 import { isValidFingerprint } from "@/lib/video/localfile";
 import {
   removeStreamMember,
@@ -33,7 +33,6 @@ type RouteParams = { params: Promise<{ slug: string }> };
  *   co-hosts may only moderate viewers; the host can never be kicked)
  * - slowmode { seconds: 0|5|10|30 } — chat slow mode for big rooms
  * - muteall { muted: boolean } — viewers read-only, privileged still chat
- * - source { videoUrl } — change the video source for everyone
  * - source { localFile } — switch the room to a "My Files" fingerprint
  * - p2pshare { on: boolean } — host-only P2P stream advertisement
  */
@@ -139,48 +138,28 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ success: true, settings });
     }
 
-    // ---- Video source change ----
-    // Either { videoUrl } for links, or { localFile: fingerprint } when the
-    // host switches the room to a "My Files" movie on their device.
+    // ---- My Files source change ----
+    // Rooms only play files picked on each device; URL sources are no longer
+    // supported.
     if (action === "source") {
       const localFile = body?.localFile;
-      if (localFile && typeof localFile === "object") {
-        if (!isValidFingerprint(localFile)) {
-          return NextResponse.json(
-            { error: "Invalid file fingerprint. Re-select the file and try again." },
-            { status: 400 }
-          );
-        }
-        const updated = await changeRoomSource(
-          slug,
-          localFileSourceFor(localFile.fpId),
-          "localfile",
-          localFile
-        );
-        if (!updated) {
-          return NextResponse.json({ error: "Room not found" }, { status: 404 });
-        }
-        return NextResponse.json({ success: true, room: updated });
-      }
-      const videoUrl =
-        typeof body?.videoUrl === "string" ? body.videoUrl.trim() : "";
-      if (!videoUrl) {
+      if (!localFile || typeof localFile !== "object") {
         return NextResponse.json(
-          { error: "videoUrl is required" },
+          { error: "Pick a movie file to change the room source." },
           { status: 400 }
         );
       }
-      const detection = detectVideoSource(videoUrl);
-      if (!detection.isValid || !detection.type) {
+      if (!isValidFingerprint(localFile)) {
         return NextResponse.json(
-          { error: detection.detail || "Invalid video URL. Use YouTube, HLS (.m3u8), or MP4." },
+          { error: "Invalid file fingerprint. Re-select the file and try again." },
           { status: 400 }
         );
       }
       const updated = await changeRoomSource(
         slug,
-        detection.cleanUrl,
-        detection.type
+        localFileSourceFor(localFile.fpId),
+        "localfile",
+        localFile
       );
       if (!updated) {
         return NextResponse.json({ error: "Room not found" }, { status: 404 });

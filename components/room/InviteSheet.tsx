@@ -70,10 +70,10 @@ export function InviteSheet({ slug, title, trigger }: InviteSheetProps) {
           size="sm"
           variant="outline"
           onClick={() => setOpen(true)}
-          className="border-border bg-card/80 text-xs text-foreground  h-11 min-w-11 px-2.5 sm:px-3 sm:h-9 cursor-pointer"
+          className="border-border bg-card/80 text-xs text-foreground  h-11 min-w-11 px-3 sm:h-9 cursor-pointer"
           aria-label="Invite friends to this party"
         >
-          📩 <span className="hidden sm:inline ml-1">Invite</span>
+          invite
         </Button>
       )}
 
@@ -85,23 +85,37 @@ export function InviteSheet({ slug, title, trigger }: InviteSheetProps) {
         className="p-5 pb-[max(env(safe-area-inset-bottom),1.25rem)] sm:p-6"
       >
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain">
-          <div className="text-center space-y-1">
-            <h3 className="text-lg font-semibold text-foreground">📩 Invite friends</h3>
-            <p className="text-sm text-muted-foreground">
-              Anyone with the link joins as a guest. No signup needed.
-            </p>
+          <div className="relative overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/10 via-transparent to-cyan-500/10 px-4 py-5 text-center">
+            <div className="pointer-events-none absolute inset-x-8 -top-12 h-24 rounded-full bg-violet-500/20 blur-3xl" />
+            <div className="relative space-y-1.5">
+              <h3 className="text-xl tracking-tight text-foreground">
+                invite friends
+              </h3>
+              <p className="text-sm text-foreground/90">
+                Join straight from the link.
+              </p>
+              <p className="text-[11px] text-muted-foreground">
+                No app install. Sign in with Google or GitHub, then land in the
+                room.
+              </p>
+            </div>
           </div>
 
           {/* Link row */}
-          <div className="flex items-center gap-2 rounded-xl border border-border bg-background/60 p-2 pl-3">
-            <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">{link}</span>
-            <Button
-              size="sm"
-              onClick={handleCopy}
-              className="h-11 min-w-11 px-4 bg-violet-600  text-[#f5f5f5] text-xs font-semibold cursor-pointer shrink-0"
-            >
-              {copied ? "✓ Copied" : "Copy"}
-            </Button>
+          <div className="space-y-2 rounded-2xl border border-border bg-background/60 p-3">
+            <span className="text-[10px] text-muted-foreground">room link</span>
+            <div className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+                {link}
+              </span>
+              <Button
+                size="sm"
+                onClick={handleCopy}
+                className="h-11 min-w-11 px-4 bg-violet-600  text-[#f5f5f5] text-xs cursor-pointer shrink-0"
+              >
+                {copied ? "copied" : "copy link"}
+              </Button>
+            </div>
           </div>
 
           {/* One-tap share actions */}

@@ -45,6 +45,15 @@ export interface RichSendOpts {
 
 export interface SendOpts extends RichSendOpts {
   text?: string;
+  /** Client id so the optimistic bubble and server copy collapse into one. */
+  id?: string;
+}
+
+function newMessageId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 interface ChatPanelProps {
@@ -175,11 +184,11 @@ function VoiceBubble({
       >
         {isPlaying ? "⏸" : "▶"}
       </button>
-      <div className="flex h-9 min-w-0 flex-1 items-center gap-[2px]" aria-hidden>
+      <div className="flex h-9 min-w-0 flex-1 items-center gap-0.5" aria-hidden>
         {peaks.map((p, i) => (
           <span
             key={i}
-            className={`w-[3px] shrink-0 rounded-full ${
+            className={`w-0.75 shrink-0 rounded-full ${
               i / peaks.length < progress
                 ? mine
                   ? "bg-[#f5f5f5]"
@@ -375,10 +384,10 @@ const READ_MORE_LIMIT = 280;
 function LongText({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   if (text.length <= READ_MORE_LIMIT) {
-    return <div className="whitespace-pre-wrap break-words">{text}</div>;
+    return <div className="whitespace-pre-wrap wrap-break-words">{text}</div>;
   }
   return (
-    <div className="break-words">
+    <div className="wrap-break-words">
       <div className="whitespace-pre-wrap">
         {open ? text : `${text.slice(0, READ_MORE_LIMIT).trimEnd()}…`}
       </div>
@@ -418,7 +427,7 @@ export function ChatPanel({
   fontSize = "m",
 }: ChatPanelProps) {
   const [inputText, setInputText] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  const [optimisticMessages, setOptimisticMessages] = useState<ChatMessage[]>([]);
   const [replyDraft, setReplyDraft] = useState<MessageReplyRef | null>(null);
   const [pinDraft, setPinDraft] = useState<number | null>(null);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -451,6 +460,36 @@ export function ChatPanel({
   const audioInputRef = useRef<HTMLInputElement>(null);
   const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Local blob URLs used by optimistic media bubbles (revoked on cleanup). */
+  const optimisticUrlsRef = useRef(new Map<string, string>());
+
+  // Remove optimistic bubbles as soon as the authoritative copy arrives.
+  useEffect(() => {
+    const realIds = new Set(messages.map((m) => m.id));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOptimisticMessages((prev) => {
+      const next = prev.filter((m) => !realIds.has(m.id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [messages]);
+
+  useEffect(() => {
+    const liveIds = new Set(optimisticMessages.map((m) => m.id));
+    for (const [id, url] of optimisticUrlsRef.current) {
+      if (!liveIds.has(id)) {
+        URL.revokeObjectURL(url);
+        optimisticUrlsRef.current.delete(id);
+      }
+    }
+  }, [optimisticMessages]);
+
+  useEffect(() => {
+    const urls = optimisticUrlsRef.current;
+    return () => {
+      for (const url of urls.values()) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
 
   useEffect(() => {
     // Only auto-scroll when the user was already near the bottom, so
@@ -463,7 +502,7 @@ export function ChatPanel({
         el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
       }
     }
-  }, [messages, typingUsers]);
+  }, [messages, optimisticMessages, typingUsers]);
 
   // Close menus on Escape for keyboard users.
   useEffect(() => {
@@ -481,7 +520,7 @@ export function ChatPanel({
   }, []);
 
   const viewersMuted = chatMuted && !isPrivileged;
-  const inputDisabled = userMuted || viewersMuted || isSending;
+  const inputDisabled = userMuted || viewersMuted;
   /** WhatsApp rule: any draft text swaps the mic for the send button. */
   const hasText = inputText.trim().length > 0 || pinDraft !== null;
   const disabledReason = userMuted
@@ -500,24 +539,54 @@ export function ChatPanel({
     ...(pinDraft !== null ? { moment: pinDraft } : {}),
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const addOptimistic = (
+    id: string,
+    text: string,
+    opts: RichSendOpts,
+    attachment?: MessageAttachment,
+    localUrl?: string
+  ) => {
+    if (localUrl) optimisticUrlsRef.current.set(id, localUrl);
+    const message: ChatMessage = {
+      id,
+      text,
+      user: { id: currentUserId, name: "You" },
+      createdAt: new Date().toISOString(),
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
+      ...(opts.moment !== undefined ? { moment: opts.moment } : {}),
+      ...(attachment ? { attachment } : {}),
+    };
+    setOptimisticMessages((prev) => [...prev, message]);
+  };
+
+  const dropOptimistic = (id: string) => {
+    setOptimisticMessages((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  /** Paint the bubble immediately, then deliver in the background. */
+  const sendTextNow = (text: string, opts: RichSendOpts) => {
+    const id = newMessageId();
+    addOptimistic(id, text, opts);
+    void Promise.resolve()
+      .then(() => onSendMessage({ text, id, ...opts }))
+      .then((ok) => {
+        if (ok === false) dropOptimistic(id);
+      })
+      .catch(() => dropOptimistic(id));
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || inputDisabled) return;
+    const text = inputText;
+    if (!text.trim() || inputDisabled) return;
     // Sending always dismisses the emoji/GIF/sticker panel.
     setEmojiOpen(false);
     setAttachOpen(false);
-    try {
-      setIsSending(true);
-      const ok = await onSendMessage({ text: inputText, ...buildOpts() });
-      if (ok !== false) {
-        setInputText("");
-        clearDrafts();
-      }
-    } finally {
-      setIsSending(false);
-      // Keep the cursor in the box so the next message flows (WhatsApp-style).
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
+    sendTextNow(text, buildOpts());
+    setInputText("");
+    clearDrafts();
+    // Keep the cursor in the box so the next message flows (WhatsApp-style).
+    requestAnimationFrame(() => inputRef.current?.focus());
   };
 
   const startPress = (id: string) => {
@@ -595,26 +664,30 @@ export function ChatPanel({
   };
 
   const sendAttachmentMessage = async (
+    id: string,
     text: string,
-    attachment: MessageAttachment
+    attachment: MessageAttachment,
+    opts: RichSendOpts,
+    viewOnce = false
   ): Promise<boolean> => {
     // Media sends also dismiss the emoji/GIF/sticker panel.
     setEmojiOpen(false);
     setAttachOpen(false);
-    // View-once applies to the next photo/video only, then disarms.
-    const armed = viewOnceArmed;
-    if (armed) setViewOnceArmed(false);
     const withOnce =
-      armed && (attachment.kind === "image" || attachment.kind === "video")
+      viewOnce && (attachment.kind === "image" || attachment.kind === "video")
         ? { ...attachment, viewOnce: true as const }
         : attachment;
-    const ok = await onSendMessage({ text, ...buildOpts(), attachment: withOnce });
-    if (ok !== false) {
-      setInputText("");
-      clearDrafts();
-      return true;
+    const ok = await onSendMessage({
+      id,
+      text,
+      ...opts,
+      attachment: withOnce,
+    });
+    if (ok === false) {
+      dropOptimistic(id);
+      return false;
     }
-    return false;
+    return true;
   };
 
   /** Burn a view-once message after opening (server persists, poll converges). */
@@ -638,19 +711,44 @@ export function ChatPanel({
 
   const handleVoiceSend = async (v: RecordedVoice) => {
     const name = `voice-note.${audioExtension(v.mime)}`;
-    setAttachBusy("Uploading voice note…");
-    try {
-      const { url } = await resolveMediaUrl(v.blob, name, "file");
-      await sendAttachmentMessage("", {
+    const id = newMessageId();
+    const localUrl = URL.createObjectURL(v.blob);
+    const opts = buildOpts();
+    addOptimistic(
+      id,
+      "",
+      opts,
+      {
         kind: "voice",
-        url,
+        url: localUrl,
         name,
         size: v.blob.size,
         mime: v.mime,
         duration: Math.round(v.duration),
         waveform: v.waveform,
-      });
+      },
+      localUrl
+    );
+    setAttachBusy("Uploading voice note…");
+    try {
+      const { url } = await resolveMediaUrl(v.blob, name, "file");
+      const ok = await sendAttachmentMessage(
+        id,
+        "",
+        {
+          kind: "voice",
+          url,
+          name,
+          size: v.blob.size,
+          mime: v.mime,
+          duration: Math.round(v.duration),
+          waveform: v.waveform,
+        },
+        opts
+      );
+      if (ok) clearDrafts();
     } catch (err) {
+      dropOptimistic(id);
       toast.error(err instanceof Error ? err.message : "Voice note failed to send.");
     } finally {
       setAttachBusy(null);
@@ -661,43 +759,104 @@ export function ChatPanel({
     await handleMediaFiles([file]);
   };
 
-  // One or many photos and/or videos: images are compressed on-device,
-  // videos ride the file CDN path with a video bubble. Each file sends
-  // as its own message so captions stay readable.
+  // One or many photos and/or videos: the local preview appears instantly,
+  // then compression/upload happens in the background. Each file sends as
+  // its own message so captions stay readable.
   const handleMediaFiles = async (files: File[]) => {
     const list = files.filter(Boolean).slice(0, 10);
     if (list.length === 0) return;
     setAttachOpen(false);
     setEmojiOpen(false);
     const caption = inputText;
+    const opts = buildOpts();
+    let onceLeft = viewOnceArmed;
+    if (onceLeft) setViewOnceArmed(false);
+    if (caption.trim()) setInputText("");
+    clearDrafts();
     for (let i = 0; i < list.length; i++) {
       const file = list[i];
       const isVideo =
         file.type.startsWith("video/") ||
         /\.(mp4|mov|webm|mkv|avi|m4v)$/i.test(file.name);
+      const isGif =
+        file.type === "image/gif" || /\.gif$/i.test(file.name);
+      const id = newMessageId();
+      const localUrl = URL.createObjectURL(file);
+      const useOnce = onceLeft;
+      if (useOnce) onceLeft = false;
+      const optimisticAttachment: MessageAttachment = isVideo
+        ? {
+            kind: "video",
+            url: localUrl,
+            name: file.name,
+            size: file.size,
+            mime: file.type || undefined,
+            ...(useOnce ? { viewOnce: true as const } : {}),
+          }
+        : {
+            kind: "image",
+            url: localUrl,
+            name: file.name,
+            size: file.size,
+            mime: file.type || "image/jpeg",
+            ...(useOnce ? { viewOnce: true as const } : {}),
+          };
+      addOptimistic(
+        id,
+        i === 0 ? caption : "",
+        opts,
+        optimisticAttachment,
+        localUrl
+      );
       try {
         if (isVideo) {
           if (file.size > FILE_MAX_BYTES) {
+            dropOptimistic(id);
             toast.error(
               `${file.name}: videos are limited to ${formatBytes(FILE_MAX_BYTES)}.`
             );
             continue;
           }
-          setAttachBusy(
-            `Uploading video ${i + 1}/${list.length}…`
-          );
+          setAttachBusy(`Uploading video ${i + 1}/${list.length}…`);
           const { url } = await resolveMediaUrl(file, file.name, "file");
-          await sendAttachmentMessage(i === 0 ? caption : "", {
-            kind: "video",
-            url,
-            name: file.name,
-            size: file.size,
-            mime: file.type || undefined,
-          });
-        } else {
-          setAttachBusy(
-            `Compressing image ${i + 1}/${list.length}…`
+          await sendAttachmentMessage(
+            id,
+            i === 0 ? caption : "",
+            {
+              kind: "video",
+              url,
+              name: file.name,
+              size: file.size,
+              mime: file.type || undefined,
+            },
+            opts,
+            useOnce
           );
+        } else if (isGif) {
+          if (file.size > FILE_MAX_BYTES) {
+            dropOptimistic(id);
+            toast.error(
+              `${file.name}: GIFs are limited to ${formatBytes(FILE_MAX_BYTES)}.`
+            );
+            continue;
+          }
+          setAttachBusy(`Uploading GIF ${i + 1}/${list.length}…`);
+          const { url } = await resolveMediaUrl(file, file.name, "image");
+          await sendAttachmentMessage(
+            id,
+            i === 0 ? caption : "",
+            {
+              kind: "image",
+              url,
+              name: file.name,
+              size: file.size,
+              mime: file.type || "image/gif",
+            },
+            opts,
+            useOnce
+          );
+        } else {
+          setAttachBusy(`Compressing image ${i + 1}/${list.length}…`);
           const { blob } = await compressImage(file, (_stage, f) => {
             if (f < 1)
               setAttachBusy(
@@ -710,15 +869,25 @@ export function ChatPanel({
             file.name.replace(/\.[^.]+$/, "") + ".jpg",
             "image"
           );
-          await sendAttachmentMessage(i === 0 ? caption : "", {
-            kind: "image",
-            url,
-            name: file.name,
-            size: blob.size,
-            mime: "image/jpeg",
-          });
+          await sendAttachmentMessage(
+            id,
+            i === 0 ? caption : "",
+            {
+              kind: "image",
+              url,
+              name: file.name,
+              size: blob.size,
+              mime: "image/jpeg",
+            },
+            opts,
+            useOnce
+          );
         }
       } catch (err) {
+        dropOptimistic(id);
+        if (i === 0 && caption.trim()) {
+          setInputText((prev) => prev || caption);
+        }
         toast.error(
           err instanceof Error ? err.message : `${file.name} failed to send.`
         );
@@ -733,17 +902,44 @@ export function ChatPanel({
       toast.error(`Files are limited to ${formatBytes(FILE_MAX_BYTES)}.`);
       return;
     }
-    setAttachBusy(`Uploading ${file.name}…`);
-    try {
-      const { url } = await resolveMediaUrl(file, file.name, "file");
-      await sendAttachmentMessage(inputText, {
+    const id = newMessageId();
+    const localUrl = URL.createObjectURL(file);
+    const opts = buildOpts();
+    const caption = inputText;
+    if (viewOnceArmed) setViewOnceArmed(false);
+    if (caption.trim()) setInputText("");
+    clearDrafts();
+    addOptimistic(
+      id,
+      caption,
+      opts,
+      {
         kind: "file",
-        url,
+        url: localUrl,
         name: file.name,
         size: file.size,
         mime: file.type || undefined,
-      });
+      },
+      localUrl
+    );
+    setAttachBusy(`Uploading ${file.name}…`);
+    try {
+      const { url } = await resolveMediaUrl(file, file.name, "file");
+      await sendAttachmentMessage(
+        id,
+        caption,
+        {
+          kind: "file",
+          url,
+          name: file.name,
+          size: file.size,
+          mime: file.type || undefined,
+        },
+        opts
+      );
     } catch (err) {
+      dropOptimistic(id);
+      if (caption.trim()) setInputText((prev) => prev || caption);
       toast.error(err instanceof Error ? err.message : "File failed to send.");
     } finally {
       setAttachBusy(null);
@@ -763,19 +959,27 @@ export function ChatPanel({
           ? `${typingUsers.map((u) => u.name).join(", ")} are typing…`
           : `${typingUsers.length} people are typing…`;
 
+  // Show pending sends immediately; once the server copy (same id) lands,
+  // the optimistic bubble disappears without a duplicate.
+  const realIds = new Set(messages.map((m) => m.id));
+  const visibleMessages = [
+    ...messages,
+    ...optimisticMessages.filter((m) => !realIds.has(m.id)),
+  ];
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-border bg-card">
       {/* Chat Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-          <span>Party Chat</span>
+          <span>Chat</span>
           {slowModeSeconds > 0 && (
             <span className="rounded-lg border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
               {slowModeSeconds}s slow
             </span>
           )}
         </h3>
-        <span className="text-[11px] text-muted-foreground font-mono">
+        <span className="text-[11px] text-muted-foreground">
           {visibleCount} messages
         </span>
       </div>
@@ -803,12 +1007,12 @@ export function ChatPanel({
         className="chat-messages min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4"
       >
         <div className="space-y-3">
-          {messages.length === 0 ? (
+          {visibleMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center text-xs text-muted-foreground">
-              <span>No messages yet. Say hello to everyone!</span>
+              <span>Say hello to everyone!</span>
             </div>
           ) : (
-            messages.map((msg) => {
+            visibleMessages.map((msg) => {
               const isMe = msg.user.id === currentUserId;
               const myReactions = new Set(
                 Object.entries(msg.reactions ?? {})
@@ -881,6 +1085,17 @@ export function ChatPanel({
 
               // View-once burn state (server flag or local optimistic burn).
               const burned = !!msg.viewedOnce || burnedLocal.has(msg.id);
+              // Image-only messages render without the chat bubble backdrop so
+              // the photo sits directly on the panel in both themes.
+              const isBareImage =
+                msg.attachment?.kind === "image" &&
+                !!msg.attachment.url &&
+                !msg.attachment.viewOnce &&
+                !msg.deleted &&
+                !msg.hiddenByGuard &&
+                !msg.replyTo &&
+                typeof msg.moment !== "number" &&
+                !msg.text?.trim();
 
               return (
                 <div
@@ -903,6 +1118,7 @@ export function ChatPanel({
                   </div>
 
                   <div
+                    // eslint-disable-next-line react-hooks/refs
                     onPointerDown={() => !msg.deleted && startPress(msg.id)}
                     onPointerUp={cancelPress}
                     onPointerMove={cancelPress}
@@ -914,14 +1130,18 @@ export function ChatPanel({
                         setMenuFor(msg.id);
                       }
                     }}
-                    className={`relative max-w-[85%] rounded-lg px-3.5 py-2 leading-relaxed select-none ${
+                    className={`relative max-w-[85%] rounded-lg leading-relaxed select-none ${
+                      isBareImage ? "p-0 bg-transparent" : "px-3.5 py-2"
+                    } ${
                       fontSize === "s" ? "text-[11px]" : fontSize === "l" ? "text-sm" : "text-xs"
                     } ${
                       flashId === msg.id ? "outline-2 outline-offset-2 outline-foreground" : ""
                     } ${
-                      isMe
-                        ? "bg-foreground text-background"
-                        : "bg-muted text-foreground border border-border"
+                      isBareImage
+                        ? ""
+                        : isMe
+                          ? "bg-foreground text-background"
+                          : "bg-muted text-foreground border border-border"
                     }`}
                   >
                     {msg.deleted ? (
@@ -986,7 +1206,7 @@ export function ChatPanel({
                               }}
                             />
                           ) : (
-                            <div className="mb-1">
+                            <div className={isBareImage ? undefined : "mb-1"}>
                               <ImageBubble
                                 attachment={msg.attachment}
                                 mine={isMe}
@@ -1262,7 +1482,7 @@ export function ChatPanel({
             }}
             onSendSticker={(emoji) => {
               setEmojiOpen(false);
-              void onSendMessage({ text: emoji });
+              sendTextNow(emoji, {});
             }}
           />
         )}
@@ -1481,16 +1701,12 @@ export function ChatPanel({
           {hasText && !voiceActive && (
             <button
               type="submit"
-              disabled={isSending || inputDisabled}
+              disabled={inputDisabled}
               aria-label="Send message"
               title="Send"
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-foreground text-background cursor-pointer disabled:opacity-50"
             >
-              {isSending ? (
-                <span className="text-sm">…</span>
-              ) : (
-                <Send size={18} />
-              )}
+              <Send size={18} />
             </button>
           )}
         </form>
@@ -1501,7 +1717,7 @@ export function ChatPanel({
         lightbox &&
         createPortal(
           <div
-            className="fixed inset-0 z-[60] flex flex-col bg-black/95 p-4 pb-[max(env(safe-area-inset-bottom),1rem)]"
+            className="fixed inset-0 z-60 flex flex-col bg-black/95 p-4 pb-[max(env(safe-area-inset-bottom),1rem)]"
             role="dialog"
             aria-label="Expanded image"
           >
@@ -1544,7 +1760,7 @@ export function ChatPanel({
         videoLightbox &&
         createPortal(
           <div
-            className="fixed inset-0 z-[60] flex flex-col bg-black/95 p-4 pb-[max(env(safe-area-inset-bottom),1rem)]"
+            className="fixed inset-0 z-60 flex flex-col bg-black/95 p-4 pb-[max(env(safe-area-inset-bottom),1rem)]"
             role="dialog"
             aria-label="Expanded video"
           >

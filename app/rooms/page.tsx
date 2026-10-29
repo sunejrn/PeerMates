@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { AuthButton } from "@/components/auth/AuthButton";
 import { Button } from "@/components/ui/button";
@@ -17,22 +16,21 @@ import {
 } from "@/lib/rooms/history";
 
 export default function AllRoomsPage() {
-  const router = useRouter();
   const { data: session, isPending } = useSession();
   const userId = session?.user?.id;
   const [rooms, setRooms] = useState<RoomHistoryEntry[] | null>(null);
 
   // All Rooms is private: only the signed-in user's own history is ever read.
-  // Unauthenticated visitors are already redirected by proxy.ts — this is the
-  // client-side backstop for expired sessions / direct client navigations.
+  // Signed-out visitors see a sign-in gate instead of any room data.
   useEffect(() => {
     if (isPending) return;
     if (!userId) {
-      router.replace("/");
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRooms(null);
       return;
     }
     setRooms(getRoomHistory(userId));
-  }, [isPending, userId, router]);
+  }, [isPending, userId]);
 
   const handleDelete = (slug: string) => {
     if (!userId) return;
@@ -47,7 +45,7 @@ export default function AllRoomsPage() {
           <Link href="/" className="text-lg font-bold tracking-tight">
             PeerMates
           </Link>
-          <nav className="flex items-center gap-1 text-sm" aria-label="Primary">
+          <nav className="hidden sm:flex items-center gap-1 text-sm" aria-label="Primary">
             <Link
               href="/rooms"
               aria-current="page"
@@ -68,20 +66,49 @@ export default function AllRoomsPage() {
         </div>
       </header>
 
+      <nav
+        className="flex sm:hidden items-center gap-1 border-b border-border/80 bg-background/80 px-4 py-1 text-sm backdrop-blur-md"
+        aria-label="Mobile"
+      >
+        <Link
+          href="/rooms"
+          aria-current="page"
+          className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-muted text-foreground"
+        >
+          All Rooms
+        </Link>
+        <Link
+          href="/settings"
+          className="flex min-h-11 flex-1 items-center justify-center rounded-lg text-muted-foreground"
+        >
+          Settings
+        </Link>
+      </nav>
+
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 sm:px-6 py-8">
         <div className="mb-6 space-y-1">
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">All Rooms</h1>
+          <h1 className="text-2xl sm:text-3xl tracking-tight">All Rooms</h1>
           <p className="text-sm text-muted-foreground">
-            Parties you created or joined. Rooms are removed 30 days after your
+            Rooms are removed 30 days after your
             last visit unless you turn that off in Settings.
           </p>
         </div>
 
-        {isPending || !userId ? (
+        {isPending ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-            <Spinner className="shrink-0" />
-            {isPending ? "Checking your session…" : "Redirecting to sign in…"}
+            <Spinner className="shrink-0" /> Checking your session…
           </div>
+        ) : !userId ? (
+          <Card className="p-8 text-center space-y-3">
+            <p className="text-sm">Sign in to see your rooms</p>
+            <p className="mx-auto max-w-sm text-xs text-muted-foreground">
+              Your room history is private to your account and saved on this
+              device. Sign in with Google or GitHub to continue.
+            </p>
+            <div className="flex justify-center">
+              <AuthButton />
+            </div>
+          </Card>
         ) : rooms === null ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
             <Spinner className="shrink-0" /> Loading your rooms…
@@ -90,11 +117,14 @@ export default function AllRoomsPage() {
           <Card className="p-8 text-center space-y-3">
             <p className="text-sm font-medium">No rooms yet</p>
             <p className="text-xs text-muted-foreground">
-              Create a party or join one with a code. It will show up here.
+              Create a party or join one with a code.
             </p>
-            <Button onClick={() => (window.location.href = "/")} className="min-h-11">
-              Back to Lobby
-            </Button>
+            <Link
+              href="/"
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-primary px-4 text-xs text-primary-foreground"
+            >
+              Create now
+            </Link>
           </Card>
         ) : (
           <div

@@ -22,7 +22,7 @@ export function AuthModal({
   open,
   onOpenChange,
   title = "Sign in to continue",
-  description = "You have used your free party. Sign in with Google or GitHub to create more parties and join live rooms.",
+  description = "Sign in to keep your identity and presence in sync across rooms.",
 }: AuthModalProps) {
   const [pendingProvider, setPendingProvider] = useState<
     "google" | "github" | null
@@ -46,7 +46,7 @@ export function AuthModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="border-border bg-popover text-popover-foreground backdrop-blur-xl sm:max-w-md shadow-none">
         <DialogHeader className="space-y-3 text-center sm:text-left">
-          <DialogTitle className="text-xl font-bold tracking-tight text-foreground">
+          <DialogTitle className="text-xl tracking-tight text-foreground">
             {title}
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
@@ -107,9 +107,7 @@ export function AuthModal({
               : "Sign in with GitHub"}
           </Button>
 
-          <p className="text-center text-xs text-muted-foreground">
-            Sign in to keep your identity and presence in sync across rooms.
-          </p>
+          
         </div>
       </DialogContent>
     </Dialog>

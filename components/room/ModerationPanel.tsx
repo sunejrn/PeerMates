@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/spinner";
@@ -24,7 +23,6 @@ interface ModerationPanelProps {
   memberCount: number;
   onSetSlowMode: (seconds: number) => Promise<void>;
   onSetChatMuted: (muted: boolean) => Promise<void>;
-  onChangeSource: (videoUrl: string) => Promise<void>;
   onSwitchToLocalFile: (fp: LocalFingerprint, file: File) => Promise<void>;
 }
 
@@ -51,11 +49,9 @@ export function ModerationPanel({
   memberCount,
   onSetSlowMode,
   onSetChatMuted,
-  onChangeSource,
   onSwitchToLocalFile,
 }: ModerationPanelProps) {
   const [pending, setPending] = useState<string | null>(null);
-  const [sourceUrl, setSourceUrl] = useState("");
   const [showFileSwitch, setShowFileSwitch] = useState(false);
   const [guardOn, setGuardOn] = useState(true);
   const [guardLevel, setGuardLevel] = useState<GuardLevel>("medium");
@@ -267,40 +263,6 @@ export function ModerationPanel({
           onClose={() => setShowGuardLog(false)}
         />
       </div>
-
-      {/* Source change */}
-      <form
-        className="space-y-1.5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!sourceUrl.trim() || pending) return;
-          const url = sourceUrl.trim();
-          run("source", () => onChangeSource(url)).then(() => setSourceUrl(""));
-        }}
-      >
-        <label className="text-xs font-medium text-foreground" htmlFor="mod-source-url">
-          Change video source
-        </label>
-        <div className="flex gap-1.5">
-          <Input
-            id="mod-source-url"
-            value={sourceUrl}
-            onChange={(e) => setSourceUrl(e.target.value)}
-            placeholder="YouTube / HLS / MP4 URL…"
-            className="h-11 bg-background/80 font-mono text-xs min-w-0 flex-1"
-          />
-          <Button
-            type="submit"
-            disabled={!sourceUrl.trim() || pending !== null}
-            className="h-11 px-4 shrink-0 text-xs rounded-lg"
-          >
-            {pending === "source" ? "…" : "Switch"}
-          </Button>
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          Playback resets for everyone so all devices re-sync.
-        </p>
-      </form>
 
       {/* Switch to a My Files movie on this device */}
       <div className="space-y-1.5">

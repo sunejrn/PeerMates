@@ -6,7 +6,6 @@ import { roomParticipants, user } from "@/db/schema";
 import { getRole, isKicked, type RoomRole } from "@/lib/redis/roles";
 import { checkRateLimit, RATE_LIMITS } from "@/lib/redis/ratelimit";
 import { rateLimited } from "@/lib/rooms/actor";
-import { nanoid } from "nanoid";
 
 export async function POST(
   req: NextRequest,
@@ -29,47 +28,20 @@ export async function POST(
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
 
-    // Identify user (session first, then nickname/guest-id body fallback).
-    let userId = "guest_" + nanoid(6);
-    let userName = "Guest Viewer";
-    let userImage: string | undefined;
-
-    let bodyNickname: string | undefined;
-    let bodyGuestId: string | undefined;
-    try {
-      const body = await req.json().catch(() => null);
-      if (body && typeof body === "object") {
-        const rec = body as Record<string, unknown>;
-        if (typeof rec.nickname === "string" && rec.nickname.trim()) {
-          bodyNickname = rec.nickname.trim().slice(0, 24);
-        }
-        for (const k of ["guestId", "actorId", "userId", "id"] as const) {
-          if (typeof rec[k] === "string" && (rec[k] as string).trim()) {
-            bodyGuestId = (rec[k] as string).trim().slice(0, 64);
-            break;
-          }
-        }
-      }
-    } catch {
-      // body is optional
+    // Only signed-in users may join a room — no guest identity.
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session?.user) {
+      return NextResponse.json(
+        {
+          error: "AUTH_REQUIRED",
+          message: "Sign in with Google or GitHub to join this party.",
+        },
+        { status: 401 }
+      );
     }
-
-    try {
-      const session = await auth.api.getSession({
-        headers: req.headers,
-      });
-      if (session?.user) {
-        userId = session.user.id;
-        userName = session.user.name;
-        userImage = session.user.image || undefined;
-      }
-    } catch {
-      // Continue as guest (body fallback below)
-    }
-    if (userId.startsWith("guest_")) {
-      if (bodyGuestId) userId = bodyGuestId;
-      if (bodyNickname) userName = bodyNickname;
-    }
+    const userId = session.user.id;
+    const userName = session.user.name;
+    const userImage = session.user.image || undefined;
 
     const isHost = room.hostId === userId;
     // Authoritative role from the Redis role store (survives reconnects and

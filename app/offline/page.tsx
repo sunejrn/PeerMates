@@ -1,8 +1,8 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Offline | PeerMates",
-  description: "You are offline. Reconnect to rejoin your party.",
+  title: "Offline",
+  description: "Reconnect to rejoin.",
 };
 
 /**
@@ -11,20 +11,16 @@ export const metadata = {
  */
 export default function OfflinePage() {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-background px-4 text-center text-foreground">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-600/15 border border-violet-500/30 text-2xl">
-        📡
-      </div>
-      <h1 className="mt-4 text-2xl font-bold tracking-tight">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-[#f5f5f5] dark:bg-[#333] px-4 text-center text-foreground">
+      <h1 className="mt-4 text-2xl tracking-tight">
         You&apos;re offline
       </h1>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground leading-relaxed">
-        PeerMates needs a connection for live parties. Check your network and
-        try again. The app will resync to the host automatically.
+        Check your network and try again. The app will resync to the host automatically.
       </p>
       <Link
         href="/"
-        className="mt-6 inline-flex min-h-11 items-center rounded-xl bg-violet-600 px-5 text-sm font-semibold text-[#f5f5f5] "
+        className="mt-6 inline-flex min-h-11 items-center rounded-xl px-5 text-sm underline "
       >
         Retry connection
       </Link>

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
 import { getRoomBySlug } from "@/lib/rooms/store";
 import {
   getRoomFingerprint,
@@ -15,10 +16,25 @@ type RouteParams = { params: Promise<{ slug: string }> };
  * the room's file label, and P2P receiver availability. Tiny JSON —
  * media bytes never touch the server.
  */
-export async function GET(_req: NextRequest, { params }: RouteParams) {
+export async function GET(req: NextRequest, { params }: RouteParams) {
   try {
+    const session = await auth.api.getSession({ headers: req.headers });
+    if (!session?.user) {
+      return NextResponse.json(
+        {
+          error: "AUTH_REQUIRED",
+          message: "Sign in to load this party's file.",
+        },
+        { status: 401 }
+      );
+    }
     const { slug } = await params;
-    const room = await getRoomBySlug(slug);
+    const [room, fingerprint, p2pCount, sharing] = await Promise.all([
+      getRoomBySlug(slug),
+      getRoomFingerprint(slug),
+      getP2PReceiverCount(slug),
+      isP2PSharing(slug),
+    ]);
     if (!room) {
       return NextResponse.json({ error: "Room not found" }, { status: 404 });
     }
@@ -28,11 +44,6 @@ export async function GET(_req: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    const [fingerprint, p2pCount, sharing] = await Promise.all([
-      getRoomFingerprint(slug),
-      getP2PReceiverCount(slug),
-      isP2PSharing(slug),
-    ]);
     if (!fingerprint) {
       return NextResponse.json(
         { error: "Host fingerprint missing. Ask the host to re-pick the file." },

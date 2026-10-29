@@ -308,8 +308,8 @@ export function StreamFromHostPanel({
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         No matching file? The host can stream their playback directly to{" "}
         <strong className="text-foreground">up to {avail.max} viewers</strong>{" "}
-        with automatic quality caps. For big rooms use YouTube, links, or
-         matching local files instead. P2P can&apos;t serve hundreds (an SFU
+        with automatic quality caps. For big rooms, everyone should play the
+        same local file instead. P2P can&apos;t serve hundreds (an SFU
         like LiveKit&apos;s free tier is the future option).
       </p>
 

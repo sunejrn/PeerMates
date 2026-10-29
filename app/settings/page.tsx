@@ -126,6 +126,7 @@ export default function SettingsPage() {
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(NICKNAME_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setNickname(saved || "");
       setNicknameSaved(saved || null);
     } catch {
@@ -146,7 +147,7 @@ export default function SettingsPage() {
       return;
     }
     setNicknameSaved(clean);
-    toast.success(`Nickname saved. You will join rooms as ${clean}.`);
+    toast.success(`Display name saved as ${clean}.`);
   };
 
   const handleExportData = () => {
@@ -227,7 +228,7 @@ export default function SettingsPage() {
           <Link href="/" className="text-lg font-bold tracking-tight">
             PeerMates
           </Link>
-          <nav className="flex items-center gap-1 text-sm" aria-label="Primary">
+          <nav className="hidden sm:flex items-center gap-1 text-sm" aria-label="Primary">
             <Link
               href="/rooms"
               className="rounded-lg px-3 min-h-11 flex items-center text-muted-foreground "
@@ -247,6 +248,25 @@ export default function SettingsPage() {
           <AuthButton />
         </div>
       </header>
+
+      <nav
+        className="flex sm:hidden items-center gap-1 border-b border-border/80 bg-background/80 px-4 py-1 text-sm backdrop-blur-md"
+        aria-label="Mobile"
+      >
+        <Link
+          href="/rooms"
+          className="flex min-h-11 flex-1 items-center justify-center rounded-lg text-muted-foreground"
+        >
+          All Rooms
+        </Link>
+        <Link
+          href="/settings"
+          aria-current="page"
+          className="flex min-h-11 flex-1 items-center justify-center rounded-lg bg-muted text-foreground"
+        >
+          Settings
+        </Link>
+      </nav>
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 sm:px-6 py-8">
         <div className="mb-6 space-y-1">
@@ -334,10 +354,10 @@ export default function SettingsPage() {
                 Profile
               </h2>
               <p className="py-2 text-xs leading-relaxed text-muted-foreground">
-                The name guests see. Saved on this device and filled in when you
-                join a room.
+                Display name for shared replays when you&apos;re signed out.
+                Saved on this device only.
                 {nicknameSaved ? (
-                  <> Currently joining as <strong className="text-foreground">{nicknameSaved}</strong>.</>
+                  <> Currently using <strong className="text-foreground">{nicknameSaved}</strong>.</>
                 ) : null}
               </p>
               <div className="flex gap-2">

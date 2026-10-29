@@ -30,6 +30,14 @@ import {
   revokeLocalObjectUrl,
   type LocalFingerprint,
 } from "@/lib/video/localfile";
+import {
+  fpFileKey,
+  loadLocalFileRecord,
+  readRoomFingerprintCache,
+  roomFileKey,
+  saveLocalFile,
+  saveRoomFingerprintCache,
+} from "@/lib/video/localFileDb";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { AnalyticsPanel } from "@/components/room/AnalyticsPanel";
 import { SyncStatusIndicator } from "@/components/room/SyncStatusIndicator";
@@ -38,11 +46,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { AuthButton } from "@/components/auth/AuthButton";
+import { AuthModal } from "@/components/auth/AuthModal";
 import { Spinner } from "@/components/ui/spinner";
 import { InviteSheet } from "@/components/room/InviteSheet";
-import { NicknameGate } from "@/components/room/NicknameGate";
 import { SubtitlesPanel } from "@/components/room/SubtitlesPanel";
-import { useGuestIdentity } from "@/hooks/useGuestIdentity";
 import { usePersistentState } from "@/hooks/usePersistentState";
 import { useRoomSubtitles } from "@/hooks/useRoomSubtitles";
 import { useReplayCapture } from "@/hooks/useReplayCapture";
@@ -98,11 +105,14 @@ export default function RoomPage({
   const [isClaimingHost, setIsClaimingHost] = useState(false);
   // ---- "My Files" local playback state (per-device, never uploaded) ----
   const [hostFp, setHostFp] = useState<LocalFingerprint | null>(null);
-  const [fpLoading, setFpLoading] = useState(false);
+  const [fpLoading, setFpLoading] = useState(true);
   const [fpError, setFpError] = useState<string | null>(null);
+  const [isRestoringFile, setIsRestoringFile] = useState(false);
   const [localFile, setLocalFile] = useState<{ file: File; url: string } | null>(null);
   const [localMatch, setLocalMatch] = useState<boolean | null>(null);
   const [playBlocked, setPlayBlocked] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(true);
+  const fileRestoredRef = useRef(false);
   // Mobile tab state for narrow viewports (< lg) — persisted per room, so a
   // refresh (or coming back later) reopens exactly the tab you left.
   const [mobileTab, setMobileTab] = usePersistentState<
@@ -172,13 +182,12 @@ export default function RoomPage({
     fetchRoom();
   }, [slug]);
 
-  // ---- Guest identity (nickname-only join, no signup) ----
-  const { guestId, nickname, saveNickname } = useGuestIdentity();
+  // Rooms require a real account — no guest/nickname path.
 
   // Stable join timestamp and memoized member object to prevent re-render loops
   const [joinedAt] = useState<number>(() => Date.now());
-  const effectiveId = session?.user?.id || guestId;
-  const effectiveName = session?.user?.name || nickname || "Guest";
+  const effectiveId = session?.user?.id || "";
+  const effectiveName = session?.user?.name || "User";
   const currentUser = useMemo(
     () => ({
       id: effectiveId,
@@ -244,7 +253,6 @@ export default function RoomPage({
     unmuteMember,
     setSlowMode,
     setChatMuted,
-    changeVideoSource,
     switchToLocalFile,
     setP2PSharing,
     setFileMatch,
@@ -271,32 +279,51 @@ export default function RoomPage({
       setLocalMatch(null);
       setFileMatch(null);
       setPlayBlocked(false);
-      toast.success("Video source changed. Re-syncing.");
+      fileRestoredRef.current = false;
+      toast.success("Room file changed. Re-syncing.");
     },
   });
 
   const isLocalRoom = room?.videoType === "localfile";
 
   // Load the host fingerprint for "My Files" rooms (tiny JSON).
-  const loadHostFile = async () => {
-    setFpLoading(true);
-    setFpError(null);
+  const loadHostFile = async (background = false) => {
+    if (!background) {
+      setFpLoading(true);
+      setFpError(null);
+    }
     try {
       const res = await fetch(`/api/rooms/${slug}/localfile`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Failed to load file info.");
-      setHostFp(data.fingerprint ?? null);
+      const fp = data.fingerprint ?? null;
+      setHostFp(fp);
+      if (fp) saveRoomFingerprintCache(slug, fp);
     } catch (err) {
-      setHostFp(null);
-      setFpError(err instanceof Error ? err.message : "Failed to load file info.");
+      if (!background) {
+        setHostFp(null);
+        setFpError(
+          err instanceof Error ? err.message : "Failed to load file info."
+        );
+      }
     } finally {
-      setFpLoading(false);
+      if (!background) setFpLoading(false);
     }
   };
 
   useEffect(() => {
     if (room?.videoType === "localfile") {
-      void loadHostFile();
+      // A local copy of the fingerprint renders file info immediately; the
+      // network refresh runs silently in the background.
+      const cached = readRoomFingerprintCache(slug);
+      if (cached) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setHostFp(cached);
+        setFpLoading(false);
+        void loadHostFile(true);
+      } else {
+        void loadHostFile();
+      }
     } else {
       setHostFp(null);
       setFpError(null);
@@ -315,7 +342,7 @@ export default function RoomPage({
   const handleFileJoin = (
     file: File,
     objectUrl: string,
-    _fp: LocalFingerprint,
+    fp: LocalFingerprint,
     match: boolean
   ) => {
     setLocalFile((prev) => {
@@ -324,6 +351,13 @@ export default function RoomPage({
     });
     setLocalMatch(match);
     setPlayBlocked(false);
+    // Persist the pick on this device so a refresh or a return visit loads
+    // it automatically. The host copy is also keyed by room, viewers by
+    // fingerprint (same movie on another device/browser).
+    void saveLocalFile(fpFileKey(fp.fpId), file, fp.fpId);
+    if (isHost) {
+      void saveLocalFile(roomFileKey(slug), file, fp.fpId);
+    }
     // A re-picked file after a refresh lands back where the room is
     // (server state wins, device backup covers a host gap).
     void (async () => {
@@ -377,12 +411,50 @@ export default function RoomPage({
     setPlayBlocked(false);
   };
 
+  // Auto-restore the file this device already picked (IndexedDB), so hosts
+  // land straight in playback after creating a room and nobody is asked to
+  // choose the same movie again.
+  useEffect(() => {
+    if (!isLocalRoom || !hostFp || fpLoading || localFile || !session?.user?.id) {
+      return;
+    }
+    if (fileRestoredRef.current) return;
+    fileRestoredRef.current = true;
+    let cancelled = false;
+    setIsRestoringFile(true);
+    void (async () => {
+      try {
+        let stored = await loadLocalFileRecord(roomFileKey(slug));
+        if (!stored || stored.fpId !== hostFp.fpId) {
+          stored = await loadLocalFileRecord(fpFileKey(hostFp.fpId));
+        }
+        if (cancelled || !stored || stored.fpId !== hostFp.fpId) return;
+        handleFileJoin(
+          stored.file,
+          createLocalObjectUrl(stored.file),
+          hostFp,
+          true
+        );
+      } catch {
+        // Restoring is best-effort; the picker stays available.
+      } finally {
+        setIsRestoringFile(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLocalRoom, hostFp, fpLoading, localFile, session?.user?.id, slug]);
+
   const handleMakeRoomFile = async (fp: LocalFingerprint, file: File) => {
     // Privileged: adopt this device's file as the room file, then play it.
     await switchToLocalFile(fp);
+    saveRoomFingerprintCache(slug, fp);
+    setHostFp(fp);
     handleFileJoin(file, createLocalObjectUrl(file), fp, true);
     setFileMatch(true);
-    await loadHostFile();
+    void loadHostFile(true);
   };
 
   const handleShareToggle = async (on: boolean) => {
@@ -410,13 +482,23 @@ export default function RoomPage({
         waveform?: number[];
       };
       moment?: number;
+      id?: string;
     }): Promise<boolean> => {
       const messageId =
-        typeof crypto !== "undefined" && "randomUUID" in crypto
+        opts.id ??
+        (typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
-          : `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          : `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`);
       const ok = await sendRich({ ...opts, id: messageId });
-      if (ok !== false) captureSend({ ...opts, messageId });
+      if (ok !== false) {
+        captureSend({
+          text: opts.text,
+          replyTo: opts.replyTo,
+          attachment: opts.attachment,
+          moment: opts.moment,
+          messageId,
+        });
+      }
       return ok;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -447,11 +529,10 @@ export default function RoomPage({
   // Stored per-device: slug, title, type, last visit. Auto-expiry (30d)
   // and the settings toggle live in lib/rooms/history.ts.
   useEffect(() => {
-    if (!room || !slug) return;
+    if (!room || !slug || !effectiveId) return;
     try {
       void import("@/lib/rooms/history").then(({ recordRoomVisit }) => {
-        // Scope by the effective identity so the All Rooms page stays
-        // private per user (signed-in user id, else this device's guest id).
+        // Scope by the signed-in user id so the All Rooms page stays private.
         recordRoomVisit(
           {
             slug,
@@ -823,12 +904,11 @@ export default function RoomPage({
     );
   }
 
-  // GUEST JOIN — nickname only, no signup. Signed-in users skip this.
-  // Existing GitHub auth keeps working (AuthButton in headers); guests get
-  // a stable local id so presence/roles survive reconnects.
-  if (!session?.user && !nickname) {
+  // SIGN IN REQUIRED — no guest access to rooms. Signing in here returns to
+  // this exact party and continues where the user stopped.
+  if (!session?.user) {
     return (
-      <div className="flex min-h-screen min-h-dvh flex-col bg-background text-foreground">
+      <div className="flex min-h-screen flex-col bg-background text-foreground">
         <header className="flex h-14 items-center justify-between border-b border-border px-4 sm:px-6">
           <Link
             href="/"
@@ -839,17 +919,30 @@ export default function RoomPage({
           <AuthButton />
         </header>
 
-        {!room ? (
-          <main className="flex flex-1 items-center justify-center p-4">
-            <p className="text-sm text-muted-foreground">Loading party…</p>
-          </main>
-        ) : (
-          <NicknameGate
-            roomTitle={room.title}
-            slug={slug}
-            onJoin={(name) => saveNickname(name)}
-          />
-        )}
+        <main className="flex flex-1 items-center justify-center p-4">
+          <div className="max-w-sm space-y-3 text-center">
+            <h1 className="text-xl font-bold text-foreground">
+              Sign in to join this party
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Rooms are private to signed-in members. Sign in with Google or
+              GitHub and you&apos;ll continue right here.
+            </p>
+            <Button
+              onClick={() => setShowAuthModal(true)}
+              className="min-h-11"
+            >
+              Sign in to continue
+            </Button>
+          </div>
+        </main>
+
+        <AuthModal
+          open={showAuthModal}
+          onOpenChange={setShowAuthModal}
+          title="Sign in to join this party"
+          description="Sign in with Google or GitHub to watch with your friends. You'll continue in this room automatically."
+        />
       </div>
     );
   }
@@ -906,13 +999,6 @@ export default function RoomPage({
             >
               {room.title}
             </h1>
-            <Badge
-              variant="outline"
-              title={`Room code ${slug}`}
-              className="border-border bg-muted font-mono text-[10px] sm:text-[11px] text-muted-foreground shrink-0 rounded-lg"
-            >
-              #{slug}
-            </Badge>
           </div>
 
           <div className="hidden md:block shrink-0">
@@ -920,6 +1006,7 @@ export default function RoomPage({
               syncState={syncState}
               driftSeconds={driftSeconds}
               isHost={isHost}
+              isCohost={isCohost}
             />
           </div>
         </div>
@@ -1001,7 +1088,7 @@ export default function RoomPage({
                 }}
                 className="flex min-h-11 items-center rounded-lg px-3 text-sm  text-left"
               >
-                Watching ({members.length})
+                watching ({members.length})
               </button>
               <button
                 type="button"
@@ -1011,7 +1098,7 @@ export default function RoomPage({
                 }}
                 className="flex min-h-11 items-center rounded-lg px-3 text-sm  text-left"
               >
-                Live chat ({visibleMessageCount})
+                live chat ({visibleMessageCount})
               </button>
               <button
                 type="button"
@@ -1021,14 +1108,14 @@ export default function RoomPage({
                 }}
                 className="flex min-h-11 items-center rounded-lg px-3 text-sm  text-left"
               >
-                Analytics
+                analytics
               </button>
               <div className="mt-2 border-t border-border pt-3 px-3 flex flex-col gap-2">
-                <span className="font-mono text-xs text-muted-foreground">#{slug}</span>
                 <SyncStatusIndicator
                   syncState={syncState}
                   driftSeconds={driftSeconds}
                   isHost={isHost}
+                  isCohost={isCohost}
                 />
               </div>
             </div>
@@ -1142,6 +1229,16 @@ export default function RoomPage({
                 </button>
               </div>
             )}
+            {isLocalRoom && !localFile && (fpLoading || isRestoringFile) && (
+              <div
+                className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-2 rounded-lg bg-black/45 p-6 text-center backdrop-blur-sm"
+                role="status"
+                aria-live="polite"
+              >
+                <Spinner className="size-6 text-[#f5f5f5]" />
+                <span className="text-sm text-[#f5f5f5]">loading file...</span>
+              </div>
+            )}
           </div>
 
           {/* Reconnecting / offline banner */}
@@ -1170,7 +1267,7 @@ export default function RoomPage({
                   : "text-muted-foreground "
               }`}
             >
-              Watching ({members.length})
+              watching ({members.length})
             </button>
             <button
               type="button"
@@ -1181,7 +1278,7 @@ export default function RoomPage({
                   : "text-muted-foreground "
               }`}
             >
-              Analytics
+              analytics
             </button>
             <button
               type="button"
@@ -1192,7 +1289,7 @@ export default function RoomPage({
                   : "text-muted-foreground "
               }`}
             >
-              Live Chat ({visibleMessageCount})
+              live chat ({visibleMessageCount})
             </button>
           </div>
         </div>
@@ -1201,7 +1298,7 @@ export default function RoomPage({
             with its own fixed height — internal scroll only, page and video
             stay put. On mobile this wrapper dissolves (display:contents) so
             all panels keep flowing naturally under the mobile tab switcher. */}
-        <div className="room-sidebar contents lg:flex lg:flex-col lg:w-[340px] xl:w-[380px] lg:shrink-0 lg:gap-3">
+        <div className="room-sidebar contents lg:flex lg:flex-col lg:w-85 xl:w-95 lg:shrink-0 lg:gap-3">
           {/* Desktop Tab Switcher (large screens only) */}
           <div className="hidden lg:flex items-center justify-center w-full p-1 bg-muted rounded-lg border border-border shrink-0">
             <button
@@ -1214,7 +1311,7 @@ export default function RoomPage({
                   : "text-muted-foreground "
               }`}
             >
-              Watching ({members.length})
+              watching ({members.length})
             </button>
             <button
               type="button"
@@ -1226,7 +1323,7 @@ export default function RoomPage({
                   : "text-muted-foreground "
               }`}
             >
-              Analytics
+              analytics
             </button>
             <button
               type="button"
@@ -1238,7 +1335,7 @@ export default function RoomPage({
                   : "text-muted-foreground "
               }`}
             >
-              Chat ({visibleMessageCount})
+              chat ({visibleMessageCount})
             </button>
           </div>
 
@@ -1278,18 +1375,18 @@ export default function RoomPage({
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="space-y-1">
                   <div className="text-xs font-medium text-muted-foreground flex items-center gap-2 flex-wrap">
-                    <span>Host-Authoritative Sync</span>
+                    <span>host sync</span>
                     {isHost ? (
                       <Badge variant="outline" className="border-border text-[10px] rounded-lg">
-                        You are the Host
+                        host
                       </Badge>
                     ) : isCohost ? (
                       <Badge variant="outline" className="border-border text-[10px] rounded-lg">
-                        You are a Co-host
+                        cohost
                       </Badge>
                     ) : (
                       <Badge variant="outline" className="border-border text-[10px] rounded-lg">
-                        Follower Mode
+                        viewer
                       </Badge>
                     )}
                   </div>
@@ -1359,7 +1456,7 @@ export default function RoomPage({
                 hostFingerprint={hostFp}
                 hostFileLoading={fpLoading}
                 hostFileError={fpError}
-                onRetryHostFile={loadHostFile}
+                onRetryHostFile={() => void loadHostFile()}
                 isPrivileged={canControl}
                 hasActiveFile={!!localFile}
                 activeFileName={localFile?.file.name ?? null}
@@ -1417,7 +1514,6 @@ export default function RoomPage({
                 memberCount={members.length}
                 onSetSlowMode={setSlowMode}
                 onSetChatMuted={setChatMuted}
-                onChangeSource={changeVideoSource}
                 onSwitchToLocalFile={handleMakeRoomFile}
               />
             )}
@@ -1485,11 +1581,7 @@ export default function RoomPage({
               mobileTab === "analytics" ? "flex" : "hidden"
             } ${deskTab === "analytics" ? "lg:flex" : "lg:hidden"} lg:w-full lg:flex-1`}
           >
-            <AnalyticsPanel
-              messages={messages}
-              members={members}
-              hostId={hostId}
-            />
+            <AnalyticsPanel messages={messages} hostId={hostId} />
           </div>
 
           {/* Live Chat Panel.

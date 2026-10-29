@@ -134,7 +134,7 @@ export function DataPanel({
         <p className="text-[11px] text-muted-foreground">
           Measured {measuredText}
           {isEstimateOnly ? (
-            <> · <span title="YouTube/MP4 bytes can't be measured from the page">~{estimatedText} estimated</span></>
+            <> · <span title="Byte counts can't be measured from the page">~{estimatedText} estimated</span></>
           ) : (
             <> · ~{estimatedText} estimated</>
           )}
@@ -168,8 +168,8 @@ export function DataPanel({
           </Button>
         </div>
         <p className="text-[10px] leading-relaxed text-muted-foreground/80">
-          Estimates only: HLS is measured exactly; YouTube/MP4 assume typical
-          bitrates. Prices are approximate prepaid mobile-data rates.
+          Estimates only: HLS is measured exactly; other formats assume
+          typical bitrates. Prices are approximate prepaid mobile-data rates.
         </p>
       </div>
     </Card>

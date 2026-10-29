@@ -2,10 +2,7 @@
 
 import { useId, useMemo } from "react";
 import { Card } from "@/components/ui/card";
-import type {
-  ChatMessage,
-  PartyMember,
-} from "@/lib/stream/realtimeClient";
+import type { ChatMessage } from "@/lib/stream/realtimeClient";
 
 const BUCKETS = 12;
 
@@ -161,7 +158,7 @@ export function ActivityCurve({
             fontSize="10"
             className="fill-muted-foreground"
           >
-            {fmtTick(bucketTimes[i] ?? Date.now())}
+            {fmtTick(bucketTimes[i] ?? 0)}
           </text>
         );
       })}
@@ -170,18 +167,14 @@ export function ActivityCurve({
 }
 export function AnalyticsPanel({
   messages,
-  members,
   hostId,
 }: {
   messages: ChatMessage[];
-  members: PartyMember[];
   hostId: string;
 }) {
   const stats = useMemo(() => {
     // System notices (slow-mode calm-downs) are not chat activity.
     const visible = messages.filter((m) => !m.deleted && !m.system);
-    let reactions = 0;
-    const emojiCounts = new Map<string, number>();
     const chatterCounts = new Map<string, { name: string; count: number }>();
     let moments = 0;
     let media = 0;
@@ -195,12 +188,6 @@ export function AnalyticsPanel({
       chatterCounts.set(m.user.id, entry);
       if (typeof m.moment === "number") moments += 1;
       if (m.attachment) media += 1;
-      const rs = m.reactions ?? {};
-      for (const [emoji, users] of Object.entries(rs)) {
-        const n = users.length;
-        reactions += n;
-        emojiCounts.set(emoji, (emojiCounts.get(emoji) ?? 0) + n);
-      }
     }
 
     // Activity over the session span (12 slices) + per-slice timestamps
@@ -232,58 +219,26 @@ export function AnalyticsPanel({
     const topChatters = [...chatterCounts.values()]
       .sort((a, b) => b.count - a.count)
       .slice(0, 5);
-    const topEmoji = [...emojiCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 6);
     const peak = Math.max(1, ...activity);
 
     return {
       totalMessages: visible.length,
-      reactions,
-      chatters: chatterCounts.size,
       moments,
       media,
-      members: members.length,
       activity,
       bucketTimes,
       spanLabel,
       topChatters,
-      topEmoji,
       peak,
     };
-  }, [messages, members, hostId]);
-
-  const tiles = [
-    { label: "Messages", value: stats.totalMessages },
-    { label: "Reactions", value: stats.reactions },
-    { label: "Chatters", value: stats.chatters },
-    { label: "Watching", value: stats.members },
-  ];
+  }, [messages, hostId]);
 
   return (
     <div className="no-scrollbar flex h-full min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain">
-      {/* Stat tiles */}
-      <div className="grid shrink-0 grid-cols-2 gap-2" role="list" aria-label="Room totals">
-        {tiles.map((t) => (
-          <Card
-            key={t.label}
-            role="listitem"
-            className="rounded-lg border-border bg-card px-3 py-2.5"
-          >
-            <p className="text-xl font-semibold tabular-nums text-foreground">
-              {t.value}
-            </p>
-            <p className="text-[11px] text-muted-foreground">{t.label}</p>
-          </Card>
-        ))}
-      </div>
-
       {/* Activity over time */}
       <Card className="shrink-0 rounded-lg border-border bg-card p-3 sm:p-4">
         <div className="flex items-baseline justify-between gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Activity
-          </h3>
+          <h3 className="text-xs text-muted-foreground">Activity</h3>
           {stats.spanLabel && (
             <span className="font-mono text-[10px] text-muted-foreground">
               {stats.spanLabel}
@@ -292,7 +247,7 @@ export function AnalyticsPanel({
         </div>
         {stats.totalMessages === 0 ? (
           <p className="py-6 text-center text-xs text-muted-foreground">
-            No activity yet. Say hello and watch the curve move.
+            No activity yet.
           </p>
         ) : (
           <>
@@ -312,9 +267,7 @@ export function AnalyticsPanel({
 
       {/* Top chatters */}
       <Card className="shrink-0 rounded-lg border-border bg-card p-3 sm:p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Top chatters
-        </h3>
+        <h3 className="text-xs text-muted-foreground">Top chatters</h3>
         {stats.topChatters.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted-foreground">
             Nobody has chatted yet.
@@ -324,7 +277,7 @@ export function AnalyticsPanel({
             {stats.topChatters.map((c) => (
               <li key={c.name} className="space-y-1">
                 <div className="flex items-baseline justify-between gap-2 text-xs">
-                  <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                  <span className="min-w-0 flex-1 truncate text-foreground">
                     {c.name}
                   </span>
                   <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
@@ -345,38 +298,6 @@ export function AnalyticsPanel({
         )}
       </Card>
 
-      {/* Reactions */}
-      <Card className="shrink-0 rounded-lg border-border bg-card p-3 sm:p-4">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Reactions
-        </h3>
-        {stats.topEmoji.length === 0 ? (
-          <p className="py-4 text-center text-xs text-muted-foreground">
-            No reactions yet. Long press a message to react.
-          </p>
-        ) : (
-          <ul className="mt-2 space-y-2">
-            {stats.topEmoji.map(([emoji, n]) => (
-              <li key={emoji} className="flex items-center gap-2.5">
-                <span className="w-6 shrink-0 text-center text-base" aria-hidden>
-                  {emoji}
-                </span>
-                <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-foreground"
-                    style={{
-                      width: `${Math.max(4, (n / Math.max(1, stats.topEmoji[0][1])) * 100)}%`,
-                    }}
-                  />
-                </div>
-                <span className="w-8 shrink-0 text-right font-mono text-[11px] tabular-nums text-muted-foreground">
-                  {n}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
     </div>
   );
 }

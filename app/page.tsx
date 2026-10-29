@@ -11,11 +11,11 @@ export default function Home() {
       {/* Header / Navbar */}
       <header className="sticky top-0 z-50 flex h-16 w-full items-center justify-between bg-background/80 px-4 sm:px-6 backdrop-blur-md">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-          <span className="text-lg font-bold tracking-tight text-foreground">
-            PeerMates
+          <span className="text-lg tracking-tight text-foreground">
+            peermates
           </span>
-          <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] font-medium text-violet-600 dark:text-violet-400 hidden xs:inline-block">
-            Live sync
+          <span className="rounded-full border border-violet-500/30 bg-violet-500/10 px-2 py-0.5 text-[11px] text-violet-600 dark:text-violet-400 hidden xs:inline-block">
+            live sync
           </span>
         </div>
 
@@ -65,8 +65,8 @@ export default function Home() {
 
         <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6 mb-8 sm:mb-12">
           <p className="mx-auto max-w-xl text-sm sm:text-base lg:text-lg leading-relaxed">
-            Watch YouTube, MP4, or HLS videos together in sync with live chat
-            and presence.
+            Watch movies from your own device together, perfectly in sync
+            with live chat and presence.
           </p>
         </div>
 

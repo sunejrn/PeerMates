@@ -31,7 +31,7 @@ export function PresenceBar({
   return (
     <div className="flex items-center gap-2 overflow-x-auto py-1 px-1 scrollbar-none">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium mr-1 shrink-0">
-        <span>Watching ({members.length}):</span>
+        <span>watching ({members.length}):</span>
       </div>
 
       <div className="flex -space-x-2 overflow-hidden items-center py-1">

@@ -66,8 +66,8 @@ export function SubtitlesPanel({
 
       {subs.youtubeBlocked && (
         <p className="text-[11px] text-amber-700 dark:text-amber-300 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2">
-          ⚠️ Custom subtitles don&apos;t apply to YouTube embeds — switch to an
-          MP4, HLS, or My Files source to use them.
+          ⚠️ Custom subtitles don&apos;t apply to this source — use a My Files
+          movie to add them.
         </p>
       )}
 
